@@ -1,0 +1,301 @@
+{
+  "asset": "Persian brass mortar and pestle",
+  "source_canvas": [
+    1536,
+    1024
+  ],
+  "recommended_node": "Mortar (Node2D)",
+  "layers": {
+    "mortar_body": {
+      "file": "mortar_body.png",
+      "size": [
+        716,
+        730
+      ],
+      "source_origin": [
+        89,
+        148
+      ],
+      "pivot_px": [
+        356,
+        692
+      ],
+      "pivot_normalized": [
+        0.49721,
+        0.94795
+      ]
+    },
+    "mortar_pestle": {
+      "file": "mortar_pestle.png",
+      "size": [
+        486,
+        647
+      ],
+      "source_origin": [
+        968,
+        221
+      ],
+      "pivot_px": [
+        402,
+        39
+      ],
+      "pivot_normalized": [
+        0.82716,
+        0.06028
+      ]
+    },
+    "mortar_inner_shadow": {
+      "file": "mortar_inner_shadow.png",
+      "size": [
+        600,
+        245
+      ],
+      "pivot_px": [
+        300,
+        122
+      ],
+      "pivot_normalized": [
+        0.5,
+        0.49796
+      ]
+    },
+    "mortar_contents_base": {
+      "file": "mortar_contents_base.png",
+      "size": [
+        431,
+        223
+      ],
+      "source_origin": [
+        132,
+        230
+      ],
+      "pivot_px": [
+        215,
+        112
+      ],
+      "pivot_normalized": [
+        0.49884,
+        0.50224
+      ]
+    },
+    "mortar_contents_crushed": {
+      "file": "mortar_contents_crushed.png",
+      "size": [
+        436,
+        229
+      ],
+      "source_origin": [
+        687,
+        227
+      ],
+      "pivot_px": [
+        218,
+        115
+      ],
+      "pivot_normalized": [
+        0.5,
+        0.50218
+      ]
+    },
+    "mortar_piece_01": {
+      "file": "mortar_piece_01.png",
+      "size": [
+        172,
+        164
+      ],
+      "source_origin": [
+        243,
+        578
+      ],
+      "pivot_px": [
+        87,
+        82
+      ],
+      "pivot_normalized": [
+        0.50581,
+        0.5
+      ]
+    },
+    "mortar_piece_02": {
+      "file": "mortar_piece_02.png",
+      "size": [
+        179,
+        157
+      ],
+      "source_origin": [
+        557,
+        584
+      ],
+      "pivot_px": [
+        91,
+        81
+      ],
+      "pivot_normalized": [
+        0.50838,
+        0.51592
+      ]
+    },
+    "mortar_piece_03": {
+      "file": "mortar_piece_03.png",
+      "size": [
+        116,
+        120
+      ],
+      "source_origin": [
+        872,
+        605
+      ],
+      "pivot_px": [
+        63,
+        57
+      ],
+      "pivot_normalized": [
+        0.5431,
+        0.475
+      ]
+    },
+    "mortar_dust_01": {
+      "file": "mortar_dust_01.png",
+      "size": [
+        332,
+        256
+      ],
+      "source_origin": [
+        163,
+        832
+      ],
+      "pivot_px": [
+        175,
+        203
+      ],
+      "pivot_normalized": [
+        0.52711,
+        0.79297
+      ]
+    },
+    "mortar_dust_02": {
+      "file": "mortar_dust_02.png",
+      "size": [
+        541,
+        252
+      ],
+      "source_origin": [
+        592,
+        844
+      ],
+      "pivot_px": [
+        276,
+        196
+      ],
+      "pivot_normalized": [
+        0.51017,
+        0.77778
+      ]
+    },
+    "mortar_shadow": {
+      "file": "mortar_shadow.png",
+      "size": [
+        760,
+        190
+      ],
+      "pivot_px": [
+        380,
+        95
+      ],
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ]
+    },
+    "mortar_glow": {
+      "file": "mortar_glow.png",
+      "size": [
+        590,
+        350
+      ],
+      "pivot_px": [
+        295,
+        175
+      ],
+      "pivot_normalized": [
+        0.5,
+        0.5
+      ]
+    }
+  },
+  "animations": {
+    "idle": {
+      "loop": true,
+      "duration_s": 2.6,
+      "pestle_rotation_deg": [
+        -0.4,
+        0.4
+      ]
+    },
+    "ready": {
+      "loop": false,
+      "duration_s": 0.3,
+      "pestle_offset_y_px": [
+        0,
+        -16
+      ],
+      "glow_alpha": [
+        0,
+        0.3
+      ]
+    },
+    "grinding_start": {
+      "loop": false,
+      "duration_s": 0.42,
+      "pestle_arc_deg": [
+        -5,
+        2
+      ],
+      "impact_frame": 0.82
+    },
+    "grinding_loop": {
+      "loop": true,
+      "duration_s": 0.84,
+      "pestle_arc_deg": [
+        -5,
+        2,
+        -5
+      ],
+      "dust_at_normalized_time": [
+        0.45
+      ],
+      "contents_crossfade_per_loop": 0.16
+    },
+    "finished": {
+      "loop": false,
+      "duration_s": 0.75,
+      "contents_base_alpha": [
+        1,
+        0
+      ],
+      "contents_crushed_alpha": [
+        0,
+        1
+      ],
+      "glow_pulse": [
+        0,
+        0.55,
+        0
+      ]
+    },
+    "selected": {
+      "loop": true,
+      "duration_s": 1.5,
+      "scale": [
+        1.0,
+        1.018,
+        1.0
+      ],
+      "glow_alpha": [
+        0.08,
+        0.34,
+        0.08
+      ]
+    }
+  }
+}

@@ -1,0 +1,259 @@
+{
+  "files_checked": 23,
+  "all_pass": true,
+  "results": [
+    {
+      "file": "Mortar/mortar_body.png",
+      "size": [
+        716,
+        730
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.7031,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_contents_base.png",
+      "size": [
+        431,
+        223
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.6939,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_contents_crushed.png",
+      "size": [
+        436,
+        229
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.6924,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_dust_01.png",
+      "size": [
+        332,
+        256
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.4113,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_dust_02.png",
+      "size": [
+        541,
+        252
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.4319,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_glow.png",
+      "size": [
+        590,
+        350
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.3836,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_inner_shadow.png",
+      "size": [
+        600,
+        245
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.5082,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_pestle.png",
+      "size": [
+        486,
+        647
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.2642,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_piece_01.png",
+      "size": [
+        172,
+        164
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.3196,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_piece_02.png",
+      "size": [
+        179,
+        157
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.3575,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_piece_03.png",
+      "size": [
+        116,
+        120
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.3303,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_preview.png",
+      "size": [
+        2048,
+        2048
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.2777,
+      "pass": true
+    },
+    {
+      "file": "Mortar/mortar_shadow.png",
+      "size": [
+        760,
+        190
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.532,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_base.png",
+      "size": [
+        444,
+        356
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.5138,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_beam.png",
+      "size": [
+        768,
+        294
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.2558,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_glow.png",
+      "size": [
+        620,
+        620
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.3884,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_left_chain.png",
+      "size": [
+        347,
+        471
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.1713,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_left_pan.png",
+      "size": [
+        418,
+        204
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.5728,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_preview.png",
+      "size": [
+        2048,
+        2048
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.2289,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_right_chain.png",
+      "size": [
+        347,
+        471
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.1683,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_right_pan.png",
+      "size": [
+        418,
+        204
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.5711,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_shadow.png",
+      "size": [
+        720,
+        170
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.5409,
+      "pass": true
+    },
+    {
+      "file": "Scale/scale_stem.png",
+      "size": [
+        151,
+        656
+      ],
+      "mode": "RGBA",
+      "transparent_corners": 4,
+      "visible_coverage": 0.4641,
+      "pass": true
+    }
+  ]
+}
