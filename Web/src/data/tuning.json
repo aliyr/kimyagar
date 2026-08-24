@@ -1,0 +1,34 @@
+{
+  "quantityCurve": [
+    { "quantity": 0.5, "factor": 0.6 },
+    { "quantity": 1.0, "factor": 1.0 },
+    { "quantity": 1.5, "factor": 1.4 },
+    { "quantity": 2.0, "factor": 1.7 },
+    { "quantity": 3.0, "factor": 2.15 },
+    { "quantity": 4.0, "factor": 2.4 }
+  ],
+  "heatExposureRate": { "low": 0.6, "medium": 1.0, "high": 1.6 },
+  "stageThresholds": { "extracting": 4, "ready": 14, "overprocessed": 42 },
+  "extractionFraction": { "fresh": 0.35, "extracting": 0.7, "ready": 1.0 },
+  "tensionCostFactor": 0.08,
+  "stirCorrections": [0.15, 0.08, 0.03],
+  "instabilityNormalization": 1.4,
+  "stabilityQualityCurve": [
+    { "stability": 0.9, "modifier": 1.0 },
+    { "stability": 0.75, "modifier": 0.98 },
+    { "stability": 0.6, "modifier": 0.93 },
+    { "stability": 0.45, "modifier": 0.82 },
+    { "stability": 0.3, "modifier": 0.65 },
+    { "stability": 0.15, "modifier": 0.4 }
+  ],
+  "bandThresholds": { "excellent": 90, "good": 70, "partial": 40 },
+  "processErrorPenalty": { "fresh": 0.25, "extracting": 0.1, "overprocessed": 0.3 },
+  "evaluationWeights": {
+    "mustHave": 70,
+    "avoid": 30,
+    "preferredBonus": 8,
+    "tagBonus": 6,
+    "sideEffectPenaltyPerUnit": 6,
+    "sideEffectFreeThreshold": 0.8
+  }
+}

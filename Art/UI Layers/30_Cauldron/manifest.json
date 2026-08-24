@@ -1,0 +1,10 @@
+{
+  "layer": "cauldron",
+  "z": 30,
+  "files": [
+    { "file": "cauldron_body.png", "rect": { "x": 640, "y": 470, "w": 470, "h": 440 }, "alpha": true, "source": "Art/Assets/Vertical Slice/prop_copper_cauldron_default.png (پردازش آلفا)" },
+    { "file": "cauldron_liquid.png", "rect": { "x": 700, "y": 520, "w": 350, "h": 120 }, "z": 31, "alpha": true, "note": "رنگ خنثی — در Runtime با CSS بر اساس مواد tint می‌شود" },
+    { "file": "steam_01.png", "rect": { "x": 720, "y": 260, "w": 310, "h": 280 }, "z": 33, "alpha": true, "note": "black-bg → alpha؛ برای انیمیشن بخار" }
+  ],
+  "processing": "cauldron_body و liquid: light-bg removal؛ steam: black-to-alpha"
+}

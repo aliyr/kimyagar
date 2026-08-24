@@ -1,0 +1,7 @@
+{
+  "layer": "work_table",
+  "z": 10,
+  "files": [{ "file": "work_table.png", "rect": { "x": 60, "y": 600, "w": 1420, "h": 480 }, "alpha": true }],
+  "processing": "light-bg removal + trim",
+  "master": "kimyagar_work_table.png (AI-generated, 16:9)"
+}

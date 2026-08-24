@@ -1,0 +1,31 @@
+{
+  "$schema_note": "چیدمان لایه‌ای صحنه‌ی کارگاه کیمیاگر — مختصات در فضای منطقی 1920x1080 (Mobile Landscape). این فایل با Web/src/scene/artManifest.ts همگام است.",
+  "coordinate_space": { "width": 1920, "height": 1080 },
+  "art_direction": "Persian-inspired cozy fantasy alchemist shop: warm wood, brass, ceramic jars, aged paper, turquoise, lapis blue, burgundy, herbal green. Physical workspace, not an app interface.",
+  "layers": [
+    { "id": "background", "folder": "00_Background", "file": "shop_background.png", "rect": { "x": 0, "y": 0, "w": 1920, "h": 1080 }, "z": 0, "notes": "دیوار مغازه، پنجره، نور گرم؛ ناحیه‌های میز/کابینت/پیشخوان باید برای لایه‌های رویی خلوت باشند" },
+    { "id": "cabinet_closed", "folder": "10_Ingredient_Cabinet", "file": "cabinet_closed.png", "rect": { "x": 0, "y": 40, "w": 190, "h": 1040 }, "z": 40, "notes": "لبه‌ی کابینت بسته با دستگیره — Affordance باز کردن با درگ" },
+    { "id": "cabinet_open", "folder": "10_Ingredient_Cabinet", "file": "cabinet_open.png", "rect": { "x": 0, "y": 40, "w": 640, "h": 1040 }, "z": 40, "notes": "کابینت باز با قفسه‌های خالی — شیشه‌ی مواد جدا رندر می‌شود" },
+    { "id": "ingredient_jars", "folder": "10_Ingredient_Cabinet", "file": "jar_<ingredient_id>.png", "rect": { "x": 30, "y": 120, "w": 160, "h": 200 }, "z": 42, "notes": "۶ شیشه/بسته: chamomile، borage، mint، saffron، poppy، ginger — روی قفسه‌های کابینت باز چیده می‌شوند" },
+    { "id": "work_table", "folder": "20_Work_Table", "file": "work_table.png", "rect": { "x": 60, "y": 600, "w": 1420, "h": 480 }, "z": 10, "notes": "میز چوبی کار — پاتیل، هاون و بطری‌ها روی آن" },
+    { "id": "cauldron_body", "folder": "30_Cauldron", "file": "cauldron_body.png", "rect": { "x": 640, "y": 470, "w": 470, "h": 440 }, "z": 30, "source": "Art/Assets/Vertical Slice/prop_copper_cauldron_default.png", "notes": "مرکز ادراکی صحنه" },
+    { "id": "cauldron_liquid", "folder": "30_Cauldron", "file": "cauldron_liquid.png", "rect": { "x": 700, "y": 520, "w": 350, "h": 120 }, "z": 31, "notes": "سطح مایع خنثی/روشن — رنگ در Runtime با CSS tint می‌شود" },
+    { "id": "cauldron_steam", "folder": "30_Cauldron", "file": "steam_01.png", "rect": { "x": 720, "y": 260, "w": 310, "h": 280 }, "z": 33, "notes": "بخار شفاف برای انیمیشن" },
+    { "id": "mortar", "folder": "40_Mortar", "file": "(reuse)", "rect": { "x": 260, "y": 600, "w": 320, "h": 300 }, "z": 35, "source": "Art/Assets/Production/Mortar/*", "notes": "لایه‌های آماده‌ی هاون: body، pestle، contents، dust — مطابق mortar_manifest.json" },
+    { "id": "heat_fire", "folder": "50_Heat_Source", "file": "fire_low.png | fire_medium.png | fire_high.png", "rect": { "x": 690, "y": 880, "w": 370, "h": 170 }, "z": 25, "notes": "سه حالت آتش زیر پاتیل — تفاوت واضح بین Low/Medium/High" },
+    { "id": "bottle_empty", "folder": "60_Bottles", "file": "bottle_empty.png", "rect": { "x": 1190, "y": 700, "w": 220, "h": 260 }, "z": 30, "source_hint": "Art/Assets/Vertical Slice/container_potion_bottle_turquoise.png", "notes": "بطری خالی قابل درگ به Bottling Point" },
+    { "id": "bottle_full", "folder": "60_Bottles", "file": "bottle_full.png", "rect": { "x": 1190, "y": 700, "w": 220, "h": 260 }, "z": 30, "notes": "بطری پرشده — مایع در Runtime tint می‌شود" },
+    { "id": "customer_counter", "folder": "70_Customer_Counter", "file": "counter.png", "rect": { "x": 1440, "y": 540, "w": 480, "h": 540 }, "z": 20, "notes": "پیشخوان جدا از میز کار — مشتری حاضر ولی غیرمزاحم" },
+    { "id": "customer", "folder": "70_Customer_Counter", "file": "customer_<appearance>.png", "rect": { "x": 1520, "y": 210, "w": 340, "h": 520 }, "z": 15, "notes": "شخصیت‌ها: woman_elder، man_worker، woman_young، man_elder — پشت پیشخوان" },
+    { "id": "goal_note", "folder": "80_Goal_Note", "file": "goal_note.png", "rect": { "x": 1460, "y": 24, "w": 430, "h": 150 }, "z": 50, "notes": "کاغذ کهنه برای خلاصه‌ی دائمی سفارش — متن در Runtime روی آن رندر می‌شود" },
+    { "id": "fx_glow", "folder": "90_FX", "file": "discovery_glow.png", "rect": { "x": 0, "y": 0, "w": 512, "h": 512 }, "z": 60, "notes": "درخشش Micro-feedback کشف" }
+  ],
+  "reused_assets": [
+    "Art/Assets/Production/Mortar/* (هاون لایه‌لایه با manifest)",
+    "Art/Assets/Production/Scale/* (ترازو — اختیاری برای دکور)",
+    "Art/Assets/Vertical Slice/prop_copper_cauldron_default.png",
+    "Art/Assets/Vertical Slice/container_potion_bottle_turquoise.png",
+    "Art/Assets/Vertical Slice/ingredient_saffron_packet_default.png"
+  ],
+  "web_sync": "PNG های نهایی به Web/public/art/<folder-key>/ کپی می‌شوند (background/, cabinet/, table/, cauldron/, mortar/, heat/, bottles/, customer/, goal/, fx/)"
+}

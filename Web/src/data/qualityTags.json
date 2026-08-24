@@ -1,0 +1,29 @@
+[
+  {
+    "id": "restful",
+    "nameFa": "خوابِ راحت",
+    "conditions": [
+      { "propertyId": "sleep", "atLeast": 1.8 },
+      { "propertyId": "calm", "atLeast": 1.8 }
+    ],
+    "discoveryFa": "خواب و آرامش در هم آمیختند... این معجون خوابی راحت می‌آورد."
+  },
+  {
+    "id": "warming_comfort",
+    "nameFa": "گرمای دلنشین",
+    "conditions": [
+      { "propertyId": "warm", "atLeast": 2.0 },
+      { "propertyId": "calm", "atLeast": 1.5 }
+    ],
+    "discoveryFa": "گرما نشست، بدون آشوب... این معجون مثل پتو روی سینه است."
+  },
+  {
+    "id": "clear_mind",
+    "nameFa": "ذهنِ روشن",
+    "conditions": [
+      { "propertyId": "focus", "atLeast": 1.7 },
+      { "propertyId": "calm", "atLeast": 1.0 }
+    ],
+    "discoveryFa": "تمرکز آمد و دل آرام ماند... این معجون ذهن را روشن می‌کند، نه بی‌قرار."
+  }
+]

@@ -1,0 +1,6 @@
+{
+  "layer": "fx",
+  "z": 60,
+  "files": [{ "file": "discovery_glow.png", "size": 512, "alpha": true, "note": "درخشش طلایی Micro-feedback کشف (۱-۲ ثانیه، غیرمسدودکننده)" }],
+  "processing": "تولید procedural (گرادیان شعاعی) در tools/build_ui_layers.mjs"
+}

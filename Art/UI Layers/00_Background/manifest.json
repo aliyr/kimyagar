@@ -1,0 +1,7 @@
+{
+  "layer": "background",
+  "z": 0,
+  "files": [{ "file": "shop_background.png", "rect": { "x": 0, "y": 0, "w": 1920, "h": 1080 }, "alpha": false }],
+  "processing": "opaque — بدون حذف پس‌زمینه",
+  "master": "kimyagar_shop_background.png (AI-generated, 16:9)"
+}

@@ -1,0 +1,7 @@
+{
+  "layer": "goal_note",
+  "z": 50,
+  "files": [{ "file": "goal_note.png", "rect": { "x": 1460, "y": 24, "w": 430, "h": 150 }, "alpha": true }],
+  "processing": "light-bg removal + trim",
+  "notes": "مرکز کاغذ خالی است — خلاصه‌ی سفارش (summaryFa) در Runtime روی آن رندر می‌شود؛ لمس = باز شدن متن کامل"
+}

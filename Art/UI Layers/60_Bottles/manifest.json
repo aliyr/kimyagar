@@ -1,0 +1,10 @@
+{
+  "layer": "bottles",
+  "z": 30,
+  "files": [
+    { "file": "bottle_empty.png", "rect": { "x": 1190, "y": 700, "w": 220, "h": 260 }, "alpha": true, "source": "Art/Assets/Vertical Slice/container_potion_bottle_turquoise.png (پردازش آلفا)", "note": "قابل درگ به Bottling Point" },
+    { "file": "bottle_full.png", "rect": { "x": 1190, "y": 700, "w": 220, "h": 260 }, "alpha": true, "note": "مایع خنثی — در Runtime tint می‌شود" }
+  ],
+  "bottling_point": { "x": 1080, "y": 560, "w": 200, "h": 240, "note": "Drop Target واضح کنار پاتیل — Drop = Bottle نهایی و غیرقابل بازگشت" },
+  "processing": "light-bg removal + trim"
+}

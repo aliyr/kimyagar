@@ -1,0 +1,13 @@
+{
+  "layer": "mortar",
+  "z": 35,
+  "rect": { "x": 260, "y": 680, "w": 320, "h": 300 },
+  "files": [
+    { "file": "mortar_body.png", "source": "Art/Assets/Production/Mortar/mortar_body.png" },
+    { "file": "mortar_pestle.png", "source": "Art/Assets/Production/Mortar/mortar_pestle.png", "note": "pivot و زمان‌بندی در Art/Assets/Production/Mortar/mortar_manifest.json" },
+    { "file": "mortar_contents_base.png", "source": "Art/Assets/Production/Mortar/mortar_contents_base.png", "note": "محتوای خام — برای crossfade با crushed" },
+    { "file": "mortar_contents_crushed.png", "source": "Art/Assets/Production/Mortar/mortar_contents_crushed.png" },
+    { "file": "mortar_shadow.png", "source": "Art/Assets/Production/Mortar/mortar_shadow.png" }
+  ],
+  "processing": "کپی مستقیم — این asset ها از قبل production-ready با آلفا هستند"
+}

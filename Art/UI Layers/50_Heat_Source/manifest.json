@@ -1,0 +1,12 @@
+{
+  "layer": "heat_source",
+  "z": 25,
+  "rect": { "x": 690, "y": 880, "w": 370, "h": 170 },
+  "files": [
+    { "file": "fire_low.png", "state": "low", "alpha": true },
+    { "file": "fire_medium.png", "state": "medium", "alpha": true },
+    { "file": "fire_high.png", "state": "high", "alpha": true }
+  ],
+  "processing": "black-to-alpha (alpha = max-channel × 1.55، unmix) — composite روی سطوح تیره دقیق است",
+  "notes": "سه حالت Low/Medium/High باید تفاوت واضح داشته باشند؛ تفاوت اندازه/شدت شعله عمدی است"
+}

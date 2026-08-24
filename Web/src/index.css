@@ -1,0 +1,45 @@
+/* پایه‌ی سراسری — جزئیات ظاهری صحنه در Workstream B ساخته می‌شود */
+
+:root {
+  --wood-dark: #2b1d12;
+  --wood: #4a3220;
+  --wood-light: #6e4e30;
+  --brass: #b8862f;
+  --parchment: #e9d9b4;
+  --turquoise: #2ba09a;
+  --lapis: #22508f;
+  --burgundy: #6e1f2e;
+  --herbal: #5a7a3a;
+
+  font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+  color: var(--parchment);
+  background-color: var(--wood-dark);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}

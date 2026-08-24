@@ -1,0 +1,288 @@
+[
+  {
+    "id": "c1_calm",
+    "nameFa": "بانو گلنار",
+    "requestFa": "چند شب است دلم مثل سیر و سرکه می‌جوشد و از هر صدای کوچکی می‌پرم. چیزی می‌خواهم که این آشوب را آرام کند. عطار گفت شاید از حجره‌ات کاری ساخته باشد.",
+    "summaryFa": "معجونی برای آرامش",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "دلم آرام گرفت، انگار باری از روی سینه‌ام برداشتند.",
+        "unmetFeedbackFa": "هنوز همان آشوبم؛ انگار چیزی در این معجون نبود که دلم را آرام کند."
+      }
+    ],
+    "appearance": "woman_elder"
+  },
+  {
+    "id": "c2_calm_nosleep",
+    "nameFa": "بانو نیلوفر",
+    "requestFa": "دستم می‌لرزد و دلم شور می‌زند، اما امشب مهمان دارم و باید سرپا بمانم. چیزی می‌خواهم که این اضطراب را بخواباند. فقط مرا مثل مرده روی قالی نینداز؛ فردا باید میزبان باشم نه خواب‌آلود.",
+    "summaryFa": "آرامش، نه خواب‌آلودگی",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "دست‌هایم آرام شد و توانستم با مهمان‌ها حرف بزنم.",
+        "unmetFeedbackFa": "هنوز توی پوست خودم نمی‌گنجم؛ این معجون دلم را جا نیاورد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "پلک‌هایم سنگین نشد؛ تا آخر شب سرپا ماندم.",
+        "unmetFeedbackFa": "آرام شدم اما تا آمدم چای بریزم خوابم برد روی پشتی."
+      }
+    ],
+    "appearance": "woman_young"
+  },
+  {
+    "id": "c3_pain",
+    "nameFa": "استاد کاظم",
+    "requestFa": "کمرم از بارهای انبار تیر می‌کشد؛ شب که به خانه می‌رسم کمر خم نمی‌شود. چیزی می‌خواهم که این درد را کم کند. کارم سنگین است و از تو معجزه نمی‌خواهم، فقط امان از این تیر کشیدن.",
+    "summaryFa": "تسکین درد کمر",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.2,
+        "direction": "at_least",
+        "metFeedbackFa": "دردم خیلی بهتر شد؛ کمرم دیگر مثل چوب خشک نیست.",
+        "unmetFeedbackFa": "هنوز همان تیر می‌کشد؛ این شربت به دردم نرسید."
+      }
+    ],
+    "appearance": "man_worker"
+  },
+  {
+    "id": "c4_pain_nosleep",
+    "nameFa": "استاد بهرام",
+    "requestFa": "درد امان نمی‌دهد، از شانه تا انگشت. اما تا شب پای دستگاه‌ام و اگر چشم روی هم بگذارم پارچه می‌سوزد. دردم را بگیر، فقط مرا خواب نکن. سستی را هم اگر بتوانی دور کن، منت می‌گذارم.",
+    "summaryFa": "درد شدید، بیداری سر کار",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.7,
+        "direction": "at_least",
+        "metFeedbackFa": "دردم خیلی بهتر شد؛ دستم دوباره مال خودم است.",
+        "unmetFeedbackFa": "درد همان است که بود؛ با این شربت که نمی‌شود پای دستگاه ایستاد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.3,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "چشمم بیدار ماند و کار از دستم در نرفت.",
+        "unmetFeedbackFa": "ولی تا شب خوابم می‌برد پشت دستگاه..."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "weakness",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "جان هم در تنم ماند؛ سست نشدم.",
+        "unmetFeedbackFa": "درد کمتر شد، اما تا شب انگار جان توی تنم نبود."
+      }
+    ],
+    "appearance": "man_worker"
+  },
+  {
+    "id": "c5_focus",
+    "nameFa": "میرزا یونس",
+    "requestFa": "دفتر حساب‌ها روی هم تلنبار شده و ذهنم مثل گنجشک از این شاخه به آن شاخه می‌پرد. چیزی می‌خواهم که حواسم را جمع کند. غلط‌حساب امشب برایم گران تمام می‌شود.",
+    "summaryFa": "تمرکز برای کار دقیق",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "اعداد سر جایشان نشستند؛ توانستم دفتر را تا ته بروم.",
+        "unmetFeedbackFa": "هنوز حواسم پرت است؛ این معجون ذهن را جمع نکرد."
+      }
+    ],
+    "appearance": "man_elder"
+  },
+  {
+    "id": "c6_focus_calm",
+    "nameFa": "بانو فریبا",
+    "requestFa": "باید سرِ سرمه‌دان و قلم، خط را راست بکشم. ذهنم باید جمع باشد، اما اگر دلم بپرد و دستم به هیجان بیفتد، طلا روی صفحه می‌چکد. تمرکزی آرام می‌خواهم، نه شور و شوقی که دست را بلرزاند.",
+    "summaryFa": "تمرکز آرام، نه هیجان",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "چشمم روی خط ماند و دستم فرمان برد.",
+        "unmetFeedbackFa": "باز حواسم رفت؛ این شربت قلم را آرام نکرد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "excitement",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "metFeedbackFa": "دلم نپرید؛ توانستم آرام کار کنم.",
+        "unmetFeedbackFa": "ذهنم تیز شد اما دستم از هیجان لرزید و خط را خراب کرد."
+      }
+    ],
+    "appearance": "woman_young"
+  },
+  {
+    "id": "c7_warm_strong",
+    "nameFa": "رستم باربر",
+    "requestFa": "این سرما توی استخوانم نشسته و از صبح شانه‌ام یخ است. نیرو می‌خواهم و گرما، که بتوانم بار را از زمین بلند کنم. اگر تنم گرم نشود، نیمه‌راه می‌مانم وسط گذر.",
+    "summaryFa": "گرمی و نیروی تن",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "warm",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "گرما آمد توی سینه؛ سرما از استخوان پرید.",
+        "unmetFeedbackFa": "هنوز یخ‌ام؛ این معجون تنم را گرم نکرد."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "strength",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "بار را بلند کردم؛ نیرو برگشت به بازو.",
+        "unmetFeedbackFa": "گرم شدم اما زورم نرسید؛ بار همان‌جا ماند."
+      }
+    ],
+    "appearance": "man_worker"
+  },
+  {
+    "id": "c8_restful",
+    "nameFa": "ننه‌زهرا",
+    "requestFa": "شب‌ها خوابم نمی‌برد و وقتی هم می‌خوابم، خوابم آشفته است و با کوچک‌ترین صدا می‌پرم. آرامش می‌خواهم و خوابی که واقعاً راحت باشد. صبح که برمی‌خیزم باید جان داشته باشم، نه اینکه تمام شب را با خیال جنگیده باشم.",
+    "summaryFa": "خوابِ آرام و راحت",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "sleep",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "بالأخره چشمم گرم شد و تا صبح دوام آورد.",
+        "unmetFeedbackFa": "باز تا سحر چشم روی هم نگذاشتم؛ این شربت خواب نیاورد."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "خیال‌هایم آرام گرفتند؛ دیگر از هر سایه‌ای نپریدم.",
+        "unmetFeedbackFa": "خوابم برد اما دلم شور می‌زد؛ خوابِ راحتی نبود."
+      }
+    ],
+    "preferredTags": ["restful"],
+    "appearance": "woman_elder"
+  },
+  {
+    "id": "c9_everything",
+    "nameFa": "خواجه محمود",
+    "requestFa": "من کوتاه نمی‌آیم. معجونی می‌خواهم که هم دردم را ببرد، هم شادم کند، هم گرمم کند، هم نیرو بدهد، هم ذهنم تیز شود و هم این آشوب سینه آرام بگیرد. عطارهای دیگر گفتند نمی‌شود؛ تو اگر بلدی، نشان بده. برای هر درد حجره‌ام یک شیشه جدا نمی‌خرم.",
+    "summaryFa": "معجونی برای همه‌چیز",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "رنگ به چهره‌ام آمد؛ دلم باز شد.",
+        "unmetFeedbackFa": "از این شیشه شادی ندیدم؛ همان ترش‌رویی خودم."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "درد بند آمد؛ این یکی را می‌پسندم.",
+        "unmetFeedbackFa": "درد سرجایش است؛ پس آن همه‌ی ادعا کو؟"
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "حساب حجره را بدون غلط تمام کردم.",
+        "unmetFeedbackFa": "ذهنم همان آشفته است؛ این که کارِ من نیست."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "warm",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "گرما نشست به تن؛ از این راضی‌ام.",
+        "unmetFeedbackFa": "تنم سرد ماند؛ معجونِ همه‌کاره که این نیست."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "آن آشوب سینه خوابید.",
+        "unmetFeedbackFa": "دلم هنوز جوش می‌زند؛ پس آرامشش کجا بود؟"
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "strength",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "زور به بازو برگشت؛ بار حجره را خودم برداشتم.",
+        "unmetFeedbackFa": "سست‌ام؛ این شیشه نیرو نداشت."
+      }
+    ],
+    "appearance": "man_elder"
+  },
+  {
+    "id": "c10_pain_awake",
+    "nameFa": "بانو لیلا",
+    "requestFa": "درد امانم را بریده، اما تا سپیده باید بیدار بمانم؛ کسی نیست کار را جمع کند. شب‌ها خوابم نمی‌برد ولی صبح باید سرِ کار هوشیار باشم. اگر سست شوم یا خوابم ببرد، همه‌چیز از دست می‌رود. دردم را بگیر و بیداری را از من نگیر.",
+    "summaryFa": "درد شدید، بیداری ناگزیر",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.7,
+        "direction": "at_least",
+        "metFeedbackFa": "دردم خیلی بهتر شد؛ توانستم روی پا بمانم.",
+        "unmetFeedbackFa": "درد همان است؛ با این حال که نمی‌شود تا سپیده ایستاد."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.6,
+        "direction": "at_least",
+        "metFeedbackFa": "چشمم روشن ماند؛ تا سپیده هوشیار بودم.",
+        "unmetFeedbackFa": "درد کم شد اما بیداری نیامد؛ سرم سنگین بود."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "خواب به چشم نیامد؛ کار زمین نماند.",
+        "unmetFeedbackFa": "نیمه‌شب خوابم برد؛ وقتی بیدار شدم دیر شده بود."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "weakness",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "سست نشدم؛ جان در تنم ماند.",
+        "unmetFeedbackFa": "تا صبح انگار جان توی تنم نبود؛ روی پا بند نمی‌شدم."
+      }
+    ],
+    "appearance": "woman_young"
+  }
+]

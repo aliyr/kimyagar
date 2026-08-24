@@ -1,0 +1,3 @@
+# میز کار — Prompt
+
+> Game asset, single isolated object on a completely flat plain light warm-gray background (#d8d2c8), no environment, no text: a long sturdy wooden alchemist work table seen straight from the front at slight top-down angle, Persian fantasy style, thick aged walnut wood top with visible grain, ring stains and scorch marks, carved front apron with subtle Persian geometric pattern, brass corner caps, a small drawer, dark turquoise ceramic tile strip inlaid along the front edge. Wide landscape proportions (roughly 3:1, table spans the full width). The table TOP surface must be empty (cauldron, mortar and bottles are separate layers). Painterly cozy game-art style, warm browns. (16:9)

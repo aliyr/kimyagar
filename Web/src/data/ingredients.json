@@ -1,0 +1,102 @@
+[
+  {
+    "id": "chamomile",
+    "nameFa": "بابونه",
+    "nameEn": "Chamomile",
+    "flavorFa": "گل‌های کوچک و مهربان؛ عطار می‌گوید خیالِ آدم را نرم می‌کند.",
+    "color": "#e8c96a",
+    "complexity": 0.03,
+    "baseProperties": { "calm": 3.0, "sleep": 2.0, "warm": 0.6 },
+    "grindingModifiers": {},
+    "heatModifiers": {},
+    "cluesFa": [
+      "با هر حرارتی می‌سازد؛ ماده‌ای بخشنده است.",
+      "آرامشش آشکار است و خواب را هم آرام همراه می‌آورد."
+    ]
+  },
+  {
+    "id": "borage",
+    "nameFa": "گل گاوزبان",
+    "nameEn": "Borage",
+    "flavorFa": "گلبرگ‌های بنفش‌آبی که در چایِ حجره، رنگ غروب به فنجان می‌دهند.",
+    "color": "#5a62b5",
+    "complexity": 0.04,
+    "baseProperties": { "calm": 2.4, "joy": 0.8, "sleep": 0.7, "warm": 0.5 },
+    "grindingModifiers": {},
+    "heatModifiers": {},
+    "cluesFa": [
+      "آرامشی پاک‌تر از بابونه دارد، اما پلک را سنگین نمی‌کند.",
+      "اندکی شادیِ آرام در تهِ فنجان می‌ماند."
+    ]
+  },
+  {
+    "id": "mint",
+    "nameFa": "نعناع",
+    "nameEn": "Mint",
+    "flavorFa": "بوی تند و خنکِ دسته‌ی تازه؛ مثل سایه‌ی صبح روی سنگ حیاط.",
+    "color": "#3d8f5a",
+    "complexity": 0.06,
+    "baseProperties": { "wake": 2.4, "cold": 2.2, "focus": 1.0, "pain_relief": 0.6 },
+    "grindingModifiers": {},
+    "heatModifiers": {
+      "medium": { "wake": 0.85, "cold": 0.85, "focus": 0.85 },
+      "high": { "wake": 0.55, "cold": 0.55, "focus": 0.55, "pain_relief": 0.7 }
+    },
+    "cluesFa": [
+      "حرارت تند بوی خنکش را می‌سوزاند و بیداری‌اش را ضعیف می‌کند.",
+      "با آتش ملایم، سر را روشن و دهان را خنک می‌گذارد."
+    ]
+  },
+  {
+    "id": "saffron",
+    "nameFa": "زعفران",
+    "nameEn": "Saffron",
+    "flavorFa": "رشته‌های سرخِ گران؛ یک پنجه از آن حجره را عطرآگین می‌کند.",
+    "color": "#c23b12",
+    "complexity": 0.08,
+    "baseProperties": { "joy": 3.0, "focus": 2.1, "warm": 1.5, "excitement": 0.6 },
+    "grindingModifiers": {},
+    "heatModifiers": {},
+    "quantitySensitive": true,
+    "cluesFa": [
+      "اندکه‌اش گوهر است؛ زیاد ریختن شادی را به بی‌قراری بدل می‌کند.",
+      "گرمای ملایم و تمرکز می‌آورد، اگر دست سنگین نباشد."
+    ]
+  },
+  {
+    "id": "poppy",
+    "nameFa": "خشخاش",
+    "nameEn": "Poppy",
+    "flavorFa": "کاسه‌های گرد و غبارآلود؛ عطار آن‌ها را آرام و با احتیاط می‌چیند.",
+    "color": "#a07888",
+    "complexity": 0.1,
+    "baseProperties": { "pain_relief": 3.3, "sleep": 3.0, "weakness": 2.0, "calm": 0.7 },
+    "grindingModifiers": {
+      "coarse": { "pain_relief": 0.5, "sleep": 0.4, "weakness": 0.35, "calm": 0.5 },
+      "crushed": { "pain_relief": 0.95, "sleep": 0.6, "weakness": 0.5 }
+    },
+    "heatModifiers": {},
+    "cluesFa": [
+      "اگر نرم بسایی همه‌اش درمی‌آید؛ خواب و سستی هم همراه درد.",
+      "نیم‌کوب مهربان‌تر است: درد را می‌گیرد و کمتر به خواب می‌کشاند."
+    ]
+  },
+  {
+    "id": "ginger",
+    "nameFa": "زنجبیل",
+    "nameEn": "Ginger",
+    "flavorFa": "ریشه‌ی گره‌دار و تند؛ بوی تندش از پشت ترازو می‌آید.",
+    "color": "#c17a2a",
+    "complexity": 0.06,
+    "baseProperties": { "warm": 3.0, "strength": 2.2, "wake": 0.6, "excitement": 0.5 },
+    "grindingModifiers": {},
+    "heatModifiers": {
+      "low": { "warm": 0.7, "strength": 0.7, "wake": 0.7 },
+      "high": { "warm": 1.25, "strength": 1.2, "excitement": 2.2 }
+    },
+    "cluesFa": [
+      "دوستدار آتش است؛ حرارت ملایم حقّش را ادا نمی‌کند.",
+      "آتش تند نیرو و گرما می‌افزاید، اما دل را هم بی‌قرار می‌کند."
+    ]
+  }
+]

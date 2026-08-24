@@ -1,0 +1,16 @@
+{
+  "layer": "ingredient_cabinet",
+  "z": 40,
+  "files": [
+    { "file": "cabinet_closed.png", "rect": { "x": 0, "y": 40, "w": 190, "h": 1040 }, "alpha": true, "note": "لبه‌ی بسته با دستگیره — Affordance باز کردن" },
+    { "file": "cabinet_open.png", "rect": { "x": 0, "y": 40, "w": 640, "h": 1040 }, "alpha": true, "note": "کابینت باز با قفسه‌های خالی؛ شیشه‌ها جدا رندر می‌شوند" },
+    { "file": "jar_chamomile.png", "slot": "shelf", "alpha": true },
+    { "file": "jar_borage.png", "slot": "shelf", "alpha": true },
+    { "file": "jar_mint.png", "slot": "shelf", "alpha": true },
+    { "file": "jar_saffron.png", "slot": "shelf", "alpha": true },
+    { "file": "jar_poppy.png", "slot": "shelf", "alpha": true },
+    { "file": "jar_ginger.png", "slot": "shelf", "alpha": true }
+  ],
+  "processing": "light-bg removal (border-median chroma distance + edge unmix) + trim",
+  "notes": "شیشه‌ها در Runtime روی قفسه‌های cabinet_open چیده می‌شوند؛ id هر شیشه با IngredientDefinition.id هم‌نام است"
+}

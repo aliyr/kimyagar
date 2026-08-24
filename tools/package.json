@@ -1,0 +1,9 @@
+{
+  "name": "kimyagar-tools",
+  "private": true,
+  "type": "module",
+  "description": "Asset pipeline tools for Kimyagar UI layers",
+  "dependencies": {
+    "sharp": "^0.34.5"
+  }
+}
