@@ -40,22 +40,20 @@ export const SCENE_ZONES = {
     x: 0, y: 0, width: 1920, height: 1080, z: 0,
     img: 'background/shop_background.png',
   },
-  /** کابینت در حالت باز — پنل کشویی از چپ */
-  cabinetOpen: {
-    id: 'cabinet_open',
-    x: 0, y: 40, width: 640, height: 1040, z: 40,
-    img: 'cabinet/cabinet_open.png',
-  },
-  /** لبه‌ی کابینت در حالت بسته (دستگیره برای باز کردن) */
-  cabinetClosed: {
-    id: 'cabinet_closed',
-    x: 0, y: 40, width: 190, height: 1040, z: 40,
-    img: 'cabinet/cabinet_closed.png',
-  },
   workTable: {
     id: 'work_table',
     x: 60, y: 600, width: 1420, height: 480, z: 10,
     img: 'table/work_table.png',
+  },
+  /**
+   * قفسه‌ی دیواری مواد — پشت میز، همیشه دیده می‌شود، اسکرول افقی.
+   * جایگزین کابینت کشویی در صحنه‌ی کلاسیک؛ شیشه‌ها روی تخته می‌نشینند و
+   * z آن زیر میز/پاتیل است (قفسه روی دیوار عقب است).
+   */
+  wallShelf: {
+    id: 'wall_shelf',
+    x: 150, y: 310, width: 1260, height: 220, z: 6,
+    img: 'shelf/shelf_board.png',
   },
   cauldron: {
     id: 'cauldron',
@@ -121,3 +119,54 @@ export type SceneZoneId = keyof typeof SCENE_ZONES;
 export function artUrl(relPath: string): string {
   return `${ART_BASE}/${relPath}`;
 }
+
+/**
+ * قرارداد asset های ارتقای کلاسیک (state های لایه‌باز) — تولید در
+ * tools/build_classic_upgrade.mjs. همه‌ی مسیرها نسبت به ART_BASE هستند.
+ *
+ * هم‌ترازی: mortar_back / mortar_front / contents_* روی «بوم مشترک» رندر
+ * شده‌اند؛ اگر هر سه با object-fit یکسان در یک Rect رندر شوند، پیکسل‌به‌پیکسل
+ * هم‌تراز می‌مانند. فریم‌های pestle و آتش هم هر ست بوم مشترک خودشان را دارند
+ * (آتش: لنگر پایین-وسط تا هیزم‌ها بین فریم‌ها ثابت بمانند).
+ */
+export const CLASSIC_ART = {
+  mortar: {
+    /** کل بدنه (پشت محتوا) */
+    back: 'mortar/mortar_back.png',
+    /** دیواره‌ی جلو — وقتی هاون محتوا دارد با opacity ~0.5 رندر شود */
+    front: 'mortar/mortar_front.png',
+    /** محتوای کف هاون؛ رنگ ماده با blend (مثل luminosity) اعمال می‌شود */
+    contents: (units: 1 | 2 | 3, state: 'raw' | 'ground') =>
+      `mortar/contents_${units}_${state}.png` as const,
+    /** ۳ فریم انیمیشن کوبش (زاویه‌ی پخته‌شده) */
+    pestleFrames: [
+      'mortar/pestle_1.png',
+      'mortar/pestle_2.png',
+      'mortar/pestle_3.png',
+    ],
+  },
+  cauldron: {
+    /** سطح آرام معجون */
+    potionStill: 'cauldron/potion_still.png',
+    /** بافت گرداب — هنگام Stir با transform: rotate چرخانده شود */
+    potionSwirl: 'cauldron/potion_swirl.png',
+    /** ۲ فریم قل‌قل (تعویض متناوب، سرعت وابسته به شدت آتش) */
+    potionBoil: ['cauldron/potion_boil_1.png', 'cauldron/potion_boil_2.png'],
+  },
+  /** ۳ فریم لرزش شعله برای هر شدت */
+  fireFrames: {
+    low: ['heat/fire_low_1.png', 'heat/fire_low_2.png', 'heat/fire_low_3.png'],
+    medium: ['heat/fire_medium_1.png', 'heat/fire_medium_2.png', 'heat/fire_medium_3.png'],
+    high: ['heat/fire_high_1.png', 'heat/fire_high_2.png', 'heat/fire_high_3.png'],
+  },
+  /** سطل چوبی Reset — جایگزین سطل CSS */
+  bucket: 'table/bucket.png',
+  /** تخته‌ی قفسه‌ی دیواری */
+  shelfBoard: 'shelf/shelf_board.png',
+  /**
+   * حالت احساسی مشتری؛ حالت عادی همان تصویر SCENE_ZONES.customer.states است.
+   * band ارزیابی excellent/good ⇒ happy و partial/failure ⇒ sad.
+   */
+  customerEmotion: (appearance: string, emotion: 'happy' | 'sad') =>
+    `customer/customer_${appearance}_${emotion}.png` as const,
+} as const;

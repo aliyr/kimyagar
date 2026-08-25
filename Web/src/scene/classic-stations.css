@@ -1,0 +1,575 @@
+/**
+ * استایل ایستگاه‌های ارتقایافته‌ی صحنه‌ی کلاسیک — هاون لایه‌ای، معجون لایه‌ای
+ * و شبح درگِ ماده‌ی کوبیده‌شده.
+ *
+ * همه‌ی کلاس‌ها با پیشوند cst- هستند تا با scene.css قدیمی تداخل نکنند؛
+ * کلاس‌های کهنه‌ی mortar/pestle/ground/liquid دیگر استفاده نمی‌شوند
+ * (پاک‌سازی scene.css با Agent اصلی است).
+ */
+
+/* ------------------------- ابزار مشترک لایه‌ها ------------------------ */
+
+/* تصویر هم‌تراز با Rect میزبان — همان رفتار zone-art--contain */
+.cst-fit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+}
+.cst-fit--cover {
+  object-fit: cover;
+}
+
+/* -------------------------------- هاون ------------------------------- */
+
+.cst-mortar {
+  /* لایه‌های داخل، خودشان interactive می‌شوند */
+}
+.cst-mortar.is-shake {
+  animation: cst-shake 0.42s ease-in-out 1;
+}
+
+/* دیواره‌ی جلو: با محتوا نیمه‌شفاف می‌شود تا داخل کاسه دیده شود */
+.cst-mortar__front {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+.cst-mortar__front.is-xray {
+  opacity: 0.5;
+}
+
+/* هاله‌ی مقصد Drop برای شیشه‌ی در دست (جایگزین mortar__glow قدیمی) */
+.cst-mortar__glow {
+  position: absolute;
+  left: -7%;
+  right: -7%;
+  top: 14%;
+  bottom: -4%;
+  border-radius: 44% 44% 50% 50% / 28% 28% 72% 72%;
+  border: 5px dashed transparent;
+  pointer-events: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.cst-mortar.is-target .cst-mortar__glow {
+  border-color: var(--glow-soft);
+  box-shadow: 0 0 60px var(--glow-soft);
+}
+.cst-mortar.is-target-active .cst-mortar__glow {
+  border-style: solid;
+  border-color: var(--glow);
+  box-shadow: 0 0 100px rgba(111, 227, 214, 0.5), inset 0 0 60px rgba(111, 227, 214, 0.2);
+  animation: cst-pulse 0.9s ease-in-out infinite;
+}
+
+/* حباب کوچک «جا ندارد» هنگام لرزش هاونِ پر */
+.cst-mortar__noroom {
+  position: absolute;
+  left: 50%;
+  top: -6%;
+  transform: translateX(-50%);
+  padding: 4px 18px;
+  border-radius: 14px;
+  font-size: 22px;
+  white-space: nowrap;
+  color: #ffe3c4;
+  background: rgba(58, 20, 8, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(214, 118, 60, 0.5);
+  pointer-events: none;
+  animation: cst-fade-in 0.2s ease-out;
+}
+
+/* placeholder کاسه تا وقتی تصویر بدنه بار نشده */
+.cst-mortar__ph {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 20%;
+  bottom: 6%;
+  border-radius: 42% 42% 50% 50% / 24% 24% 76% 76%;
+  background: radial-gradient(80% 70% at 32% 20%, var(--stone), var(--stone-mid) 46%, #2e2a24 100%);
+  box-shadow: inset 0 -26px 40px rgba(0, 0, 0, 0.55), 0 22px 34px rgba(0, 0, 0, 0.5);
+}
+
+/* ------------------------- محتوای رنگ‌شده‌ی هاون ---------------------- */
+
+/*
+ * تکنیک tint: یک لایه‌ی رنگ که با خودِ تصویر mask شده (شکل دقیق تپه) و
+ * روی آن همان تصویر با mix-blend-mode: luminosity — بافت از تصویر،
+ * رنگ از ماده. isolation تا blend از کاسه بیرون نزند.
+ */
+.cst-contents {
+  position: absolute;
+  inset: 0;
+  isolation: isolate;
+}
+.cst-contents.is-ready {
+  cursor: grab;
+}
+.cst-contents.is-shaking {
+  animation: cst-jiggle 0.3s linear infinite;
+}
+.cst-contents__color {
+  position: absolute;
+  inset: 0;
+  background: var(--ing-color, #8a7a52);
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+}
+.cst-contents__texture {
+  mix-blend-mode: luminosity;
+  opacity: 0.85;
+}
+/* درخشش «آماده‌ی برداشتن» دور دهانه پس از کوبیدن کامل */
+.cst-contents.is-ready::after {
+  content: '';
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 26%;
+  height: 26%;
+  border-radius: 50%;
+  box-shadow: 0 0 30px rgba(255, 235, 190, 0.3);
+  animation: cst-breathe 2.6s ease-in-out infinite;
+}
+
+/* ذرات گرد که هنگام کوبیدن از دهانه بلند می‌شوند */
+.cst-dust {
+  position: absolute;
+  left: var(--d-left, 50%);
+  top: 30%;
+  width: var(--d-size, 9px);
+  height: var(--d-size, 9px);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ing-color, #8a7a52) 62%, #fff2dc);
+  filter: blur(1px);
+  opacity: 0;
+  pointer-events: none;
+  animation: cst-dust-rise var(--d-dur, 0.9s) ease-out infinite;
+  animation-delay: var(--d-delay, 0s);
+}
+
+/* -------------------------------- کوبه ------------------------------- */
+
+.cst-pestle {
+  cursor: grab;
+  touch-action: none;
+}
+/* زاویه در خود فریم‌ها پخته شده؛ فقط تکان ریز کوبیدن اضافه می‌شود */
+.cst-pestle.is-grinding {
+  animation: cst-grind 0.34s linear infinite;
+}
+.cst-pestle.is-usable::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 34%;
+  top: 58%;
+  height: 32%;
+  border-radius: 50%;
+  box-shadow: 0 0 26px rgba(255, 220, 150, 0.35);
+  animation: cst-breathe 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* placeholder کوبه تا وقتی فریم‌ها بار نشده‌اند */
+.cst-pestle__ph {
+  position: absolute;
+  inset: 0;
+  transform: rotate(18deg);
+  transform-origin: 50% 82%;
+}
+.cst-pestle__rod {
+  position: absolute;
+  left: 33%;
+  top: 0;
+  width: 34%;
+  height: 72%;
+  border-radius: 14px 14px 8px 8px;
+  background: linear-gradient(90deg, #33210f, #9a6c3c 42%, #4a3220 78%, #2a1a0c);
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.55);
+}
+.cst-pestle__head {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 6%;
+  height: 32%;
+  border-radius: 46% 46% 50% 50% / 34% 34% 66% 66%;
+  background: radial-gradient(70% 70% at 34% 26%, #b3a999, #6b6459 52%, #3b3730);
+  box-shadow: inset 0 -8px 14px rgba(0, 0, 0, 0.5), 0 10px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* ------------------------------ معجون پاتیل -------------------------- */
+
+.cst-liquid {
+  border-radius: 50%;
+  overflow: hidden;
+  isolation: isolate;
+  pointer-events: none;
+  box-shadow:
+    inset 0 8px 22px rgba(0, 0, 0, 0.55),
+    0 0 0 2px rgba(0, 0, 0, 0.45);
+}
+
+/* لایه‌ی پایه: بیضی رنگی با رنگِ ترکیب مواد (colors.ts) */
+.cst-liquid__base {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    82% 130% at 42% 18%,
+    var(--liquid-light, #6b7059),
+    var(--liquid, #4a5042) 46%,
+    var(--liquid-deep, #2c3027) 100%
+  );
+  transition: background 0.9s ease;
+}
+.cst-liquid.is-burnt .cst-liquid__base {
+  filter: saturate(0.55) brightness(0.82);
+}
+
+/* بافت سطح آرام — luminosity تا رنگ از لایه‌ی پایه بیاید */
+.cst-liquid__still {
+  mix-blend-mode: luminosity;
+  opacity: 0.62;
+  transition: opacity 0.35s ease;
+}
+.cst-liquid.is-boiling .cst-liquid__still {
+  opacity: 0.28;
+}
+.cst-liquid.is-burnt .cst-liquid__still,
+.cst-liquid.is-burnt .cst-liquid__swirl,
+.cst-liquid.is-burnt .cst-liquid__boil {
+  filter: saturate(0.6) brightness(0.8);
+}
+
+/*
+ * بافت گرداب: چرخش واقعی با rAF روی transform انجام می‌شود
+ * (scaleY پخته‌شده در transform تا چرخش در فضای بیضی درست دیده شود).
+ * opacity هم با سرعت زاویه‌ای از JS تنظیم می‌شود.
+ */
+.cst-liquid__swirl {
+  position: absolute;
+  object-fit: cover;
+  mix-blend-mode: luminosity;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* دو فریم قل‌قل — crossfade با تعویض کلاس is-on */
+.cst-liquid__boil {
+  mix-blend-mode: luminosity;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.cst-liquid__boil.is-on {
+  opacity: 0.72;
+}
+
+/* برق نرم سطح */
+.cst-liquid__sheen {
+  position: absolute;
+  left: 10%;
+  top: 12%;
+  width: 46%;
+  height: 36%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.2), transparent);
+  filter: blur(7px);
+}
+
+/* حباب‌های CSS — شدت و سرعت از حرارت (در حرارت کم فقط همین‌ها) */
+.cst-bubble {
+  position: absolute;
+  left: var(--b-left, 50%);
+  bottom: 4%;
+  width: var(--b-size, 16px);
+  height: var(--b-size, 16px);
+  border-radius: 50%;
+  border: 2px solid var(--liquid-foam, rgba(255, 255, 255, 0.6));
+  background: radial-gradient(circle at 34% 28%, var(--liquid-foam, rgba(255, 255, 255, 0.5)), transparent 72%);
+  opacity: 0;
+  animation: cst-bubble 2.4s ease-in infinite;
+  animation-duration: calc(var(--b-dur, 2.4s) * var(--bubble-speed, 1));
+  animation-delay: var(--b-delay, 0s);
+}
+.cst-liquid.is-burnt .cst-bubble {
+  animation-timing-function: steps(5, end);
+  border-color: rgba(190, 170, 140, 0.5);
+}
+
+/* درخشش «رسیده» */
+.cst-liquid__shimmer {
+  position: absolute;
+  inset: -12%;
+  background: conic-gradient(from 0deg, transparent 0 22%, rgba(255, 255, 255, 0.2) 34%, transparent 46% 100%);
+  mix-blend-mode: screen;
+  animation: cst-spin 7s linear infinite;
+}
+
+/* پاشش افزودن ماده: قطره‌ی رنگی + ترکش‌ها + موج */
+.cst-splash {
+  position: absolute;
+  inset: 0;
+}
+.cst-splash__drop {
+  position: absolute;
+  left: 50%;
+  top: -80px;
+  margin-left: -26px;
+  width: 52px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--splash-color, var(--liquid-light, #8a7a52));
+  animation: cst-fall 0.2s ease-in 1 forwards;
+}
+.cst-splash__bit {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: var(--sb-size, 13px);
+  height: var(--sb-size, 13px);
+  border-radius: 50%;
+  background: var(--splash-color, #8a7a52);
+  opacity: 0;
+  animation: cst-splash-bit 0.6s ease-out 1 forwards;
+  animation-delay: var(--sb-delay, 0.12s);
+}
+.cst-splash__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 3px solid var(--liquid-foam, rgba(255, 255, 255, 0.6));
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: cst-ripple 1s ease-out 1 forwards;
+}
+.cst-splash__ring:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+/* -------------------------------- بخار ------------------------------- */
+
+.cst-steam {
+  overflow: visible;
+  pointer-events: none;
+}
+.cst-steam__plume {
+  position: absolute;
+  left: var(--s-left, 50%);
+  bottom: 36%;
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 248, 235, 0.3), transparent 70%);
+  filter: blur(11px);
+  opacity: 0;
+  animation: cst-steam 5.4s ease-out infinite;
+  animation-delay: var(--s-delay, 0s);
+}
+
+/* ----------------------- شبح ماده‌ی کوبیده در دست --------------------- */
+
+/*
+ * تصویر واقعی contents_{units}_ground با همان تکنیک tint؛ filter شبح را
+ * isolate می‌کند تا blend فقط داخل خودش بماند و سایه‌ی نرم هم می‌دهد.
+ * تپه روی بوم مشترک هاون بالاتر از مرکز است ⇒ کمی پایین می‌آوریم.
+ */
+.cst-ghost-ground {
+  position: absolute;
+  inset: 0;
+  transform: translateY(16%) scale(0.92);
+  transition: transform 0.24s ease;
+  filter: drop-shadow(0 14px 16px rgba(0, 0, 0, 0.5));
+}
+/* روی پاتیل: کج‌شدن به نشانه‌ی «آماده‌ی ریختن» */
+.cst-ghost-ground.is-pouring {
+  transform: translateY(16%) scale(0.92) rotate(20deg);
+}
+
+/* ------------------------------ Keyframes ---------------------------- */
+
+@keyframes cst-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  20% {
+    transform: translate(-9px, 0) rotate(-2deg);
+  }
+  40% {
+    transform: translate(8px, 0) rotate(2deg);
+  }
+  60% {
+    transform: translate(-6px, 0) rotate(-1.4deg);
+  }
+  80% {
+    transform: translate(4px, 0) rotate(0.8deg);
+  }
+}
+
+@keyframes cst-jiggle {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-2px, 1px);
+  }
+  50% {
+    transform: translate(0, 2px);
+  }
+  75% {
+    transform: translate(2px, 1px);
+  }
+}
+
+@keyframes cst-grind {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-8px, 4px) rotate(-3deg);
+  }
+  50% {
+    transform: translate(0, 9px) rotate(0deg);
+  }
+  75% {
+    transform: translate(8px, 4px) rotate(3deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+@keyframes cst-dust-rise {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-56px) scale(1.25);
+    opacity: 0;
+  }
+}
+
+@keyframes cst-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes cst-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.5);
+  }
+}
+
+@keyframes cst-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cst-bubble {
+  0% {
+    transform: translateY(0) scale(0.35);
+    opacity: 0;
+  }
+  22% {
+    opacity: calc(var(--bubble-intensity, 0.6) * 0.9);
+  }
+  100% {
+    transform: translateY(-62px) scale(1.05);
+    opacity: 0;
+  }
+}
+
+@keyframes cst-steam {
+  0% {
+    transform: translate(0, 0) scale(0.5);
+    opacity: 0;
+  }
+  22% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate(-34px, -280px) scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes cst-fall {
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(96px) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes cst-splash-bit {
+  0% {
+    transform: translate(-50%, -50%) scale(0.6);
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--sb-x, 0px)), calc(-50% + var(--sb-y, -40px))) scale(0.4);
+    opacity: 0;
+  }
+}
+
+@keyframes cst-ripple {
+  from {
+    width: 40px;
+    height: 16px;
+    opacity: 0.9;
+  }
+  to {
+    width: 330px;
+    height: 116px;
+    opacity: 0;
+  }
+}
+
+@keyframes cst-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

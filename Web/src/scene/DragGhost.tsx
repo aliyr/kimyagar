@@ -1,15 +1,22 @@
 /**
  * شیء در دست بازیکن — دقیقاً زیر انگشت/اشاره‌گر حرکت می‌کند.
  * تا Drop، همه‌چیز قابل لغو است؛ رهاکردن جای اشتباه بی‌هزینه است.
+ *
+ * ماده‌ی کوبیده (kind: 'ground') با تصویر واقعی contents_{units}_ground و
+ * tint رنگ ماده رندر می‌شود (همان تکنیک mask + luminosity هاون)؛ روی پاتیل
+ * ~۲۰ درجه کج می‌شود، انگار آماده‌ی ریختن است.
  */
 
 import { useGameStore } from '../store/gameStore';
+import { CLASSIC_ART, artUrl } from './artManifest';
 import { useArt, vars } from './Zone';
 import { useUiState } from './uiState';
+import './classic-stations.css';
 
 const SIZES = {
   jar: { width: 150, height: 150 },
-  ground: { width: 140, height: 88 },
+  /* بوم مشترک هاون ~مربع است؛ تپه وسطِ آن می‌نشیند */
+  ground: { width: 190, height: 194 },
   bottle: { width: 150, height: 250 },
 };
 
@@ -17,6 +24,10 @@ export function DragGhost() {
   const drag = useUiState((s) => s.drag);
   const ingredient = useGameStore((s) =>
     drag?.ingredientId ? s.ingredientById(drag.ingredientId) : undefined,
+  );
+  /** واحدهای هاون هنگام درگ (هاون تا Drop خالی نمی‌شود) */
+  const mortarUnits = useGameStore((s) =>
+    s.mortar ? (Math.min(3, Math.max(1, Math.round(s.mortar.quantity))) as 1 | 2 | 3) : 1,
   );
   const jarArt = useArt(
     drag?.kind === 'jar' && drag.ingredientId
@@ -27,6 +38,8 @@ export function DragGhost() {
 
   if (!drag) return null;
   const size = SIZES[drag.kind];
+  const groundSrc =
+    drag.kind === 'ground' ? artUrl(CLASSIC_ART.mortar.contents(mortarUnits, 'ground')) : undefined;
 
   return (
     <div
@@ -56,7 +69,20 @@ export function DragGhost() {
           <span className="jar__label">{ingredient?.nameFa}</span>
         </>
       ) : null}
-      {drag.kind === 'ground' ? <span className="ghost__heap" /> : null}
+      {drag.kind === 'ground' && groundSrc ? (
+        <span
+          className={`cst-ghost-ground${drag.over === 'cauldron' ? ' is-pouring' : ''}`}
+        >
+          <span
+            className="cst-contents__color"
+            style={{
+              WebkitMaskImage: `url("${groundSrc}")`,
+              maskImage: `url("${groundSrc}")`,
+            }}
+          />
+          <img className="cst-fit cst-contents__texture" src={groundSrc} alt="" draggable={false} />
+        </span>
+      ) : null}
       {drag.kind === 'bottle' ? (
         <>
           {bottleArt.node}

@@ -1,0 +1,177 @@
+{
+  "generated": "2026-08-25T01:06:05.247Z",
+  "source": "AI masters (classic_*.png) + existing classic art, processed by tools/build_classic_upgrade.mjs",
+  "runtime": "Web/public/art/",
+  "files": [
+    {
+      "file": "mortar/mortar_back.png",
+      "source": "mortar_body.png",
+      "note": "full body on shared canvas"
+    },
+    {
+      "file": "mortar/mortar_front.png",
+      "source": "mortar_body.png",
+      "note": "front wall band (fade 0.27–0.4)"
+    },
+    {
+      "file": "mortar/contents_1_raw.png",
+      "source": "classic_heap_raw.png",
+      "note": "1 unit(s), bottom-anchored at 0.52"
+    },
+    {
+      "file": "mortar/contents_2_raw.png",
+      "source": "classic_heap_raw.png",
+      "note": "2 unit(s), bottom-anchored at 0.52"
+    },
+    {
+      "file": "mortar/contents_3_raw.png",
+      "source": "classic_heap_raw.png",
+      "note": "3 unit(s), bottom-anchored at 0.52"
+    },
+    {
+      "file": "mortar/contents_1_ground.png",
+      "source": "classic_heap_ground.png",
+      "note": "1 unit(s), bottom-anchored at 0.52"
+    },
+    {
+      "file": "mortar/contents_2_ground.png",
+      "source": "classic_heap_ground.png",
+      "note": "2 unit(s), bottom-anchored at 0.52"
+    },
+    {
+      "file": "mortar/contents_3_ground.png",
+      "source": "classic_heap_ground.png",
+      "note": "3 unit(s), bottom-anchored at 0.52"
+    },
+    {
+      "file": "mortar/pestle_1.png",
+      "source": "mortar_pestle.png",
+      "note": "baked rotation 14°"
+    },
+    {
+      "file": "mortar/pestle_2.png",
+      "source": "mortar_pestle.png",
+      "note": "baked rotation 4°"
+    },
+    {
+      "file": "mortar/pestle_3.png",
+      "source": "mortar_pestle.png",
+      "note": "baked rotation 24°"
+    },
+    {
+      "file": "cauldron/potion_still.png",
+      "source": "classic_potion_still.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/potion_swirl.png",
+      "source": "classic_potion_swirl.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/potion_boil_1.png",
+      "source": "classic_potion_boil_1.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/potion_boil_2.png",
+      "source": "classic_potion_boil_2.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "heat/fire_low_1.png",
+      "source": "fire_low.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_low_2.png",
+      "source": "classic_fire_low_2.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_low_3.png",
+      "source": "classic_fire_low_3.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_medium_1.png",
+      "source": "fire_medium.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_medium_2.png",
+      "source": "classic_fire_medium_2.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_medium_3.png",
+      "source": "classic_fire_medium_3.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_high_1.png",
+      "source": "fire_high.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_high_2.png",
+      "source": "classic_fire_high_2.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "heat/fire_high_3.png",
+      "source": "classic_fire_high_3.png",
+      "note": "bottom-anchored on shared canvas"
+    },
+    {
+      "file": "table/bucket.png",
+      "source": "classic_bucket.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/shelf_board.png",
+      "source": "classic_shelf_board.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_woman_elder_happy.png",
+      "source": "classic_customer_woman_elder_happy.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_woman_elder_sad.png",
+      "source": "classic_customer_woman_elder_sad.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_man_worker_happy.png",
+      "source": "classic_customer_man_worker_happy.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_man_worker_sad.png",
+      "source": "classic_customer_man_worker_sad.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_woman_young_happy.png",
+      "source": "classic_customer_woman_young_happy.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_woman_young_sad.png",
+      "source": "classic_customer_woman_young_sad.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_man_elder_happy.png",
+      "source": "classic_customer_man_elder_happy.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_man_elder_sad.png",
+      "source": "classic_customer_man_elder_sad.png",
+      "note": "light-bg"
+    }
+  ]
+}

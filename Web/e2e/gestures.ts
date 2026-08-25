@@ -51,6 +51,52 @@ export async function circularMoves(
   await pause(page, 60);
 }
 
+/**
+ * درگ شیشه از قفسه‌ی دیواری به هاون: اول کشیدن عمودی به پایین (تا ژست قفسه
+ * آن را Drag تشخیص دهد نه اسکرول افقی)، بعد حرکت به مرکز هاون.
+ */
+export async function dragJarToMortar(page: Page, jar: Locator, mortar: Locator): Promise<void> {
+  const jarBox = await jar.boundingBox();
+  const mortarBox = await mortar.boundingBox();
+  if (!jarBox || !mortarBox) throw new Error('jar/mortar bounding box missing');
+  const from = { x: jarBox.x + jarBox.width / 2, y: jarBox.y + jarBox.height / 2 };
+  const mid = { x: from.x, y: from.y + 70 };
+  const to = { x: mortarBox.x + mortarBox.width / 2, y: mortarBox.y + mortarBox.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await pause(page, 30);
+  for (let i = 1; i <= 6; i++) {
+    await page.mouse.move(from.x, from.y + (mid.y - from.y) * (i / 6));
+    await pause(page, 18);
+  }
+  const steps = 18;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    await page.mouse.move(mid.x + (to.x - mid.x) * t, mid.y + (to.y - mid.y) * t);
+    await pause(page, 18);
+  }
+  await page.mouse.up();
+  await pause(page, 80);
+}
+
+/** کشیدن افقی با اشاره‌گر — برای اسکرول قفسه‌ی دیواری. */
+export async function dragHorizontally(
+  page: Page,
+  from: { x: number; y: number },
+  dx: number,
+  steps = 20,
+): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await pause(page, 30);
+  for (let i = 1; i <= steps; i++) {
+    await page.mouse.move(from.x + (dx * i) / steps, from.y);
+    await pause(page, 18);
+  }
+  await page.mouse.up();
+  await pause(page, 80);
+}
+
 /** دو دور کامل حول مرکز (هم‌زدن). */
 export async function twoCircles(page: Page, locator: Locator, radius = 22): Promise<void> {
   const c = await centerOf(locator);

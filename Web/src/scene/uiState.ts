@@ -31,6 +31,8 @@ export interface UiState {
   splashPulse: number;
   swirlPulse: number;
   pourPulse: number;
+  /** لرزش «جا ندارد» هاون — وقتی Drop شیشه روی هاونِ پر رد می‌شود */
+  mortarShakePulse: number;
 
   beginDrag: (d: Omit<DragState, 'over'>) => void;
   updateDrag: (x: number, y: number, over: DropTargetId | null) => void;
@@ -38,7 +40,7 @@ export interface UiState {
   setGrinding: (v: boolean) => void;
   setStirring: (v: boolean) => void;
   setPouring: (v: boolean) => void;
-  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse') => void;
+  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse') => void;
 }
 
 export const useUiState = create<UiState>((set) => ({
@@ -49,6 +51,7 @@ export const useUiState = create<UiState>((set) => ({
   splashPulse: 0,
   swirlPulse: 0,
   pourPulse: 0,
+  mortarShakePulse: 0,
 
   beginDrag: (d) => set({ drag: { ...d, over: null } }),
   updateDrag: (x, y, over) =>

@@ -8,8 +8,10 @@
 import { useGameStore } from '../store/gameStore';
 import { uiLabels } from '../data/labels';
 import { tapProps } from '../gestures';
+import { CLASSIC_ART } from './artManifest';
 import { PROPS } from './layout';
-import { rectStyle } from './Zone';
+import { ArtLayer, rectStyle } from './Zone';
+import './classic-props.css';
 
 export function TableProps() {
   const openOverlay = useGameStore((s) => s.openOverlayAction);
@@ -48,15 +50,19 @@ export function TableProps() {
 
       <div
         data-testid="reset-button"
-        className={`bucket interactive${hasBrew ? ' is-live' : ''}`}
+        className={`bucket prop-bucket interactive${hasBrew ? ' is-live' : ''}`}
         title={uiLabels.resetBrew}
         style={rectStyle(PROPS.bucket, 45)}
         {...tapProps(resetBrew)}
       >
-        <span className="bucket__body" />
-        <span className="bucket__band bucket__band--top" />
-        <span className="bucket__band bucket__band--bottom" />
-        <span className="bucket__handle" />
+        <ArtLayer src={CLASSIC_ART.bucket} fit="contain" className="prop-bucket-img">
+          <div className="prop-bucket-ph">
+            <span className="prop-bucket-ph__handle" />
+            <span className="prop-bucket-ph__body" />
+            <span className="prop-bucket-ph__band prop-bucket-ph__band--top" />
+            <span className="prop-bucket-ph__band prop-bucket-ph__band--bottom" />
+          </div>
+        </ArtLayer>
       </div>
     </>
   );

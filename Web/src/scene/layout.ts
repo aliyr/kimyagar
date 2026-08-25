@@ -5,7 +5,6 @@
  * فیزیکی متعلق به Workstream B را نگه می‌دارد (همه در فضای منطقی 1920×1080).
  */
 
-import type { Quantity } from '../engine/types';
 import { SCENE_ZONES } from './artManifest';
 
 export interface Rect {
@@ -78,16 +77,6 @@ export const PROPS = {
   stirHint: { x: 655, y: 396, width: 440, height: 48 },
 } satisfies Record<string, Rect>;
 
-export const DISH_SIZE = 68;
-
-/** ظرف‌های کوچک سهم‌بندی، روی لبه‌ی پشتی میز بالای هاون */
-export const QUANTITY_DISHES: { q: Quantity; faLabel: string; x: number; y: number }[] = [
-  { q: 0.5, faLabel: '۰٫۵', x: 262, y: 508 },
-  { q: 1, faLabel: '۱', x: 344, y: 508 },
-  { q: 1.5, faLabel: '۱٫۵', x: 426, y: 508 },
-  { q: 2, faLabel: '۲', x: 508, y: 508 },
-];
-
 /**
  * سه اهرم برنجی حرارت، روی لبه‌ی جلویی میز زیر اجاق.
  * بیرون از Zone اجاق تا روی خودِ شعله‌ها نیفتند و لمس آسان بماند.
@@ -98,17 +87,3 @@ export const HEAT_NOTCHES: { x: number; y: number; width: number; height: number
   { x: 976, y: 1000, width: 108, height: 76 },
 ];
 
-/**
- * شبکه‌ی شیشه‌های کابینت، هم‌تراز با قفسه‌های نقاشی‌شده‌ی cabinet_open.png
- * (تصویر با object-fit: fill روی Zone کشیده می‌شود تا این نسبت‌ها دقیق بمانند).
- * y هر ردیف = بالای جعبه‌ی شیشه؛ کف شیشه روی تخته‌ی قفسه می‌نشیند.
- */
-export const JAR_SIZE = { width: 150, height: 140 };
-export const JAR_ROWS = [132, 288, 443, 603];
-export const JAR_COLUMNS = [84, 254, 424];
-
-export function jarSlot(index: number): { left: number; top: number } {
-  const perRow = JAR_COLUMNS.length;
-  const row = Math.floor(index / perRow) % JAR_ROWS.length;
-  return { left: JAR_COLUMNS[index % perRow], top: JAR_ROWS[row] };
-}
