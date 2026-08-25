@@ -12,8 +12,9 @@ dist
 dist-ssr
 *.local
 
-# Debug APK output
-apk/
+# Debug APK output — خودِ فایل نصب را نگه می‌داریم تا روی ریموت برود
+apk/*
+!apk/kimiagar-debug.apk
 test-results
 playwright-report
 blob-report
