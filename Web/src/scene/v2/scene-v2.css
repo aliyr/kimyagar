@@ -1,0 +1,156 @@
+/* ==========================================================================
+   صحنه‌ی نسخه ۲ (v2) — مالک: Workstream B
+   همه‌ی اندازه‌ها در فضای منطقی 1920×1080 هستند (Stage آن را مقیاس می‌کند).
+   لایه‌های مشترک با کلاسیک (پاتیل، اجاق، بطری، مشتری، …) همان کلاس‌های
+   scene.css را دوباره استفاده می‌کنند تا placeholder ها یکسان و کامل بمانند؛
+   اینجا فقط چیزهای مخصوص v2 تعریف می‌شود.
+   قفسه و هاون (shelf-mortar.css) مال Workstream A است و اینجا نمی‌آید.
+   ========================================================================== */
+
+/* سبک پیکسل باید بدون نرم‌شدگی مقیاس بگیرد (کلاس را ArtLayerV2 می‌گذارد) */
+.zone-art--pixelated {
+  image-rendering: pixelated;
+}
+
+/* ظرف صحنه‌ی v2 — دقیقاً روی مستطیل صحنه می‌نشیند تا مختصات منطقی
+   لایه‌ها همان مختصات V2_ZONES باقی بماند */
+.v2-scene {
+  position: absolute;
+  inset: 0;
+}
+
+/* ----------------------------- معجون پاتیل --------------------------- */
+
+/* تصویر معجون (still / boil_1 / boil_2) روی گرادیان رنگیِ زیر می‌نشیند */
+.v2-potion__art {
+  mix-blend-mode: overlay;
+  opacity: 0.92;
+}
+/* placeholder تا وقتی تصویر معجون نیامده: سطح مایع خودِ گرادیان زیر است،
+   این لایه فقط کمی عمق و لبه‌ی مرطوب اضافه می‌کند */
+.v2-potion__ph {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    68% 120% at 50% 108%,
+    var(--liquid-deep, rgba(0, 0, 0, 0.5)),
+    transparent 74%
+  );
+}
+/* رنگ ماده‌ها روی بافت تصویر می‌نشیند تا در هر دو سبک، ترکیب وزنی رنگ
+   مواد دیده شود (بازخورد کیفی، بخش ۶.۸) */
+.v2-potion__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    82% 130% at 42% 18%,
+    var(--liquid-light, #6b7059),
+    var(--liquid, #4a5042) 58%,
+    var(--liquid-deep, #2c3128) 100%
+  );
+  mix-blend-mode: color;
+  opacity: 0.62;
+}
+/* پاتیل خالی: فقط آب گل‌آلود، بی‌رنگ و آرام */
+.v2-potion.is-empty {
+  opacity: 0.62;
+  filter: saturate(0.45);
+}
+.v2-potion.is-empty .v2-potion__tint {
+  opacity: 0.35;
+}
+.v2-potion.is-burnt .v2-potion__art {
+  filter: saturate(0.5) brightness(0.8);
+}
+/* جوش: تپش ملایم هم‌زمان با تعویض فریم‌ها تا حس «قل‌قل» کامل شود */
+.v2-potion.is-boiling .v2-potion__art {
+  animation: kg-v2-boil 0.7s ease-in-out infinite;
+}
+.v2-potion.is-ripe {
+  box-shadow:
+    inset 0 8px 22px rgba(0, 0, 0, 0.45),
+    0 0 60px rgba(111, 227, 214, 0.35);
+}
+
+@keyframes kg-v2-boil {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+/* ------------------------------- بطری‌ها ----------------------------- */
+
+/* هیت‌باکس برداشتن بطری از سبد — مستقل از اینکه هنر آمده یا placeholder */
+.v2-bottle-grab {
+  position: absolute;
+  left: 26px;
+  top: 20px;
+  width: 168px;
+  height: 240px;
+  cursor: grab;
+}
+
+/* --------------------------- انتخاب سبک هنری ------------------------- */
+
+.v2-style-switcher {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+.v2-style-switcher:hover {
+  opacity: 1;
+}
+.v2-style-switcher__btn {
+  padding: 6px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(233, 217, 180, 0.28);
+  background: rgba(16, 10, 6, 0.62);
+  color: rgba(233, 217, 180, 0.82);
+  font-size: 22px;
+  line-height: 1.6;
+  text-decoration: none;
+}
+.v2-style-switcher__btn.is-active {
+  border-color: rgba(255, 214, 140, 0.7);
+  background: rgba(233, 217, 180, 0.88);
+  color: #1b120b;
+}
+.v2-style-switcher__classic {
+  margin-inline-start: 6px;
+  color: rgba(233, 217, 180, 0.55);
+  font-size: 20px;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(233, 217, 180, 0.4);
+}
+.v2-style-switcher__classic:hover {
+  color: rgba(233, 217, 180, 0.9);
+}
+
+/* لینک رفتن به نسخه ۲ در مسیر کلاسیک — بیرون از Stage، گوشه‌ی پایین */
+.v2-route-link {
+  position: fixed;
+  inset-inline-end: 14px;
+  bottom: 12px;
+  z-index: 70;
+  padding: 5px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(233, 217, 180, 0.22);
+  background: rgba(16, 10, 6, 0.55);
+  color: rgba(233, 217, 180, 0.6);
+  font-size: 14px;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+.v2-route-link:hover {
+  opacity: 1;
+  color: rgba(233, 217, 180, 0.95);
+}

@@ -60,6 +60,7 @@ export const quantityLabels: Record<Quantity, string> = {
   1: '۱',
   1.5: '۱٫۵',
   2: '۲',
+  3: 'سه واحد',
 };
 
 export const processEventLabels: Record<ProcessEventType, string> = {

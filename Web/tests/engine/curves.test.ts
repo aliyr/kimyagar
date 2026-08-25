@@ -15,6 +15,7 @@ describe('quantity curve', () => {
     expect(quantityFactorFor(1, TUNING)).toBeCloseTo(1.0);
     expect(quantityFactorFor(1.5, TUNING)).toBeCloseTo(1.4);
     expect(quantityFactorFor(2, TUNING)).toBeCloseTo(1.7);
+    expect(quantityFactorFor(3, TUNING)).toBeCloseTo(2.15);
   });
 
   it('interpolates linearly between anchor points', () => {

@@ -1,0 +1,656 @@
+/* ==========================================================================
+   قفسه‌ی دیواری + هاون v2 — مالک: Workstream A
+   فقط کلاس‌های با پیشوند v2- (به scene.css و scene-v2.css دست نمی‌زنیم).
+   همه‌ی placeholder ها بدون فایل هنری هم «عمدی» به‌نظر می‌رسند: رنگ تخت،
+   شکل‌های گرد، و رنگ ماده از متغیر ‎--ing-color‎.
+   ========================================================================== */
+
+/* ------------------------------- قفسه -------------------------------- */
+
+.v2-shelf {
+  /* اسکرول/درگ را خودمان مدیریت می‌کنیم؛ مرورگر دست نزند */
+  touch-action: none;
+  pointer-events: auto;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.v2-shelf:active {
+  cursor: grabbing;
+}
+.v2-shelf img {
+  -webkit-user-drag: none;
+}
+
+.v2-shelf__strip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  will-change: transform;
+}
+
+/* placeholder تخته‌ی قفسه: دیوارِ فرورفته + تخته‌ی چوبی */
+.v2-shelf__board-ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.v2-shelf__board-ph::before {
+  content: '';
+  position: absolute;
+  inset: 6px 0 52px;
+  border-radius: 12px;
+  background:
+    repeating-linear-gradient(94deg, rgba(0, 0, 0, 0.06) 0 3px, transparent 3px 30px),
+    linear-gradient(180deg, rgba(16, 10, 6, 0.5), rgba(36, 24, 15, 0.28) 55%, rgba(14, 9, 5, 0.55));
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.55);
+}
+.v2-shelf__board-plank {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 26px;
+  height: 42px;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 3px, transparent 3px 150px),
+    linear-gradient(180deg, #8a5f36, #4a3220 62%, #2a1a0e);
+  box-shadow:
+    0 14px 22px rgba(0, 0, 0, 0.6),
+    inset 0 3px 0 rgba(255, 220, 170, 0.25);
+}
+.v2-shelf__board-plank::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -16px;
+  height: 16px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent);
+}
+
+/* نشانه‌ی اسکرول: محوِ لبه + فلش کوچک در سمتی که شیشه‌ی پنهان دارد */
+.v2-shelf__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 74px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.v2-shelf__edge.is-on {
+  opacity: 1;
+}
+.v2-shelf__edge--left {
+  left: 0;
+  background: linear-gradient(90deg, rgba(13, 8, 5, 0.78), transparent);
+}
+.v2-shelf__edge--right {
+  right: 0;
+  background: linear-gradient(270deg, rgba(13, 8, 5, 0.78), transparent);
+}
+.v2-shelf__edge span {
+  font-size: 46px;
+  line-height: 1;
+  color: rgba(233, 217, 180, 0.75);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  animation: v2-breathe 2.6s ease-in-out infinite;
+}
+
+/* ------------------------------- شیشه‌ها ------------------------------ */
+
+.v2-jar {
+  position: absolute;
+  touch-action: none;
+  cursor: grab;
+  transition: opacity 0.14s ease;
+}
+.v2-jar:active {
+  cursor: grabbing;
+}
+.v2-jar.is-lifted {
+  opacity: 0.2;
+}
+.v2-jar__ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.v2-jar__body {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 30px;
+  bottom: 22px;
+  overflow: hidden;
+  border-radius: 16px 16px 28px 28px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.04) 42%,
+    rgba(0, 0, 0, 0.28)
+  );
+  box-shadow:
+    inset 0 0 0 2px rgba(233, 217, 180, 0.2),
+    0 10px 18px rgba(0, 0, 0, 0.5);
+}
+.v2-jar__fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 68%;
+  background: var(--ing-color, #8a7a52);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ing-color, #8a7a52) 76%, white),
+    var(--ing-color, #8a7a52) 46%,
+    color-mix(in srgb, var(--ing-color, #8a7a52) 68%, black)
+  );
+  box-shadow: inset 0 6px 10px rgba(255, 255, 255, 0.18);
+}
+.v2-jar__gloss {
+  position: absolute;
+  left: 14%;
+  top: 6%;
+  width: 18%;
+  height: 82%;
+  border-radius: 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04));
+  filter: blur(1px);
+}
+.v2-jar__lid {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 6px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #e0b45f, #a3702a 55%, #62400f);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 245, 210, 0.5),
+    0 4px 10px rgba(0, 0, 0, 0.5);
+}
+/* برچسب کاغذی با نام فارسی ماده، چسبیده به لبه‌ی تخته */
+.v2-jar__label {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: -10px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-size: 20px;
+  color: #33240f;
+  background: linear-gradient(180deg, #f2e4c2, #cdb488);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ------------------------------- هاون -------------------------------- */
+
+.v2-mortar {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.v2-mortar img {
+  -webkit-user-drag: none;
+}
+.v2-mortar.is-shake {
+  animation: v2-shake 0.42s ease-in-out;
+}
+
+.v2-mortar__layer {
+  position: absolute;
+  inset: 0;
+}
+.v2-mortar__back {
+  z-index: 1;
+}
+.v2-mortar__contents {
+  z-index: 2;
+  pointer-events: none;
+  /* رنگ ماده به‌شکل هاله‌ی ظریف روی محتوا (روی هنر هم جواب می‌دهد) */
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--ing-color, #8a7a52) 45%, transparent));
+}
+/* «دیدن از پشت دیواره»: با محتوا، دیواره‌ی جلو نیمه‌شفاف می‌شود */
+.v2-mortar__front {
+  z-index: 3;
+  transition: opacity 0.22s ease;
+}
+.v2-mortar__front.is-xray {
+  opacity: 0.5;
+}
+
+/* placeholder داخل کاسه (لایه‌ی عقب) */
+.v2-mortar__back-ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.v2-mortar__inner-wall {
+  position: absolute;
+  left: 54px;
+  right: 54px;
+  top: 78px;
+  height: 130px;
+  border-radius: 0 0 50% 50% / 0 0 70% 70%;
+  background: linear-gradient(180deg, #37322b, #17140f);
+}
+.v2-mortar__cavity {
+  position: absolute;
+  left: 44px;
+  right: 44px;
+  top: 30px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, #241f19, #0f0c09);
+  box-shadow:
+    inset 0 12px 20px rgba(0, 0, 0, 0.85),
+    0 3px 0 rgba(255, 240, 210, 0.14);
+}
+
+/* placeholder دیواره‌ی بیرونی (لایه‌ی جلو) */
+.v2-mortar__front-ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.v2-mortar__wall {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 72px;
+  bottom: 26px;
+  border-radius: 42% 42% 50% 50% / 22% 22% 78% 78%;
+  background: radial-gradient(
+    82% 72% at 32% 18%,
+    var(--stone, #9a9083),
+    var(--stone-mid, #625b51) 46%,
+    #2e2a24 100%
+  );
+  box-shadow:
+    inset 0 -26px 40px rgba(0, 0, 0, 0.55),
+    inset 0 12px 20px rgba(255, 240, 210, 0.14),
+    0 20px 30px rgba(0, 0, 0, 0.5);
+}
+.v2-mortar__foot {
+  position: absolute;
+  left: 84px;
+  right: 84px;
+  bottom: 0;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--stone-dark, #3a352f), #1a1712);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* placeholder محتوا: تپه‌ای که با هر واحد بلندتر و پهن‌تر می‌شود */
+.v2-mortar__heap {
+  position: absolute;
+  left: 78px;
+  right: 78px;
+  bottom: 124px;
+  height: 56px;
+  border-radius: 50% 50% 44% 44% / 82% 82% 22% 22%;
+  background: radial-gradient(
+    70% 100% at 42% 20%,
+    color-mix(in srgb, var(--ing-color, #8a7a52) 74%, white),
+    var(--ing-color, #8a7a52) 52%,
+    color-mix(in srgb, var(--ing-color, #8a7a52) 60%, black) 100%
+  );
+  box-shadow: inset 0 -8px 14px rgba(0, 0, 0, 0.4);
+  transition: height 0.18s ease, left 0.18s ease, right 0.18s ease;
+}
+.v2-mortar__contents[data-units='2'] .v2-mortar__heap {
+  left: 66px;
+  right: 66px;
+  height: 80px;
+}
+.v2-mortar__contents[data-units='3'] .v2-mortar__heap {
+  left: 56px;
+  right: 56px;
+  height: 104px;
+}
+/* بافت: خام = تکه‌های درشت؛ کوبیده = دانه‌های ریز و صاف‌تر */
+.v2-mortar__heap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: radial-gradient(rgba(38, 24, 10, 0.55) 26%, transparent 30%);
+  background-size: 26px 26px;
+  opacity: 0.85;
+}
+.v2-mortar__contents[data-ground='true'] .v2-mortar__heap {
+  filter: saturate(0.94) brightness(1.06);
+}
+.v2-mortar__contents[data-ground='true'] .v2-mortar__heap::after {
+  background-size: 8px 8px;
+  opacity: 0.3;
+}
+.v2-mortar.is-grinding .v2-mortar__contents {
+  animation: v2-jiggle 0.3s linear infinite;
+}
+
+/* --------------------------------- کوبه ------------------------------- */
+
+.v2-pestle {
+  position: absolute;
+  left: 82px;
+  top: -52px;
+  width: 164px;
+  height: 226px;
+  z-index: 4;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  transform: rotate(16deg);
+  transform-origin: 50% 84%;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.v2-pestle:active {
+  cursor: grabbing;
+}
+/* زاویه‌ی کوبه داخل خود تصویر است؛ چرخش CSS فقط برای placeholder */
+.v2-pestle.is-art {
+  transform: none;
+}
+/* لرزش سبک هنگام کوبیدن — حتی پیش از آمدن هنر خوانا است */
+.v2-pestle.is-grinding {
+  animation: v2-grind 0.34s linear infinite;
+}
+.v2-pestle.is-art.is-grinding {
+  animation: v2-grind-art 0.34s linear infinite;
+}
+.v2-pestle.is-usable::after {
+  content: '';
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 60%;
+  height: 34%;
+  border-radius: 50%;
+  box-shadow: 0 0 26px rgba(255, 220, 150, 0.35);
+  animation: v2-breathe 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.v2-pestle__ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.v2-pestle__rod {
+  position: absolute;
+  left: 33%;
+  top: 0;
+  width: 34%;
+  height: 70%;
+  border-radius: 14px 14px 8px 8px;
+  background: linear-gradient(90deg, #33210f, #9a6c3c 42%, #4a3220 78%, #2a1a0c);
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.55);
+}
+.v2-pestle__head {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 0;
+  height: 34%;
+  border-radius: 46% 46% 50% 50% / 34% 34% 66% 66%;
+  background: radial-gradient(70% 70% at 34% 26%, #b3a999, #6b6459 52%, #3b3730);
+  box-shadow:
+    inset 0 -8px 14px rgba(0, 0, 0, 0.5),
+    0 10px 18px rgba(0, 0, 0, 0.5);
+}
+
+/* دهانه‌ی کاسه: پس از کوبیدن، برداشتنی و قابل کشیدن به پاتیل */
+.v2-mortar__grab {
+  position: absolute;
+  left: 26px;
+  top: 44px;
+  width: 268px;
+  height: 110px;
+  z-index: 5;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  border-radius: 50%;
+}
+.v2-mortar__grab:active {
+  cursor: grabbing;
+}
+.v2-mortar__grab::after {
+  content: '';
+  position: absolute;
+  inset: 8px 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 28px rgba(255, 235, 190, 0.28);
+  animation: v2-breathe 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* هاله‌ی مقصد Drop وقتی شیشه‌ای در دست است */
+.v2-mortar__ring {
+  position: absolute;
+  left: -8%;
+  right: -8%;
+  top: 6%;
+  bottom: -6%;
+  z-index: 6;
+  border-radius: 44% 44% 50% 50% / 28% 28% 72% 72%;
+  border: 5px dashed transparent;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  pointer-events: none;
+}
+.v2-mortar.is-target .v2-mortar__ring {
+  border-color: var(--glow-soft, rgba(111, 227, 214, 0.34));
+  box-shadow: 0 0 60px var(--glow-soft, rgba(111, 227, 214, 0.34));
+}
+.v2-mortar.is-target-active .v2-mortar__ring {
+  border-style: solid;
+  border-color: var(--glow, #7fe6da);
+  box-shadow:
+    0 0 100px rgba(111, 227, 214, 0.5),
+    inset 0 0 60px rgba(111, 227, 214, 0.2);
+  animation: v2-pulse 0.9s ease-in-out infinite;
+}
+
+/* نشانگر واحدها: چیپ فارسی + سه چراغ کوچک */
+.v2-mortar__units {
+  position: absolute;
+  left: 50%;
+  bottom: -48px;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 18px;
+  border-radius: 18px;
+  background: rgba(18, 11, 6, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(184, 134, 47, 0.45);
+  font-size: 22px;
+  color: #f4e2b4;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: v2-fade-in 0.3s ease-out;
+}
+.v2-mortar__pips {
+  display: flex;
+  gap: 5px;
+}
+.v2-mortar__pip {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(233, 217, 180, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(184, 134, 47, 0.4);
+  transition: background 0.2s ease;
+}
+.v2-mortar__pip.is-filled {
+  background: var(--ing-color, #d8b45f);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ing-color, #d8b45f) 60%, transparent);
+}
+
+/* راهنمای کوبیدن تا وقتی ماده خام است */
+.v2-mortar__hint {
+  position: absolute;
+  left: 50%;
+  bottom: -86px;
+  transform: translateX(-50%);
+  z-index: 7;
+  font-size: 20px;
+  color: rgba(233, 217, 180, 0.62);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: v2-fade-in 0.5s ease-out;
+}
+
+/* قلم‌مو: خالی کردن هاون */
+.v2-mortar__brush {
+  position: absolute;
+  left: 274px;
+  top: 126px;
+  width: 52px;
+  height: 98px;
+  z-index: 7;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: rotate(9deg);
+}
+.v2-brush__handle {
+  position: absolute;
+  left: 34%;
+  top: 0;
+  width: 32%;
+  height: 62%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #33210f, #8a6236 45%, #2f1e0e);
+}
+.v2-brush__ferrule {
+  position: absolute;
+  left: 26%;
+  right: 26%;
+  top: 58%;
+  height: 12%;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #d9ab52, #7a5218);
+}
+.v2-brush__bristles {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  top: 68%;
+  bottom: 0;
+  border-radius: 4px 4px 10px 10px;
+  background: repeating-linear-gradient(90deg, #6b5a3a 0 3px, #3f3422 3px 6px);
+}
+
+/* ------------------------------ Keyframes ----------------------------- */
+
+@keyframes v2-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes v2-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.5);
+  }
+}
+
+@keyframes v2-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes v2-jiggle {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(0, 3px);
+  }
+}
+
+@keyframes v2-shake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  20% {
+    transform: translateX(-10px) rotate(-1.5deg);
+  }
+  40% {
+    transform: translateX(9px) rotate(1.2deg);
+  }
+  60% {
+    transform: translateX(-6px) rotate(-0.8deg);
+  }
+  80% {
+    transform: translateX(4px) rotate(0.5deg);
+  }
+}
+
+/* لرزش کوبه‌ی placeholder حول زاویه‌ی پایه‌ی ۱۶ درجه */
+@keyframes v2-grind {
+  0% {
+    transform: rotate(16deg) translate(0, 0);
+  }
+  25% {
+    transform: rotate(9deg) translate(-7px, 5px);
+  }
+  50% {
+    transform: rotate(16deg) translate(0, 9px);
+  }
+  75% {
+    transform: rotate(23deg) translate(7px, 5px);
+  }
+  100% {
+    transform: rotate(16deg) translate(0, 0);
+  }
+}
+
+/* لرزش کوبه‌ی هنری (زاویه داخل تصویر است) */
+@keyframes v2-grind-art {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-8px, 4px) rotate(-5deg);
+  }
+  50% {
+    transform: translate(0, 9px) rotate(0deg);
+  }
+  75% {
+    transform: translate(8px, 4px) rotate(5deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}

@@ -1,0 +1,188 @@
+{
+  "style": "pixel",
+  "generated": "2026-08-25T00:19:45.227Z",
+  "source": "AI masters ({style}_{name}.png) processed by tools/build_ui_styles.mjs",
+  "runtime": "Web/public/art/pixel/",
+  "files": [
+    {
+      "file": "background/shop_background.png",
+      "source": "pixel_shop_background.png",
+      "note": "opaque"
+    },
+    {
+      "file": "shelf/shelf_board.png",
+      "source": "pixel_shelf_board.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/jar_chamomile.png",
+      "source": "pixel_jar_chamomile.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/jar_borage.png",
+      "source": "pixel_jar_borage.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/jar_mint.png",
+      "source": "pixel_jar_mint.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/jar_saffron.png",
+      "source": "pixel_jar_saffron.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/jar_poppy.png",
+      "source": "pixel_jar_poppy.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "shelf/jar_ginger.png",
+      "source": "pixel_jar_ginger.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "table/work_table.png",
+      "source": "pixel_work_table.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/cauldron_empty.png",
+      "source": "pixel_cauldron_empty.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/potion_still.png",
+      "source": "pixel_potion_still.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/potion_boil_1.png",
+      "source": "pixel_potion_boil_1.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "cauldron/potion_boil_2.png",
+      "source": "pixel_potion_boil_2.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "heat/fire_low.png",
+      "source": "pixel_fire_low.png",
+      "note": "black-bg"
+    },
+    {
+      "file": "heat/fire_medium.png",
+      "source": "pixel_fire_medium.png",
+      "note": "black-bg"
+    },
+    {
+      "file": "heat/fire_high.png",
+      "source": "pixel_fire_high.png",
+      "note": "black-bg"
+    },
+    {
+      "file": "bottles/bottle_empty.png",
+      "source": "pixel_bottle_empty.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "bottles/bottle_full.png",
+      "source": "pixel_bottle_full.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/counter.png",
+      "source": "pixel_customer_counter.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_woman_elder.png",
+      "source": "pixel_customer_woman_elder.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_man_worker.png",
+      "source": "pixel_customer_man_worker.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_woman_young.png",
+      "source": "pixel_customer_woman_young.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "customer/customer_man_elder.png",
+      "source": "pixel_customer_man_elder.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "goal/goal_note.png",
+      "source": "pixel_goal_note.png",
+      "note": "light-bg"
+    },
+    {
+      "file": "mortar/mortar_back.png",
+      "source": "pixel_mortar.png",
+      "note": "full body"
+    },
+    {
+      "file": "mortar/mortar_front.png",
+      "source": "pixel_mortar.png",
+      "note": "front wall band (fade 0.26–0.38 of body height)"
+    },
+    {
+      "file": "mortar/contents_1_raw.png",
+      "source": "pixel_heap_raw.png",
+      "note": "1 unit(s), bottom-anchored at 0.5 of body height"
+    },
+    {
+      "file": "mortar/contents_2_raw.png",
+      "source": "pixel_heap_raw.png",
+      "note": "2 unit(s), bottom-anchored at 0.5 of body height"
+    },
+    {
+      "file": "mortar/contents_3_raw.png",
+      "source": "pixel_heap_raw.png",
+      "note": "3 unit(s), bottom-anchored at 0.5 of body height"
+    },
+    {
+      "file": "mortar/contents_1_ground.png",
+      "source": "pixel_heap_ground.png",
+      "note": "1 unit(s), bottom-anchored at 0.5 of body height"
+    },
+    {
+      "file": "mortar/contents_2_ground.png",
+      "source": "pixel_heap_ground.png",
+      "note": "2 unit(s), bottom-anchored at 0.5 of body height"
+    },
+    {
+      "file": "mortar/contents_3_ground.png",
+      "source": "pixel_heap_ground.png",
+      "note": "3 unit(s), bottom-anchored at 0.5 of body height"
+    },
+    {
+      "file": "mortar/pestle_1.png",
+      "source": "pixel_pestle.png",
+      "note": "baked rotation 16°"
+    },
+    {
+      "file": "mortar/pestle_2.png",
+      "source": "pixel_pestle.png",
+      "note": "baked rotation 6°"
+    },
+    {
+      "file": "mortar/pestle_3.png",
+      "source": "pixel_pestle.png",
+      "note": "baked rotation 26°"
+    },
+    {
+      "file": "fx/discovery_glow.png",
+      "source": "procedural",
+      "note": "radial golden glow"
+    }
+  ]
+}

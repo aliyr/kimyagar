@@ -32,8 +32,12 @@ export type QualityTagId = string;
 
 export type GrindState = 'coarse' | 'crushed' | 'fine';
 export type HeatLevel = 'low' | 'medium' | 'high';
-/** مقادیر مجاز Prototype */
-export type Quantity = 0.5 | 1 | 1.5 | 2;
+/**
+ * مقادیر مجاز Prototype.
+ * صحنه‌ی کلاسیک از 0.5..2 استفاده می‌کند؛ صحنه‌ی v2 فقط واحدهای صحیح 1..3
+ * (هر درگ-اند-دراپ = ۱ واحد، حداکثر ۳). منحنی tuning.json تا 3 پوشش دارد.
+ */
+export type Quantity = 0.5 | 1 | 1.5 | 2 | 3;
 
 export type ProcessStage = 'fresh' | 'extracting' | 'ready' | 'overprocessed';
 

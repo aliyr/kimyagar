@@ -1,19 +1,8 @@
 import { useState } from 'react';
 import { OverlayShell } from './OverlayShell';
-import { heatFromPayload, toFaDigits } from './format';
-import {
-  grindLabels,
-  heatLabels,
-  stageLabels,
-  uiLabels,
-  quantityLabels,
-} from '../data/labels';
+import { formatQuantity, heatFromPayload, toFaDigits } from './format';
+import { grindLabels, heatLabels, stageLabels, uiLabels } from '../data/labels';
 import { useGameStore } from '../store/gameStore';
-import type { Quantity } from '../engine/types';
-
-function quantityFa(q: Quantity): string {
-  return quantityLabels[q];
-}
 
 export function ProcessHistoryOverlay() {
   const brew = useGameStore((s) => s.brew);
@@ -49,7 +38,7 @@ export function ProcessHistoryOverlay() {
                   <dl className="kimi-history-detail">
                     <div>
                       <dt>{uiLabels.quantity}</dt>
-                      <dd>{quantityFa(entry.quantity)}</dd>
+                      <dd>{formatQuantity(entry.quantity)}</dd>
                     </div>
                     <div>
                       <dt>{uiLabels.grindState}</dt>

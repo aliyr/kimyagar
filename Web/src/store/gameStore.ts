@@ -46,6 +46,9 @@ export interface RecordedRecipe {
   finalHeat: HeatLevel;
 }
 
+/** سقف واحدهای هاون در صحنه‌ی v2 (هر درگ-اند-دراپ = ۱ واحد) */
+export const MAX_MORTAR_UNITS = 3;
+
 /** آستانه‌های کار کوبش برای رسیدن به هر Grind State */
 export const GRIND_THRESHOLDS: { state: GrindState; work: number }[] = [
   { state: 'coarse', work: 1 },
@@ -91,6 +94,12 @@ export interface GameState {
   toggleCabinet: (open?: boolean) => void;
   /** برداشتن ماده از قفسه و گذاشتن در هاون (جایگزین محتوای قبلی هاون) */
   pickIngredient: (id: IngredientId) => void;
+  /**
+   * صحنه‌ی v2: افزودن ۱ واحد با هر درگ-اند-دراپ.
+   * همان ماده ⇒ ۱+ واحد تا سقف MAX_MORTAR_UNITS (بیشتر: بی‌اثر، UI لرزش می‌دهد).
+   * ماده‌ی متفاوت ⇒ جایگزینی کامل با ۱ واحد. افزودن واحد جدید کوبش را ریست می‌کند.
+   */
+  addUnitToMortar: (id: IngredientId) => void;
   setQuantity: (q: Quantity) => void;
   /** اعمال کار کوبش (از Gesture هاون) */
   applyGrindWork: (amount: number) => void;
@@ -148,6 +157,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0 },
       cabinetOpen: false,
     })),
+
+  addUnitToMortar: (id) =>
+    set((s) => {
+      if (!s.mortar || s.mortar.ingredientId !== id) {
+        return { mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0 } };
+      }
+      if (s.mortar.quantity >= MAX_MORTAR_UNITS) return {};
+      const quantity = Math.min(s.mortar.quantity + 1, MAX_MORTAR_UNITS) as Quantity;
+      // واحد تازه خام است ⇒ کوبش قبلی از بین می‌رود و باید دوباره کوبیده شود
+      return { mortar: { ingredientId: id, quantity, grindState: null, grindWork: 0 } };
+    }),
 
   setQuantity: (q) =>
     set((s) => (s.mortar ? { mortar: { ...s.mortar, quantity: q } } : {})),
