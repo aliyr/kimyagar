@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
+    "art:sync-works": "node scripts/sync-works-flat.mjs",
+    "art:check-works": "node scripts/sync-works-flat.mjs --check",
     "cap:sync": "npm run build && npx cap sync android",
     "apk": "npm run cap:sync && powershell -ExecutionPolicy Bypass -File ./scripts/build-apk.ps1"
   },
@@ -17,6 +19,7 @@
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

@@ -30,7 +30,8 @@ export type OverlayId =
   | 'notebook'
   | 'process_history'
   | 'customer_request'
-  | 'result';
+  | 'result'
+  | 'settings';
 
 export interface MortarState {
   ingredientId: IngredientId;
@@ -39,6 +40,11 @@ export interface MortarState {
   grindState: GrindState | null;
   /** کار انباشته‌ی کوبش؛ آستانه‌ها در GRIND_THRESHOLDS */
   grindWork: number;
+  /**
+   * کوبش خودکار در جریان است (کلاسیک): tick با نرخ GRIND_RATE کار می‌افزاید تا
+   * سقف؛ با رسیدن به سقف یا با transferMortar خاموش می‌شود.
+   */
+  grinding: boolean;
 }
 
 export interface RecordedRecipe {
@@ -55,6 +61,11 @@ export const GRIND_THRESHOLDS: { state: GrindState; work: number }[] = [
   { state: 'crushed', work: 2.2 },
   { state: 'fine', work: 3.6 },
 ];
+
+/** پنجره‌ی کوبش خودکار کلاسیک: در این مدت کار از ۰ به سقف (نرم) می‌رسد */
+export const MORTAR_GRIND_SECONDS = 7;
+/** نرخ کار کوبش خودکار (کار بر ثانیه) ⇒ درشت ≈ ۱٫۹ث، نیم‌کوب ≈ ۴٫۳ث، نرم = ۷ث */
+export const GRIND_RATE = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work / MORTAR_GRIND_SECONDS;
 
 export function grindStateForWork(work: number): GrindState | null {
   let result: GrindState | null = null;
@@ -101,8 +112,16 @@ export interface GameState {
    */
   addUnitToMortar: (id: IngredientId) => void;
   setQuantity: (q: Quantity) => void;
-  /** اعمال کار کوبش (از Gesture هاون) */
+  /** اعمال کار کوبش (از Gesture هاون یا tick کوبش خودکار) */
   applyGrindWork: (amount: number) => void;
+  /** شروع کوبش خودکار (کلاسیک) — بعد از فرود ماده در هاون */
+  startGrinding: () => void;
+  /**
+   * Tap روی هاون در فلو کلاسیک: کوبش می‌ایستد و درجه‌ی فعلی قفل می‌شود؛
+   * کلیک زودتر از آستانه‌ی اول ⇒ «درشت». برمی‌گرداند آیا چیزی برای انتقال هست.
+   * خودِ افزودن به پاتیل با addMortarToCauldron در لحظه‌ی ریختن قاشق انجام می‌شود.
+   */
+  transferMortar: () => boolean;
   /** خالی کردن هاون قبل از Add (بدون هزینه) */
   clearMortar: () => void;
   /** Drop محتوای هاون در پاتیل — غیرقابل Undo */
@@ -154,19 +173,24 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   pickIngredient: (id) =>
     set(() => ({
-      mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0 },
+      mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0, grinding: false },
       cabinetOpen: false,
     })),
 
   addUnitToMortar: (id) =>
     set((s) => {
       if (!s.mortar || s.mortar.ingredientId !== id) {
-        return { mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0 } };
+        return {
+          mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0, grinding: false },
+        };
       }
       if (s.mortar.quantity >= MAX_MORTAR_UNITS) return {};
       const quantity = Math.min(s.mortar.quantity + 1, MAX_MORTAR_UNITS) as Quantity;
       // واحد تازه خام است ⇒ کوبش قبلی از بین می‌رود و باید دوباره کوبیده شود
-      return { mortar: { ingredientId: id, quantity, grindState: null, grindWork: 0 } };
+      // (کوبش خودکار در جریان ادامه می‌یابد؛ فقط از صفر شروع می‌شود)
+      return {
+        mortar: { ingredientId: id, quantity, grindState: null, grindWork: 0, grinding: s.mortar.grinding },
+      };
     }),
 
   setQuantity: (q) =>
@@ -177,8 +201,38 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!s.mortar) return {};
       const maxWork = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work;
       const grindWork = Math.min(s.mortar.grindWork + amount, maxWork);
-      return { mortar: { ...s.mortar, grindWork, grindState: grindStateForWork(grindWork) } };
+      return {
+        mortar: {
+          ...s.mortar,
+          grindWork,
+          grindState: grindStateForWork(grindWork),
+          grinding: s.mortar.grinding && grindWork < maxWork,
+        },
+      };
     }),
+
+  startGrinding: () =>
+    set((s) => {
+      if (!s.mortar) return {};
+      const maxWork = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work;
+      if (s.mortar.grindWork >= maxWork) return {};
+      return { mortar: { ...s.mortar, grinding: true } };
+    }),
+
+  transferMortar: () => {
+    const s = get();
+    if (!s.mortar || s.brew.bottled) return false;
+    set({
+      mortar: {
+        ...s.mortar,
+        grinding: false,
+        // کلیک پیش از آستانه‌ی اول هم درشت حساب می‌شود تا هیچ کلیکی هدر نرود
+        grindState: s.mortar.grindState ?? GRIND_THRESHOLDS[0].state,
+        grindWork: Math.max(s.mortar.grindWork, GRIND_THRESHOLDS[0].work),
+      },
+    });
+    return true;
+  },
 
   clearMortar: () => set({ mortar: null }),
 
@@ -231,7 +285,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         finalHeat: s.brew.currentHeat,
       },
       // Overlay اینجا باز نمی‌شود؛ اول انیمیشن ریختن در بطری پخش می‌شود
-      // و بعد صحنه، نتیجه و پاسخ مشتری را نشان می‌دهد (BottleStation).
+      // و بعد صحنه، نتیجه و پاسخ مشتری را نشان می‌دهد (BottlingSequence / BottleStationV2).
     });
   },
 
@@ -288,7 +342,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   tick: (dtSeconds) => {
     const s = get();
-    if (s.isPaused() || s.brew.bottled || s.brew.entries.length === 0) return;
+    if (s.isPaused()) return;
+    // کوبش خودکار هاون (کلاسیک) — مستقل از وضعیت پاتیل
+    if (s.mortar?.grinding) s.applyGrindWork(dtSeconds * GRIND_RATE);
+    if (s.brew.bottled || s.brew.entries.length === 0) return;
     set({ brew: engine.advanceTime(s.brew, dtSeconds, s.defs) });
   },
 }));

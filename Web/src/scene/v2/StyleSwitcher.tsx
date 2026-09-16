@@ -46,7 +46,7 @@ export function StyleSwitcher() {
           {s.labelFa}
         </a>
       ))}
-      <a className="v2-style-switcher__classic" href="#/classic">
+      <a className="v2-style-switcher__classic" href="#/">
         نسخه کلاسیک
       </a>
     </div>

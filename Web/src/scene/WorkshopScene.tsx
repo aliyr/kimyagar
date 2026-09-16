@@ -8,10 +8,12 @@
 
 import './classic-ambience.css';
 import { Backdrop } from './Backdrop';
+import { ContactShadows } from './ContactShadows';
+import { StoveHole } from './StoveHole';
 import { CauldronStation } from './CauldronStation';
-import { HeatControl } from './HeatControl';
+import { FurnaceFire } from './FurnaceFire';
 import { MortarStation } from './MortarStation';
-import { BottleStation } from './BottleStation';
+import { BottlingSequence } from './BottlingSequence';
 import { TableProps } from './TableProps';
 import { CustomerArea } from './CustomerArea';
 import { ShelfStationClassic } from './ShelfStationClassic';
@@ -22,12 +24,14 @@ export function WorkshopScene() {
   return (
     <>
       <Backdrop />
+      <ContactShadows />
+      <StoveHole />
       <ShelfStationClassic />
       <CustomerArea />
-      <HeatControl />
+      <FurnaceFire />
       <CauldronStation />
       <MortarStation />
-      <BottleStation />
+      <BottlingSequence />
       <TableProps />
       <GoalNote />
       <DragGhost />

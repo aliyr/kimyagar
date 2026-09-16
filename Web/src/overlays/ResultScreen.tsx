@@ -10,16 +10,44 @@
  * نمی‌کنیم) و تیرگی Vignette صحنه هم با کلاس amb-reaction روی body کم می‌شود.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { OverlayShell } from './OverlayShell';
 import { PropertyChips } from './PropertyChips';
 import { toFaDigits } from './format';
 import { bandLabels, heatLabels, stabilityLabels, uiLabels } from '../data/labels';
 import { useGameStore } from '../store/gameStore';
+import { useRouteKind } from '../route';
+import { useArtStyle } from '../scene/v2/contracts';
+import { desaturate, mixColors, rgbString, shade } from '../scene/colors';
+import { FlatPotSvg } from '../art/flat/react/FlatPotSvg';
+import { sfx } from '../audio/sfx';
 import '../scene/classic-ambience.css';
 
 /** مدت پخش واکنش مشتری روی صحنه پیش از نمایش پنل متنی */
 const REACTION_MS = 2200;
+
+/**
+ * در سبک فلت (روت v2): دیگ برداری کوچک با رنگ نهایی معجون — همان ترکیب وزنی
+ * رنگ مواد که در پاتیل دیده می‌شد؛ سوخته ⇒ کم‌اشباع و تیره.
+ */
+function ResultPot() {
+  const routeKind = useRouteKind();
+  const artStyle = useArtStyle();
+  const flat = routeKind === 'v2' && artStyle === 'flat';
+  const entries = useGameStore((s) => s.result?.entries ?? s.brew.entries);
+  const ingredientById = useGameStore((s) => s.ingredientById);
+  const liquid = useMemo(() => {
+    if (entries.length === 0) return null;
+    let rgb = shade(
+      mixColors(entries.map((e) => ({ color: ingredientById(e.ingredientId)?.color ?? '#6b6b4a', weight: e.quantity }))),
+      -0.18,
+    );
+    if (entries.some((e) => e.stage === 'overprocessed')) rgb = shade(desaturate(rgb, 0.45), -0.3);
+    return rgbString(rgb);
+  }, [entries, ingredientById]);
+  if (!flat || !liquid) return null;
+  return <FlatPotSvg liquid={liquid} className="res-pot" data-testid="result-flat-pot" />;
+}
 
 export function ResultOverlay() {
   const result = useGameStore((s) => s.result);
@@ -43,6 +71,9 @@ export function ResultOverlay() {
       return;
     }
     setRevealed(false);
+    // استینگر با واکنش مشتری: موفق (عالی/خوب) یا ناموفق (ناقص/شکست)
+    if (evaluation.band === 'excellent' || evaluation.band === 'good') sfx.success();
+    else sfx.failure();
     const timer = window.setTimeout(() => setRevealed(true), REACTION_MS);
     return () => window.clearTimeout(timer);
   }, [evaluation]);
@@ -70,6 +101,7 @@ export function ResultOverlay() {
     return (
       <OverlayShell overlayId="result">
         <div className="res-compact">
+          <ResultPot />
           <p className="kimi-letter-name">{customer.nameFa}</p>
           <blockquote className="kimi-speech" data-testid="customer-reaction">
             {evaluation.reactionFa}
@@ -122,6 +154,7 @@ export function ResultOverlay() {
   return (
     <OverlayShell overlayId="result">
       <div className="res-compact">
+        <ResultPot />
         <h2 className="kimi-overlay-title kimi-overlay-title-inline">{uiLabels.potionReady}</h2>
 
         <section className="kimi-result-section">

@@ -1,44 +1,47 @@
 /**
- * ایستگاه هاون — نسخه‌ی لایه‌ای کلاسیک (هم‌قرارداد با v2):
+ * ایستگاه هاون — فلو کلیکی کلاسیک.
  *
- * - هر درگ-اند-دراپ شیشه از قفسه = ۱ واحد (تا سقف ۳)؛ ظرف‌های سهم‌بندی حذف شدند.
- * - رندر لایه‌ای روی بوم مشترک (CLASSIC_ART.mortar) در همان Rect و همان
- *   object-fit تا پیکسل‌به‌پیکسل هم‌تراز بمانند:
- *     ۱) mortar_back  ۲) contents_{units}_{raw|ground} با tint رنگ ماده
- *     ۳) mortar_front — با محتوا opacity ~۰٫۵ تا داخل کاسه دیده شود.
- * - کوبه بالای همه‌ی لایه‌ها (همیشه قابل لمس)؛ سرش داخل دهانه. هنگام کوبیدن
- *   فریم‌ها با چرخه‌ی ۱→۲→۳→۲→۱ (هر ~۱۱۰ms) عوض می‌شوند.
- * - پالس mortarShakePulse (Drop روی هاونِ پر) ⇒ لرزش کوتاه + «جا ندارد».
+ * - Tap شیشه در قفسه ⇒ ماده تا هاون پرواز می‌کند (IngredientFlight) و با فرود،
+ *   store.startGrinding() کوبش خودکار ۷ ثانیه‌ای را آغاز می‌کند (tick در store).
+ * - هنگام کوبش: فریم‌های کوبه ۱→۲→۳→۲ (~۱۱۰ms)، گرد و خاک، جرقه‌های دور دهانه،
+ *   حلقه‌ی برنجی زمان‌بندی (GrindRing) و هر ~۰٫۳۵ث یک «تیک» (صدا/هپتیک).
+ * - Tap روی هاون/کوبه ⇒ store.transferMortar() درجه‌ی همان لحظه را قفل می‌کند
+ *   (زودتر از آستانه‌ی اول = درشت) و SpoonTransfer قاشق سر بزی را می‌آورد؛
+ *   کوبه کنار می‌رود؛ در لحظه‌ی drop: addMortarToCauldron + splashPulse.
+ * - بعد از ۷ ثانیه ماده «نرم» می‌ماند و منتظر Tap.
+ * - رندر لایه‌ای روی بوم مشترک (CLASSIC_ART.mortar) مثل قبل:
+ *     mortar_back ⇒ contents_{units}_{raw|ground} با tint ⇒ mortar_front (x-ray).
+ * - پالس mortarShakePulse (شیشه روی هاونِ پر) ⇒ لرزش کوتاه + «جا ندارد».
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { grindLabels, uiLabels } from '../data/labels';
-import { tapProps, useDragSource, useGrindGesture } from '../gestures';
+import { tapProps } from '../gestures';
 import { CLASSIC_ART, SCENE_ZONES, artUrl } from './artManifest';
 import { PROPS } from './layout';
 import { ArtLayer, rectStyle, vars } from './Zone';
 import { useUiState } from './uiState';
+import { GrindRing } from './GrindRing';
+import { SpoonTransfer } from './SpoonTransfer';
+import { sfx } from '../audio/sfx';
+import { haptic } from '../platform/haptics';
 import './classic-stations.css';
 
 const Z = SCENE_ZONES.mortar.z;
-/**
- * پنل کابینتِ باز (z=40) جلوی هاون می‌ایستد؛ وقتی شیشه‌ای در دست است کل
- * ایستگاه بالا می‌آید تا مقصد Drop دیده شود (رفتار قبلی حفظ شده).
- */
-const LIFT = 25;
 
-/**
- * Rect کوبه — ثابت محلی چون layout.ts فریز است. فریم‌های pestle_{1..3} بوم
- * مشترک 654×736 دارند (چرخش پخته‌شده)؛ مرکز همان PROPS.pestle قدیمی است تا
- * سرِ کوبه داخل دهانه بماند و دسته رو به بالا-راست.
- */
-const PESTLE_RECT = { x: 346, y: 488, width: 204, height: 230 };
+/** Rect کوبه — نسبی به Zone هاون (layout.PROPS) تا با تغییر اندازه‌ی هاون هم‌راستا بماند */
+const PESTLE_RECT = PROPS.pestle;
 /** چرخه‌ی پینگ‌پنگ فریم‌ها هنگام کوبیدن: ۱→۲→۳→۲→۱→… */
 const PESTLE_SEQ = [1, 2, 3, 2] as const;
 const PESTLE_FRAME_MS = 110;
+/** هر «ضربه»ی کوبش (یک چرخه‌ی کامل فریم‌ها) ⇒ تیک صدا/هپتیک */
+const GRIND_TICK_MS = 350;
 /** طول لرزش «جا ندارد» — هماهنگ با cst-shake در CSS */
 const SHAKE_MS = 420;
+/** Tap = رهاکردن بدون جابه‌جایی بیش از این مقدار (پیکسل CSS) */
+const TAP_SLOP_PX = 10;
 
 /** ذرات گردی که هنگام کوبیدن از دهانه بلند می‌شوند */
 const DUST = [
@@ -48,38 +51,82 @@ const DUST = [
   { left: 42, delay: 0.65, dur: 0.85, size: 7 },
 ];
 
+/** جرقه‌های ریز دور دهانه (زاویه بر حسب درجه، فاصله‌ی زمانی) */
+const SPARKS = Array.from({ length: 8 }, (_, i) => ({
+  angle: -160 + i * 20 + (i % 2 ? 6 : -6),
+  delay: (i * 0.09) % 0.7,
+  dur: 0.55 + (i % 3) * 0.12,
+}));
+
+/** Tap ساده با تحمل لرزش انگشت (کوبه/هاون) */
+function useTapWithSlop(onTap: () => void) {
+  return useCallback(
+    (e: ReactPointerEvent<HTMLElement>) => {
+      if (e.button > 0) return;
+      e.stopPropagation();
+      const el = e.currentTarget;
+      const pointerId = e.pointerId;
+      const sx = e.clientX;
+      const sy = e.clientY;
+      const cleanup = () => {
+        el.removeEventListener('pointerup', onUp);
+        el.removeEventListener('pointercancel', onCancel);
+        if (el.hasPointerCapture?.(pointerId)) el.releasePointerCapture(pointerId);
+      };
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        cleanup();
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) <= TAP_SLOP_PX) onTap();
+      };
+      const onCancel = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        cleanup();
+      };
+      el.setPointerCapture(pointerId);
+      el.addEventListener('pointerup', onUp);
+      el.addEventListener('pointercancel', onCancel);
+    },
+    [onTap],
+  );
+}
+
 export function MortarStation() {
   const mortar = useGameStore((s) => s.mortar);
   const ingredient = useGameStore((s) =>
     s.mortar ? s.ingredientById(s.mortar.ingredientId) : undefined,
   );
-  const applyGrindWork = useGameStore((s) => s.applyGrindWork);
+  const paused = useGameStore((s) => s.openOverlay !== null || s.result !== null);
   const clearMortar = useGameStore((s) => s.clearMortar);
+  const transferMortar = useGameStore((s) => s.transferMortar);
   const addMortarToCauldron = useGameStore((s) => s.addMortarToCauldron);
 
-  const grinding = useUiState((s) => s.grinding);
-  const dropHint = useUiState((s) => s.drag?.kind === 'jar');
-  const dropActive = useUiState((s) => s.drag?.kind === 'jar' && s.drag.over === 'mortar');
-  const carryingGround = useUiState((s) => s.drag?.kind === 'ground');
+  const transfer = useUiState((s) => s.transfer);
+  const setTransfer = useUiState((s) => s.setTransfer);
   const mortarShakePulse = useUiState((s) => s.mortarShakePulse);
-  const setGrinding = useUiState((s) => s.setGrinding);
+  const setGrindingUi = useUiState((s) => s.setGrinding);
   const pulse = useUiState((s) => s.pulse);
 
   const grindState = mortar?.grindState ?? null;
   const ready = grindState !== null;
+  const grinding = !!mortar?.grinding && !paused && transfer === null;
   /** در کلاسیک فقط ۱..۳ می‌آید؛ برای اطمینان clamp می‌کنیم */
   const units = mortar
     ? (Math.min(3, Math.max(1, Math.round(mortar.quantity))) as 1 | 2 | 3)
     : 0;
-  const z = dropHint ? Z + LIFT : Z;
+  /** بعد از برداشتن با قاشق، کاسه خالی دیده می‌شود (store تا لحظه‌ی drop پر است) */
+  const contentsVisible = mortar !== null && (transfer === null || transfer === 'scoop');
+  const canTap = mortar !== null && transfer === null && !paused;
 
   /** ایندکس گام در چرخه‌ی پینگ‌پنگ کوبه؛ در سکون همیشه فریم ۱ */
   const [pestleStep, setPestleStep] = useState(0);
   const [pestleArtOk, setPestleArtOk] = useState(false);
   const [shaking, setShaking] = useState(false);
+  const transferColor = useRef('#8a7a52');
+  if (ingredient) transferColor.current = ingredient.color;
 
-  // چرخه‌ی فریم‌ها فقط هنگام کوبیدن
+  // چرخه‌ی فریم‌ها + وضعیت UI فقط هنگام کوبیدن
   useEffect(() => {
+    setGrindingUi(grinding);
     if (!grinding) {
       setPestleStep(0);
       return;
@@ -89,9 +136,22 @@ export function MortarStation() {
       PESTLE_FRAME_MS,
     );
     return () => window.clearInterval(id);
-  }, [grinding]);
+  }, [grinding, setGrindingUi]);
 
-  // لرزش «جا ندارد» — با هر پالس یک‌بار پخش می‌شود (پالس از ایجنت قفسه)
+  // تیک کوبش: صدا + هپتیک سبک + پالس برای دیگر لایه‌ها
+  useEffect(() => {
+    if (!grinding) return;
+    const tick = () => {
+      pulse('grindTickPulse');
+      sfx.grindTick();
+      haptic('light');
+    };
+    tick();
+    const id = window.setInterval(tick, GRIND_TICK_MS);
+    return () => window.clearInterval(id);
+  }, [grinding, pulse]);
+
+  // لرزش «جا ندارد» — با هر پالس یک‌بار پخش می‌شود (پالس از قفسه)
   useEffect(() => {
     if (mortarShakePulse === 0) return;
     setShaking(true);
@@ -99,26 +159,32 @@ export function MortarStation() {
     return () => window.clearTimeout(t);
   }, [mortarShakePulse]);
 
+  // اگر وسط انتقال Reset شد (هاون خالی و قاشق هنوز در راه)، انتقال لغو می‌شود
+  useEffect(() => {
+    if (transfer !== null && mortar === null && transfer !== 'drop') setTransfer(null);
+  }, [transfer, mortar, setTransfer]);
+
   const pestleFrame = grinding ? PESTLE_SEQ[pestleStep] : 1;
 
-  const grind = useGrindGesture({
-    enabled: mortar !== null,
-    onWork: applyGrindWork,
-    onStroke: () => pulse('pourPulse'),
-    onActiveChange: setGrinding,
-  });
+  const startTransfer = useCallback(() => {
+    if (!canTap) return;
+    if (!transferMortar()) return;
+    setTransfer('scoop');
+  }, [canTap, transferMortar, setTransfer]);
 
-  const carry = useDragSource({
-    kind: 'ground',
-    ingredientId: mortar?.ingredientId,
-    targets: ['cauldron'],
-    draggable: ready,
-    onDrop: (target) => {
-      if (target !== 'cauldron') return;
-      addMortarToCauldron();
-      pulse('splashPulse');
-    },
-  });
+  const onTapPointerDown = useTapWithSlop(startTransfer);
+
+  const onDrop = useCallback(() => {
+    addMortarToCauldron();
+    pulse('splashPulse');
+    sfx.splash();
+    haptic('medium');
+  }, [addMortarToCauldron, pulse]);
+
+  const onDone = useCallback(() => setTransfer(null), [setTransfer]);
+  const onScoop = useCallback(() => {
+    sfx.scoop();
+  }, []);
 
   const contentsSrc =
     units === 0 ? undefined : artUrl(CLASSIC_ART.mortar.contents(units, ready ? 'ground' : 'raw'));
@@ -128,30 +194,27 @@ export function MortarStation() {
       <div
         data-testid="mortar"
         data-mortar-units={mortar?.quantity ?? 0}
-        className={`cst-mortar${dropHint ? ' is-target' : ''}${
-          dropActive ? ' is-target-active' : ''
-        }${shaking ? ' is-shake' : ''}`}
+        data-grinding={grinding ? 'true' : undefined}
+        className={`cst-mortar${shaking ? ' is-shake' : ''}${canTap ? ' is-tappable interactive' : ''}`}
         style={{
-          ...rectStyle(SCENE_ZONES.mortar, z),
+          ...rectStyle(SCENE_ZONES.mortar, Z),
           ...vars({ '--ing-color': ingredient?.color ?? '#8a7a52' }),
         }}
         onDragStart={(e) => e.preventDefault()}
+        onPointerDown={canTap ? onTapPointerDown : undefined}
       >
         {/* ۱) بدنه‌ی کامل (پشت محتوا) */}
         <ArtLayer src={CLASSIC_ART.mortar.back}>
           <div className="cst-mortar__ph" />
         </ArtLayer>
 
-        {/* ۲) محتوا: لایه‌ی رنگ mask شده + بافت luminosity؛ منبع Drag پس از کوبیدن */}
-        {mortar && contentsSrc ? (
+        {/* ۲) محتوا: لایه‌ی رنگ mask شده + بافت luminosity */}
+        {contentsVisible && contentsSrc ? (
           <div
-            // قرارداد e2e: «mortar-contents» فقط وقتی ماده کوبیده و قابل درگ است
+            // قرارداد e2e: «mortar-contents» فقط وقتی ماده درجه گرفته است
             data-testid={ready ? 'mortar-contents' : 'mortar-contents-raw'}
             data-grind={grindState ?? 'whole'}
-            className={`cst-contents interactive${ready ? ' is-ready' : ''}${
-              grinding ? ' is-shaking' : ''
-            }`}
-            {...carry}
+            className={`cst-contents${ready ? ' is-ready' : ''}${grinding ? ' is-shaking' : ''}`}
           >
             <span
               className="cst-contents__color"
@@ -184,22 +247,44 @@ export function MortarStation() {
         ) : null}
 
         {/* ۳) دیواره‌ی جلو — با محتوا نیمه‌شفاف تا داخل کاسه دیده شود */}
-        <div className={`cst-mortar__front${mortar ? ' is-xray' : ''}`}>
+        <div className={`cst-mortar__front${contentsVisible ? ' is-xray' : ''}`}>
           <ArtLayer src={CLASSIC_ART.mortar.front} />
         </div>
+
+        {/* جرقه‌های کوبش دور دهانه */}
+        {grinding ? (
+          <div className="cst-mortar__sparks" aria-hidden>
+            {SPARKS.map((s, i) => (
+              <span
+                key={i}
+                className="cst-spark"
+                style={vars({
+                  '--sp-angle': `${s.angle}deg`,
+                  '--sp-delay': `${s.delay}s`,
+                  '--sp-dur': `${s.dur}s`,
+                })}
+              />
+            ))}
+          </div>
+        ) : null}
 
         <div className="cst-mortar__glow" />
         {shaking ? <div className="cst-mortar__noroom">جا ندارد!</div> : null}
       </div>
 
-      {/* کوبه — بالای دیواره‌ی جلو تا همیشه دیده و لمس شود؛ سرش داخل دهانه */}
+      {/* حلقه‌ی برنجی زمان‌بندی — فقط وقتی ماده‌ای در هاون است */}
+      {mortar && transfer === null ? (
+        <GrindRing work={mortar.grindWork} active={grinding} z={Z + 1} />
+      ) : null}
+
+      {/* کوبه — بالای دیواره‌ی جلو؛ هنگام انتقال کنار می‌رود */}
       <div
         data-testid="pestle"
-        className={`cst-pestle interactive${mortar ? ' is-usable' : ''}${
+        className={`cst-pestle${canTap ? ' interactive is-usable' : ''}${
           grinding ? ' is-grinding' : ''
-        }`}
-        style={rectStyle(PESTLE_RECT, z + 3)}
-        {...grind}
+        }${transfer !== null ? ' is-aside' : ''}`}
+        style={rectStyle(PESTLE_RECT, Z + 3)}
+        onPointerDown={canTap ? onTapPointerDown : undefined}
       >
         {([1, 2, 3] as const).map((f) => (
           <img
@@ -221,12 +306,25 @@ export function MortarStation() {
         )}
       </div>
 
+      {/* قاشق سر بزی: هاون ⇒ پاتیل */}
+      {transfer !== null ? (
+        <div className="cst-spoon-layer" style={rectStyle({ x: 0, y: 0, width: 1920, height: 1080 }, 44)}>
+          <SpoonTransfer
+            color={transferColor.current}
+            onPhase={setTransfer}
+            onScoop={onScoop}
+            onDrop={onDrop}
+            onDone={onDone}
+          />
+        </div>
+      ) : null}
+
       {/* قلم‌مو: خالی کردن هاون پیش از افزودن (بی‌هزینه) */}
-      {mortar && !carryingGround ? (
+      {mortar && transfer === null ? (
         <div
           className="brush interactive"
           title="خالی کردن هاون"
-          style={rectStyle(PROPS.brush, z + 1)}
+          style={rectStyle(PROPS.brush, Z + 1)}
           {...tapProps(clearMortar)}
         >
           <span className="brush__handle" />
@@ -235,12 +333,15 @@ export function MortarStation() {
         </div>
       ) : null}
 
-      {mortar ? (
-        <div className="mortar-label" style={rectStyle(PROPS.mortarLabel, z + 2)}>
+      {mortar && transfer === null ? (
+        <div className="mortar-label" style={rectStyle(PROPS.mortarLabel, Z + 2)}>
           {grindState ? (
-            <span className="mortar-label__state">{grindLabels[grindState]}</span>
+            <span className="mortar-label__state">
+              {grindLabels[grindState]}
+              {grinding ? '' : ` — ${uiLabels.tapMortarHint}`}
+            </span>
           ) : (
-            <span className="mortar-label__hint">{uiLabels.grindHint}</span>
+            <span className="mortar-label__hint">{uiLabels.grindingHint}</span>
           )}
         </div>
       ) : null}

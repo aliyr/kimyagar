@@ -1,11 +1,19 @@
 import { OverlayShell } from './OverlayShell';
 import { useGameStore } from '../store/gameStore';
 import { uiLabels } from '../data/labels';
+import { useRouteKind } from '../route';
+import { useArtStyle } from '../scene/v2/contracts';
+import { FlatIngredientIcon } from '../art/flat/react/FlatIngredientIcon';
+import { flatIngredientById } from '../art/flat/kit/ingredients.ts';
 
 export function NotebookOverlay() {
   const defs = useGameStore((s) => s.defs);
   const discoveredTagIds = useGameStore((s) => s.discoveredTagIds);
   const usedIngredientIds = useGameStore((s) => s.usedIngredientIds);
+  // سبک فلت (v2): آیکون برداری ماده به‌جای لکه‌ی رنگ
+  const routeKind = useRouteKind();
+  const artStyle = useArtStyle();
+  const flatIcons = routeKind === 'v2' && artStyle === 'flat';
 
   const discoveredTags = defs.qualityTags.filter((t) => discoveredTagIds.includes(t.id));
   const hiddenTagCount = defs.qualityTags.length - discoveredTags.length;
@@ -41,7 +49,13 @@ export function NotebookOverlay() {
             return (
               <li key={ing.id} className="kimi-notebook-card">
                 <div className="kimi-ingredient-head kimi-ingredient-head-compact">
-                  <span className="kimi-color-swatch" style={{ background: ing.color }} aria-hidden />
+                  {flatIcons && flatIngredientById(ing.id) ? (
+                    <span className="kimi-flat-icon" aria-hidden data-testid={`notebook-flat-icon-${ing.id}`}>
+                      <FlatIngredientIcon ingredientId={ing.id} />
+                    </span>
+                  ) : (
+                    <span className="kimi-color-swatch" style={{ background: ing.color }} aria-hidden />
+                  )}
                   <strong>{ing.nameFa}</strong>
                 </div>
                 {used && ing.cluesFa && ing.cluesFa.length > 0 ? (

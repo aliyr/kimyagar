@@ -13,21 +13,26 @@
 .stage-letterbox {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
   background: radial-gradient(120% 120% at 50% 50%, #120c08 0%, #060403 100%);
 }
 
+/*
+ * صحنه با left/top صحیح (از Stage.tsx) و scale از گوشه‌ی بالا-چپ جای‌گذاری می‌شود
+ * تا هیچ آفست نیم‌پیکسلی نداشته باشد (وگرنه با هر composite تازه، کل صحنه می‌پرد).
+ * backface-visibility لایه‌ی ریشه را از ابتدا composite می‌کند تا raster ثابت بماند.
+ */
 .scene {
-  position: relative;
-  flex: 0 0 auto;
-  transform-origin: 50% 50%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  backface-visibility: hidden;
   direction: rtl;
   background: #17100a;
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.8);
-  overflow: hidden;
+  /* clip (نه hidden): هیچ اسکرول برنامه‌ای (focus/scrollIntoView) نتواند صحنه را جابه‌جا کند */
+  overflow: clip;
 
   --glow: #7fe6da;
   --glow-soft: rgba(111, 227, 214, 0.34);
@@ -1191,7 +1196,7 @@
 .notebook:active {
   transform: scale(0.97);
 }
-/* دفترِ چرمی که به دیوارِ پشتِ میز تکیه داده است */
+/* دفترِ چرمی پایین‌راست، جلوی پیشخوان */
 .notebook__pages {
   position: absolute;
   left: 10px;

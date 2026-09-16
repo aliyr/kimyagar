@@ -40,9 +40,13 @@ export const SCENE_ZONES = {
     x: 0, y: 0, width: 1920, height: 1080, z: 0,
     img: 'background/shop_background.png',
   },
+  /**
+   * میز کار با کوره‌ی توکار: طاقچه‌ی آجری وسط دامنِ میز است؛ Zone کمی به راست
+   * رفته تا دهانه‌ی کوره زیر پاتیل بیفتد (هندسه‌ی دقیق در scene/furnaceGeometry).
+   */
   workTable: {
     id: 'work_table',
-    x: 60, y: 600, width: 1420, height: 480, z: 10,
+    x: 140, y: 600, width: 1420, height: 480, z: 10,
     img: 'table/work_table.png',
   },
   /**
@@ -55,35 +59,54 @@ export const SCENE_ZONES = {
     x: 150, y: 310, width: 1260, height: 220, z: 6,
     img: 'shelf/shelf_board.png',
   },
+  /**
+   * بدنه‌ی PNG پاتیل؛ افکت‌های داخل دهانه روی Canvas (scene/classicCauldronGeometry).
+   * Zone دقیقاً نسبت تصویر (1071×750) است تا پایه‌ی PNG = لبه‌ی پایین Zone باشد؛
+   * پایه (y=770) داخل سوراخ اجاق روی سطح میز (StoveHole) می‌نشیند، هم‌مرکز با کوره.
+   */
   cauldron: {
     id: 'cauldron',
-    x: 640, y: 470, width: 470, height: 440, z: 30,
+    x: 647, y: 490, width: 400, height: 280, z: 30,
     img: 'cauldron/cauldron_body.png',
   },
-  /** سطح مایع داخل پاتیل (رنگ با ترکیب مواد تغییر می‌کند) */
+  /**
+   * سطح مایع داخل پاتیل — در کلاسیک هیبرید دیگر رندر نمی‌شود (مایع از کیت فلت
+   * روی Canvas می‌آید)؛ برای v2 و ابزارهای هنری نگه داشته شده است.
+   */
   cauldronLiquid: {
     id: 'cauldron_liquid',
-    x: 700, y: 520, width: 350, height: 120, z: 31,
+    x: 680, y: 520, width: 350, height: 120, z: 31,
     img: 'cauldron/cauldron_liquid.png',
   },
+  /**
+   * دهانه‌ی کوره‌ی توکار میز (هیت‌باکس Tap برای چرخاندن درجه). آتش روی Canvas
+   * داخل طاقچه رندر می‌شود (FurnaceFire)؛ تصاویر states فقط fallback/v2 هستند.
+   */
   heatSource: {
     id: 'heat_source',
-    x: 690, y: 880, width: 370, height: 170, z: 25,
+    x: 735, y: 868, width: 225, height: 192, z: 12,
     states: {
       low: 'heat/fire_low.png',
       medium: 'heat/fire_medium.png',
       high: 'heat/fire_high.png',
     },
   },
+  /**
+   * هاون روی سطح میز (سطح رویه‌ی میز در صحنه ≈ y 600..797)؛ پایه‌ی کاسه روی
+   * y=775. اجزای وابسته (کوبه، محتوا، قلم‌مو، برچسب) در layout.PROPS نسبی‌اند.
+   */
   mortar: {
     id: 'mortar',
-    x: 260, y: 600, width: 320, height: 300, z: 35,
+    x: 290, y: 520, width: 250, height: 255, z: 35,
     img: 'mortar/mortar_body.png',
   },
-  /** قفسه/سبد بطری‌های خالی */
+  /**
+   * شیشه‌ی خالی روی میز، کنار پاتیل (نسبت دقیق تصویر 642×1126). هنگام ریختن،
+   * BottlingSequence همین شیشه را «برمی‌دارد» و این Zone خالی می‌شود.
+   */
   bottleShelf: {
     id: 'bottle_shelf',
-    x: 1190, y: 700, width: 220, height: 260, z: 30,
+    x: 1150, y: 560, width: 125, height: 220, z: 30,
     img: 'bottles/bottle_empty.png',
   },
   /** نقطه‌ی Bottling کنار پاتیل — Drop Target واضح و بزرگ */
@@ -91,9 +114,14 @@ export const SCENE_ZONES = {
     id: 'bottling_point',
     x: 1080, y: 560, width: 200, height: 240, z: 32,
   },
+  /**
+   * پیشخوان: Zone با همان نسبت تصویر (652×620) و لبه‌ی پایین کمی زیر لبه‌ی صحنه،
+   * تا پایه‌هایش روی زمین کارگاه بنشیند و «شناور» دیده نشود. مشتری (z=15) پشت
+   * آن می‌ایستد و از کمر به پایین پنهان می‌شود.
+   */
   customerCounter: {
     id: 'customer_counter',
-    x: 1440, y: 540, width: 480, height: 540, z: 20,
+    x: 1430, y: 599, width: 510, height: 485, z: 20,
     img: 'customer/counter.png',
   },
   customer: {
@@ -104,6 +132,20 @@ export const SCENE_ZONES = {
       man_worker: 'customer/customer_man_worker.png',
       woman_young: 'customer/customer_woman_young.png',
       man_elder: 'customer/customer_man_elder.png',
+      // شش ظاهر جدید (tools/build_customers.mjs) — هر یک با _happy / _sad
+      woman_merchant: 'customer/customer_woman_merchant.png',
+      woman_scribe: 'customer/customer_woman_scribe.png',
+      woman_weaver: 'customer/customer_woman_weaver.png',
+      woman_healer: 'customer/customer_woman_healer.png',
+      man_scholar: 'customer/customer_man_scholar.png',
+      man_musician: 'customer/customer_man_musician.png',
+      // سری سوم (جوان، بیشتر دختر؛ چهره‌های متفاوت)
+      woman_student: 'customer/customer_woman_student.png',
+      woman_florist: 'customer/customer_woman_florist.png',
+      woman_noble: 'customer/customer_woman_noble.png',
+      woman_traveler: 'customer/customer_woman_traveler.png',
+      woman_baker: 'customer/customer_woman_baker.png',
+      man_apprentice: 'customer/customer_man_apprentice.png',
     },
   },
   /** کاغذ خلاصه‌ی سفارش — دائمی، بالا-راست، فشرده */

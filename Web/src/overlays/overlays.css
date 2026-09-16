@@ -100,6 +100,20 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
   flex-shrink: 0;
 }
+/* آیکون برداری ماده (سبک فلت) جای لکه‌ی رنگ */
+.kimi-flat-icon {
+  display: inline-block;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+}
+/* دیگ برداری کوچک بالای پنل نتیجه (سبک فلت) */
+.res-compact .res-pot.flat-svg {
+  width: 7.5rem;
+  height: 7.5rem;
+  margin: -0.4rem auto 0.2rem;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.3));
+}
 
 .kimi-flavor,
 .kimi-clue,
@@ -382,4 +396,76 @@
     opacity: 0;
     transform: translateX(-50%) translateY(6px);
   }
+}
+
+/* --- تنظیمات: کلیدهای صدا و لرزش --- */
+.kimi-settings {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.kimi-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(184, 134, 47, 0.45);
+  border-radius: 0.7rem;
+  background: rgba(255, 248, 228, 0.35);
+}
+
+.kimi-setting-text {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.kimi-setting-label {
+  font-weight: 700;
+  color: #4a2218;
+}
+
+.kimi-setting-hint {
+  font-size: 0.82rem;
+  color: #6b5236;
+}
+
+.kimi-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 5.6rem;
+  height: 2rem;
+  padding: 0 0.6rem 0 2.1rem;
+  border-radius: 999px;
+  border: 1px solid #8a6a2c;
+  background: linear-gradient(#cdb58a, #b59c6f);
+  color: #5a4428;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.kimi-switch__knob {
+  position: absolute;
+  inset-inline-start: 0.2rem;
+  top: 0.2rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff5dc, #c9a45a 70%, #8a6a2c);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.kimi-switch.is-on {
+  background: linear-gradient(#5fa88a, #3d7f68);
+  color: #f6ecd2;
+  padding: 0 2.1rem 0 0.6rem;
+}
+
+.kimi-switch.is-on .kimi-switch__knob {
+  inset-inline-start: auto;
+  inset-inline-end: 0.2rem;
 }

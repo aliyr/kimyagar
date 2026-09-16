@@ -14,7 +14,8 @@
   /* اسکرول/درگ را خودمان مدیریت می‌کنیم؛ مرورگر دست نزند */
   touch-action: none;
   pointer-events: auto;
-  overflow: hidden;
+  /* clip: ظرف هرگز scrollLeft نگیرد (اسکرول برنامه‌ای ⇒ پرش قفسه)؛ نوار با transform حرکت می‌کند */
+  overflow: clip;
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
@@ -72,19 +73,94 @@
 .shelf-jar {
   position: absolute;
   touch-action: none;
-  cursor: grab;
-  transition: opacity 0.14s ease, transform 0.14s ease;
-}
-.shelf-jar:active {
-  cursor: grabbing;
+  cursor: pointer;
+  transition: opacity 0.14s ease, transform 0.14s ease, filter 0.2s ease;
 }
 .shelf-jar:hover {
   transform: translateY(-4px);
+}
+/* انگشت روی شیشه: کمی فشرده — «الان می‌رود» */
+.shelf-jar.is-pressed {
+  transform: translateY(2px) scale(0.97);
+}
+/* همین ماده الان در هاون است: درخشش خفیف */
+.shelf-jar.is-in-mortar {
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--ing-color, #d9a641) 70%, #fff));
 }
 /* شیشه در دست است ⇒ جای خالی‌اش روی قفسه محو می‌ماند */
 .shelf-jar.is-lifted {
   opacity: 0.2;
   transform: none;
+}
+
+/* سرپوش‌های چوبی دو سر قفسه — برش تیز تخته را می‌پوشانند */
+.shelf-wall__cap {
+  position: absolute;
+  bottom: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 220, 170, 0.18), rgba(0, 0, 0, 0) 18%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.12) 0 2px, transparent 2px 18px),
+    linear-gradient(90deg, #6a4526 0%, #8c5f33 40%, #5a3a1e 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(40, 22, 8, 0.8),
+    0 12px 22px rgba(0, 0, 0, 0.55);
+}
+.shelf-wall__cap--left {
+  left: -8px;
+  border-radius: 10px 4px 4px 10px;
+}
+.shelf-wall__cap--right {
+  right: -8px;
+  border-radius: 4px 10px 10px 4px;
+}
+.shelf-wall__cap-arrow {
+  font-size: 44px;
+  line-height: 1;
+  color: rgba(240, 224, 188, 0.85);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  animation: shelf-hint 2.6s ease-in-out infinite;
+}
+.shelf-wall__cap--right .shelf-wall__cap-arrow {
+  animation-name: shelf-hint-rtl;
+}
+.shelf-wall__cap.is-on .shelf-wall__cap-arrow {
+  opacity: 1;
+}
+
+/* پرواز ماده از شیشه تا هاون */
+.shelf-flight-layer {
+  pointer-events: none;
+  overflow: visible;
+}
+.shelf-flight {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.45));
+}
+.shelf-flight__icon {
+  position: absolute;
+  inset: 0;
+}
+.shelf-flight__icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* اگر آیکون کیت برای ماده نبود، یک گلوله‌ی رنگی */
+.shelf-flight__fallback {
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff8, transparent 40%), var(--ing-color, #8a7a52);
+  z-index: -1;
 }
 
 /* برچسب کاغذی نام ماده، چسبیده به لبه‌ی تخته */
@@ -105,37 +181,7 @@
   white-space: nowrap;
 }
 
-/* نشانه‌ی کشف‌پذیری اسکرول: محوِ لبه + فلش در سمتی که شیشه‌ی پنهان دارد */
-.shelf-wall__edge {
-  position: absolute;
-  top: 26%;
-  bottom: 0;
-  width: 78px;
-  display: grid;
-  place-items: center;
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  pointer-events: none;
-}
-.shelf-wall__edge.is-on {
-  opacity: 1;
-}
-.shelf-wall__edge--left {
-  left: 0;
-  background: linear-gradient(90deg, rgba(13, 8, 5, 0.72), rgba(13, 8, 5, 0));
-}
-.shelf-wall__edge--right {
-  right: 0;
-  background: linear-gradient(270deg, rgba(13, 8, 5, 0.72), rgba(13, 8, 5, 0));
-}
-.shelf-wall__edge span {
-  font-size: 48px;
-  line-height: 1;
-  color: rgba(240, 224, 188, 0.8);
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-  animation: shelf-hint 2.6s ease-in-out infinite;
-}
-
+/* فلش اسکرول داخل سرپوش‌ها (shelf-wall__cap-arrow) */
 @keyframes shelf-hint {
   0%,
   100% {
@@ -146,9 +192,6 @@
     opacity: 1;
     transform: translateX(-6px);
   }
-}
-.shelf-wall__edge--right span {
-  animation-name: shelf-hint-rtl;
 }
 @keyframes shelf-hint-rtl {
   0%,
@@ -181,9 +224,21 @@
   transform-origin: 50% 100%;
 }
 
-/* تصویر حالت احساسی روی تصویر عادی Crossfade می‌شود */
+/* تصویر حالت احساسی روی تصویر عادی Crossfade می‌شود و تصویر عادی هم‌زمان محو
+   می‌شود؛ وگرنه اگر قاب دو تصویر کمی فرق داشته باشد، دو چهره روی هم دیده می‌شوند */
 .cust-emotion {
   animation: cust-fade-in 0.3s ease-out both;
+}
+.cust-sprite.has-emotion > .zone-art:not(.cust-emotion) {
+  animation: cust-fade-out 0.3s ease-out both;
+}
+@keyframes cust-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 /* --- فاز ورود: راه‌رفتن از لبه‌ی راست --- */
@@ -717,7 +772,7 @@ body.amb-reaction .scene.is-paused .scene-vignette {
   .amb-dust__mote,
   .amb-warmth,
   .amb-fire,
-  .shelf-wall__edge span,
+  .shelf-wall__cap-arrow,
   .cust-spark,
   .res-waiting__dot,
   .cust-root[data-phase] .cust-walk,

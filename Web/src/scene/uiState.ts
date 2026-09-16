@@ -7,7 +7,16 @@ import { create } from 'zustand';
 import type { IngredientId } from '../engine/types';
 import type { DropTargetId } from './layout';
 
+/**
+ * نوع Drag. در فلو کلیکی کلاسیک دیگر استفاده نمی‌شود (قفسه فقط اسکرول افقی
+ * دارد)؛ برای سازگاری DragGhost و نسخه‌ی v2 نگه داشته شده است.
+ */
 export type DragKind = 'jar' | 'ground' | 'bottle';
+
+/** فازهای انتقال هاون ⇒ دیگ با قاشق سر بزی (کلاسیک) */
+export type TransferPhase = null | 'scoop' | 'carry' | 'drop';
+/** فازهای ریختن دیگ ⇒ شیشه ⇒ مشتری (کلاسیک) */
+export type PourPhase = null | 'tilt' | 'stream' | 'deliver';
 
 export interface DragState {
   kind: DragKind;
@@ -33,6 +42,12 @@ export interface UiState {
   pourPulse: number;
   /** لرزش «جا ندارد» هاون — وقتی Drop شیشه روی هاونِ پر رد می‌شود */
   mortarShakePulse: number;
+  /** هر «ضربه»ی کوبش خودکار (~۰٫۳۵ث) — برای صدا/هپتیک و لرزش کوبه */
+  grindTickPulse: number;
+  /** انتقال هاون ⇒ دیگ با قاشق (کلاسیک) */
+  transfer: TransferPhase;
+  /** ریختن دیگ ⇒ شیشه ⇒ مشتری (کلاسیک) */
+  pour: PourPhase;
 
   beginDrag: (d: Omit<DragState, 'over'>) => void;
   updateDrag: (x: number, y: number, over: DropTargetId | null) => void;
@@ -40,7 +55,9 @@ export interface UiState {
   setGrinding: (v: boolean) => void;
   setStirring: (v: boolean) => void;
   setPouring: (v: boolean) => void;
-  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse') => void;
+  setTransfer: (phase: TransferPhase) => void;
+  setPour: (phase: PourPhase) => void;
+  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse' | 'grindTickPulse') => void;
 }
 
 export const useUiState = create<UiState>((set) => ({
@@ -52,6 +69,9 @@ export const useUiState = create<UiState>((set) => ({
   swirlPulse: 0,
   pourPulse: 0,
   mortarShakePulse: 0,
+  grindTickPulse: 0,
+  transfer: null,
+  pour: null,
 
   beginDrag: (d) => set({ drag: { ...d, over: null } }),
   updateDrag: (x, y, over) =>
@@ -60,5 +80,7 @@ export const useUiState = create<UiState>((set) => ({
   setGrinding: (v) => set({ grinding: v }),
   setStirring: (v) => set({ stirring: v }),
   setPouring: (v) => set({ pouring: v }),
+  setTransfer: (phase) => set({ transfer: phase }),
+  setPour: (phase) => set({ pour: phase, pouring: phase !== null }),
   pulse: (key) => set((s) => ({ [key]: s[key] + 1 }) as Partial<UiState>),
 }));

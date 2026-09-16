@@ -27,8 +27,10 @@ import { useStageSpace } from '../Stage';
 import { hitTestDrop } from '../layout';
 import { useUiState } from '../uiState';
 import { vars } from '../Zone';
-import { ArtLayerV2, SHELF_INGREDIENT_ORDER, V2_ART, V2_ZONES } from './contracts';
+import { ArtLayerV2, SHELF_INGREDIENT_ORDER, V2_ART, V2_ZONES, useArtStyle } from './contracts';
 import { bumpMortarShake } from './MortarStationV2';
+import { FlatJar } from './FlatJar';
+import { flatIngredientById } from '../../art/flat/kit/ingredients.ts';
 import './shelf-mortar.css';
 
 const ZONE = V2_ZONES.shelf;
@@ -66,6 +68,8 @@ function Jar({
   const isLifted = useUiState(
     (s) => s.drag?.kind === 'jar' && s.drag.ingredientId === ingredient.id,
   );
+  // سبک فلت: شیشه‌ی برداری با آیکون زنده‌ی ماده (اگر در کیت Works موجود باشد)
+  const flatVector = useArtStyle() === 'flat' && flatIngredientById(ingredient.id) !== undefined;
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -170,16 +174,20 @@ function Jar({
       }}
       onPointerDown={onPointerDown}
     >
-      <ArtLayerV2 src={V2_ART.jar(ingredient.id)}>
-        <span className="v2-jar__ph">
-          <span className="v2-jar__body">
-            <span className="v2-jar__fill" />
-            <span className="v2-jar__gloss" />
+      {flatVector ? (
+        <FlatJar ingredientId={ingredient.id} color={ingredient.color} />
+      ) : (
+        <ArtLayerV2 src={V2_ART.jar(ingredient.id)}>
+          <span className="v2-jar__ph">
+            <span className="v2-jar__body">
+              <span className="v2-jar__fill" />
+              <span className="v2-jar__gloss" />
+            </span>
+            <span className="v2-jar__lid" />
+            <span className="v2-jar__label">{ingredient.nameFa}</span>
           </span>
-          <span className="v2-jar__lid" />
-          <span className="v2-jar__label">{ingredient.nameFa}</span>
-        </span>
-      </ArtLayerV2>
+        </ArtLayerV2>
+      )}
     </div>
   );
 }

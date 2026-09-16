@@ -1,0 +1,22 @@
+/* SVG درون‌خطی کیت فلت: ظرف اندازه را تعیین می‌کند، SVG آن را پر می‌کند */
+.flat-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.flat-svg > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Canvas صحنه‌ی پخت فلت — اندازه‌ی CSS از زون می‌آید، backing store از DPR */
+.flat-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

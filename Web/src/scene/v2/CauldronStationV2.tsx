@@ -19,7 +19,8 @@ import { useCircleGesture } from '../../gestures';
 import { MURKY_WATER, desaturate, mixColors, rgbString, shade } from '../colors';
 import { rectStyle, vars, zoneStyle } from '../Zone';
 import { useUiState } from '../uiState';
-import { ArtLayerV2, V2_ART, V2_ZONES } from './contracts';
+import { ArtLayerV2, V2_ART, V2_ZONES, useArtStyle } from './contracts';
+import { FlatCauldron } from './FlatCauldron';
 
 const BUBBLES = [
   { left: 14, size: 20, delay: 0, dur: 2.4 },
@@ -76,7 +77,16 @@ function useBoilFrame(active: boolean, periodMs: number): BoilFrame {
   return frame;
 }
 
+/**
+ * سبک فلت: صحنه‌ی پخت برداریِ زنده (FlatCauldron)؛ سبک‌های بیت‌مپی (pixel/engraved):
+ * همان پاتیل PNG + معجون tint‌دار.
+ */
 export function CauldronStationV2() {
+  const artStyle = useArtStyle();
+  return artStyle === 'flat' ? <FlatCauldron /> : <BitmapCauldronV2 />;
+}
+
+function BitmapCauldronV2() {
   const entries = useGameStore((s) => s.brew.entries);
   const heat = useGameStore((s) => s.brew.currentHeat);
   const stirCount = useGameStore((s) => s.brew.stirCount);

@@ -121,6 +121,20 @@
   inset: 0;
   display: block;
 }
+/* شیشه‌ی برداری سبک فلت (FlatJar): سه SVG روی هم، همه در مستطیل شیشه */
+.v2-jar__flat {
+  position: absolute;
+  inset: 0;
+  display: block;
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.35));
+}
+.v2-jar__flat .v2-jar__flat-layer {
+  position: absolute;
+  inset: 0;
+}
+.v2-jar__flat .v2-jar__flat-icon {
+  position: absolute;
+}
 .v2-jar__body {
   position: absolute;
   left: 24px;

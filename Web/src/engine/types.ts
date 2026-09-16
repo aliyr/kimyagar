@@ -91,6 +91,11 @@ export interface IngredientDefinition {
   /** ضرایب حرارت (پیش‌فرض ۱) — مثال: زنجبیل high → excitement ×2.2 */
   heatModifiers: Partial<Record<HeatLevel, PropertyMultipliers>>;
   quantitySensitive?: boolean;
+  /**
+   * ضریب سرعت استخراج در پاتیل (پیش‌فرض ۱). گل‌های نازک زودتر دم می‌کشند
+   * (>۱) و ریشه‌های سفت دیرتر (<۱)؛ روی Exposure و در نتیجه‌ی آن Stage اثر می‌کند.
+   */
+  extractionSpeed?: number;
   /** Clue های کیفی که با کشف در Notebook دیده می‌شوند */
   cluesFa?: string[];
 }

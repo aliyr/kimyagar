@@ -132,7 +132,7 @@ export function CustomerArea() {
         <div className="cust-walk">
           <div className="cust-bob">
             <div
-              className="cust-sprite"
+              className={`cust-sprite${emotion && emotionArt.loaded ? ' has-emotion' : ''}`}
               data-testid="customer-emotion"
               data-emotion={emotion ?? undefined}
             >

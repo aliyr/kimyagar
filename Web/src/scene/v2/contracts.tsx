@@ -35,7 +35,10 @@ export function artUrlV2(style: ArtStyle, relPath: string): string {
   return `/art/${style}/${relPath}`;
 }
 
-/** Provider آن در WorkshopSceneV2 (Workstream B) قرار می‌گیرد */
+/**
+ * Provider اصلی در App (تا Overlayها هم سبک را ببینند)؛ WorkshopSceneV2 هم
+ * برای اطمینان دوباره آن را با سبک روت می‌بندد.
+ */
 export const StyleContext = createContext<ArtStyle>(DEFAULT_ART_STYLE);
 
 export function useArtStyle(): ArtStyle {
@@ -86,6 +89,17 @@ export const V2_ZONES = {
       boil_2: 'cauldron/potion_boil_2.png',
     },
   },
+  /**
+   * بوم صحنه‌ی پخت برداریِ سبک فلت (FlatCookingScene از Kimiagar.Works):
+   * دیگ + اجاق + قاشق + مواد در حال سقوط، همه در یک Canvas. مربع ۵۱۲ واحدیِ
+   * صحنه با ضریب ۱٫۹ روی cauldron/heatSource می‌نشیند (لبه‌ی دیگ ≈ y 508،
+   * دهانه ≈ y 552، کف بدنه ≈ y 858، هیزم ≈ y 922). بالای صحنه بیرون Stage
+   * است تا قاشق جا داشته باشد. هیت‌باکس Drop/هم‌زدن همان `cauldron` می‌ماند.
+   */
+  flatCookingScene: {
+    id: 'v2_flat_cooking_scene',
+    x: 388, y: -20, width: 973, height: 973, z: 30,
+  },
   heatSource: {
     id: 'v2_heat_source',
     x: 690, y: 880, width: 370, height: 170, z: 25,
@@ -117,6 +131,18 @@ export const V2_ZONES = {
       man_worker: 'customer/customer_man_worker.png',
       woman_young: 'customer/customer_woman_young.png',
       man_elder: 'customer/customer_man_elder.png',
+      woman_merchant: 'customer/customer_woman_merchant.png',
+      woman_scribe: 'customer/customer_woman_scribe.png',
+      woman_weaver: 'customer/customer_woman_weaver.png',
+      woman_healer: 'customer/customer_woman_healer.png',
+      man_scholar: 'customer/customer_man_scholar.png',
+      man_musician: 'customer/customer_man_musician.png',
+      woman_student: 'customer/customer_woman_student.png',
+      woman_florist: 'customer/customer_woman_florist.png',
+      woman_noble: 'customer/customer_woman_noble.png',
+      woman_traveler: 'customer/customer_woman_traveler.png',
+      woman_baker: 'customer/customer_woman_baker.png',
+      man_apprentice: 'customer/customer_man_apprentice.png',
     },
   },
   goalNote: {

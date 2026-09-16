@@ -1,23 +1,24 @@
 /**
- * قفسه‌ی دیواری مواد (کلاسیک) — جانشین کابینت کشویی.
+ * قفسه‌ی دیواری مواد (کلاسیک) — فلو کلیکی.
  *
  * تخته‌ی چوبی روی دیوارِ پشت میز (SCENE_ZONES.wallShelf) که همیشه دیده می‌شود؛
  * شیشه‌ها روی سطح تخته می‌ایستند و نوار محتوا پهن‌تر از دهانه‌ی قفسه است تا با
  * کشیدن، افقی اسکرول شود.
  *
- * تفکیک ژست روی شیشه (slop جهت‌دار — همان قرارداد قفسه‌ی v2):
- *   - جابه‌جایی کمتر از DIRECTION_SLOP ⇒ هنوز «Tap» است.
- *   - عبور از slop با غلبه‌ی افقی ⇒ اسکرول قفسه.
- *   - عبور از slop با غلبه‌ی عمودی (به‌سمت میز/هاون) ⇒ Drag شیشه با سیستم
- *     مشترک (uiState + hitTestDrop، مقصد 'mortar') تا DragGhost آن را نشان دهد.
- *   - رهاکردن بدون عبور از slop ⇒ Overlay جزئیات ماده (مثل کابینت قدیم).
+ * ژست روی شیشه:
+ *   - Tap (رهاکردن پیش از عبور از slop و پیش از LONG_PRESS_MS) ⇒ یک واحد ماده
+ *     با IngredientFlight تا هاون پرواز می‌کند؛ با فرود: addUnitToMortar +
+ *     startGrinding (کوبش خودکار). اگر هاون با همین ماده پُر باشد (سقف
+ *     MAX_MORTAR_UNITS) پروازی نیست و لرزش «جا ندارد» پخش می‌شود.
+ *   - نگه‌داشتن (LONG_PRESS_MS) بدون حرکت ⇒ Overlay جزئیات ماده.
+ *   - عبور از slop (هر جهت) ⇒ اسکرول افقی قفسه. Drag شیشه دیگر وجود ندارد.
  * کشیدن روی پس‌زمینه‌ی قفسه ⇒ همیشه اسکرول.
  *
- * هر Drop موفق روی هاون = ۱ واحد؛ اگر هاون با همین ماده پُر باشد (سقف
- * MAX_MORTAR_UNITS) افزودن بی‌اثر است و به‌جایش لرزش «جا ندارد» پخش می‌شود.
+ * لبه‌ها: translate3d با مقدار گِردشده (بدون لرزش زیرپیکسلی خط تخته)، دو
+ * «سرپوش چوبی» (.shelf-wall__cap) روی برش دو سرِ دهانه و فلش/محو داخل سرپوش.
  *
  * RTL: شیشه‌ی نخست راست‌ترین است و نوار به‌سمت چپ ادامه می‌یابد؛ چیدمان با
- * left/translateX مطلق است تا از direction مستقل بماند.
+ * left/translate مطلق است تا از direction مستقل بماند.
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -25,10 +26,13 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { MAX_MORTAR_UNITS, useGameStore } from '../store/gameStore';
 import type { IngredientDefinition } from '../engine/types';
 import { useStageSpace } from './Stage';
-import { hitTestDrop } from './layout';
 import { useUiState } from './uiState';
 import { CLASSIC_ART, SCENE_ZONES } from './artManifest';
 import { ArtLayer, rectStyle, useArt, vars } from './Zone';
+import { IngredientFlight } from './IngredientFlight';
+import type { FlightSpec } from './IngredientFlight';
+import { sfx } from '../audio/sfx';
+import { haptic } from '../platform/haptics';
 import './classic-ambience.css';
 
 const ZONE = SCENE_ZONES.wallShelf;
@@ -49,8 +53,13 @@ const AIR_ABOVE = 215;
 /** سطح بالای تخته در تصویر shelf_board.png حدود ۱۳٪ از بالای آن است */
 const BOARD_SURFACE = AIR_ABOVE + Math.round(ZONE.height * 0.13);
 
-/** آستانه‌ی slop در فضای صحنه؛ پیش از آن Tap، بعدش اسکرول یا Drag */
+/** آستانه‌ی slop در فضای صحنه؛ پیش از آن Tap/نگه‌داشتن، بعدش اسکرول */
 const DIRECTION_SLOP = 12;
+/** نگه‌داشتن بدون حرکت ⇒ جزئیات ماده */
+const LONG_PRESS_MS = 450;
+
+/** پهنای سرپوش چوبی دو سر قفسه */
+const CAP_WIDTH = 64;
 
 const CONTAINER = {
   x: ZONE.x,
@@ -73,18 +82,19 @@ function Jar({
   index,
   stripWidth,
   scrollBy,
+  onTap,
 }: {
   ingredient: IngredientDefinition;
   index: number;
   stripWidth: number;
   scrollBy: (dxScene: number) => void;
+  onTap: (ingredient: IngredientDefinition, from: { x: number; y: number }) => void;
 }) {
   const { toScene } = useStageSpace();
   const openOverlay = useGameStore((s) => s.openOverlayAction);
-  const isLifted = useUiState(
-    (s) => s.drag?.kind === 'jar' && s.drag.ingredientId === ingredient.id,
-  );
+  const inMortar = useGameStore((s) => s.mortar?.ingredientId === ingredient.id);
   const art = useArt(`cabinet/jar_${ingredient.id}.png`);
+  const [pressed, setPressed] = useState(false);
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -96,9 +106,19 @@ function Jar({
       const pointerId = e.pointerId;
       const start = toScene(e.clientX, e.clientY);
       let last = start;
-      let mode: 'pending' | 'scroll' | 'drag' = 'pending';
+      let mode: 'pending' | 'scroll' | 'held' = 'pending';
+      setPressed(true);
+
+      const longPress = window.setTimeout(() => {
+        if (mode !== 'pending') return;
+        mode = 'held';
+        setPressed(false);
+        openOverlay('ingredient_detail', ingredient.id);
+      }, LONG_PRESS_MS);
 
       const detach = () => {
+        window.clearTimeout(longPress);
+        setPressed(false);
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUp);
         el.removeEventListener('pointercancel', onCancel);
@@ -109,61 +129,32 @@ function Jar({
         if (ev.pointerId !== pointerId) return;
         const point = toScene(ev.clientX, ev.clientY);
         if (mode === 'pending') {
-          const dx = point.x - start.x;
-          const dy = point.y - start.y;
-          if (Math.hypot(dx, dy) < DIRECTION_SLOP) {
+          if (Math.hypot(point.x - start.x, point.y - start.y) < DIRECTION_SLOP) {
             last = point;
             return;
           }
-          mode = Math.abs(dx) >= Math.abs(dy) ? 'scroll' : 'drag';
-          if (mode === 'drag') {
-            useUiState.getState().beginDrag({
-              kind: 'jar',
-              ingredientId: ingredient.id,
-              x: point.x,
-              y: point.y,
-            });
-          }
+          mode = 'scroll';
+          window.clearTimeout(longPress);
+          setPressed(false);
         }
-        if (mode === 'scroll') {
-          scrollBy(point.x - last.x);
-        } else {
-          useUiState
-            .getState()
-            .updateDrag(point.x, point.y, hitTestDrop(point.x, point.y, ['mortar']));
-        }
+        if (mode === 'scroll') scrollBy(point.x - last.x);
         last = point;
       };
 
       const onUp = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
+        const wasPending = mode === 'pending';
         detach();
-        if (mode === 'pending') {
-          // Tap ⇒ Inspect (همان رفتار کابینت قدیم)
-          openOverlay('ingredient_detail', ingredient.id);
-          return;
-        }
-        if (mode !== 'drag') return;
-        const over = useUiState.getState().drag?.over ?? null;
-        useUiState.getState().endDrag();
-        if (over !== 'mortar') return;
-        const before = useGameStore.getState().mortar;
-        if (
-          before &&
-          before.ingredientId === ingredient.id &&
-          before.quantity >= MAX_MORTAR_UNITS
-        ) {
-          // store افزودن را نادیده می‌گیرد؛ فقط لرزش «جا ندارد»
-          useUiState.getState().pulse('mortarShakePulse');
-          return;
-        }
-        useGameStore.getState().addUnitToMortar(ingredient.id);
+        if (!wasPending) return;
+        // Tap ⇒ افزودن به هاون با پرواز از مرکز شیشه
+        const r = el.getBoundingClientRect();
+        const from = toScene(r.left + r.width / 2, r.top + r.height * 0.45);
+        onTap(ingredient, from);
       };
 
       const onCancel = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         detach();
-        if (mode === 'drag') useUiState.getState().endDrag();
       };
 
       el.setPointerCapture(pointerId);
@@ -171,13 +162,13 @@ function Jar({
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointercancel', onCancel);
     },
-    [toScene, scrollBy, ingredient.id, openOverlay],
+    [toScene, scrollBy, ingredient, openOverlay, onTap],
   );
 
   return (
     <div
       data-testid={`jar-${ingredient.id}`}
-      className={`shelf-jar${isLifted ? ' is-lifted' : ''}`}
+      className={`shelf-jar${pressed ? ' is-pressed' : ''}${inMortar ? ' is-in-mortar' : ''}`}
       aria-label={ingredient.nameFa}
       style={{
         left: jarLeft(index, stripWidth),
@@ -203,9 +194,12 @@ function Jar({
   );
 }
 
+let flightSeq = 0;
+
 export function ShelfStationClassic() {
   const { toScene } = useStageSpace();
   const ingredients = useGameStore((s) => s.defs.ingredients);
+  const [flights, setFlights] = useState<FlightSpec[]>([]);
 
   const stripWidth = stripWidthFor(ingredients.length);
   const maxScroll = Math.max(0, stripWidth - ZONE.width);
@@ -220,6 +214,36 @@ export function ShelfStationClassic() {
     const next = Math.min(0, Math.max(-maxScrollRef.current, txRef.current + dxScene));
     txRef.current = next;
     setTx(next);
+  }, []);
+
+  /** Tap شیشه ⇒ پرواز (یا لرزش «جا ندارد» اگر هاون با همین ماده پُر است) */
+  const onJarTap = useCallback((ingredient: IngredientDefinition, from: { x: number; y: number }) => {
+    const store = useGameStore.getState();
+    const ui = useUiState.getState();
+    if (store.openOverlay !== null || store.result !== null) return;
+    if (ui.transfer !== null) return; // قاشق در راه است؛ کمی صبر
+    const before = store.mortar;
+    if (before && before.ingredientId === ingredient.id && before.quantity >= MAX_MORTAR_UNITS) {
+      ui.pulse('mortarShakePulse');
+      return;
+    }
+    haptic('light');
+    setFlights((f) => [
+      ...f,
+      { key: ++flightSeq, ingredientId: ingredient.id, color: ingredient.color, from },
+    ]);
+  }, []);
+
+  const onFlightLand = useCallback((flight: FlightSpec) => {
+    const store = useGameStore.getState();
+    if (store.openOverlay !== null || store.result !== null) return;
+    store.addUnitToMortar(flight.ingredientId);
+    store.startGrinding();
+    sfx.jarDrop();
+  }, []);
+
+  const onFlightDone = useCallback((key: number) => {
+    setFlights((f) => f.filter((x) => x.key !== key));
   }, []);
 
   /** پس‌زمینه‌ی قفسه: کشیدن به هر سو = اسکرول (شیشه‌ها propagation را می‌بندند) */
@@ -255,44 +279,65 @@ export function ShelfStationClassic() {
     [toScene, scrollBy],
   );
 
-  // نشانه‌ی کشف‌پذیری اسکرول: محو + فلش در سمتی که شیشه‌ی پنهان دارد
+  // نشانه‌ی کشف‌پذیری اسکرول: فلش داخل سرپوشِ سمتی که شیشه‌ی پنهان دارد
   const hiddenAtLeft = tx < -2;
   const hiddenAtRight = tx > -maxScroll + 2;
+  /** گِرد تا خط تخته و لبه‌ها بین فریم‌ها نلرزند */
+  const txRounded = Math.round(tx);
 
   return (
-    <div
-      data-testid="shelf"
-      className="shelf-wall interactive"
-      style={rectStyle(CONTAINER, ZONE.z)}
-      onPointerDown={onBackgroundPointerDown}
-      onDragStart={(e) => e.preventDefault()}
-    >
+    <>
       <div
-        className="shelf-wall__strip"
-        style={{ width: stripWidth, transform: `translateX(${tx}px)` }}
+        data-testid="shelf"
+        className="shelf-wall interactive"
+        style={rectStyle(CONTAINER, ZONE.z)}
+        onPointerDown={onBackgroundPointerDown}
+        onDragStart={(e) => e.preventDefault()}
       >
-        <div className="shelf-wall__board" style={{ height: ZONE.height }}>
-          <ArtLayer src={CLASSIC_ART.shelfBoard} fit="fill">
-            <span className="shelf-wall__board-ph" />
-          </ArtLayer>
+        <div
+          className="shelf-wall__strip"
+          style={{ width: stripWidth, transform: `translate3d(${txRounded}px, 0, 0)` }}
+        >
+          <div className="shelf-wall__board" style={{ height: ZONE.height }}>
+            <ArtLayer src={CLASSIC_ART.shelfBoard} fit="fill">
+              <span className="shelf-wall__board-ph" />
+            </ArtLayer>
+          </div>
+          {ingredients.map((ing, i) => (
+            <Jar
+              key={ing.id}
+              ingredient={ing}
+              index={i}
+              stripWidth={stripWidth}
+              scrollBy={scrollBy}
+              onTap={onJarTap}
+            />
+          ))}
         </div>
-        {ingredients.map((ing, i) => (
-          <Jar
-            key={ing.id}
-            ingredient={ing}
-            index={i}
-            stripWidth={stripWidth}
-            scrollBy={scrollBy}
-          />
-        ))}
+
+        {/* سرپوش‌های چوبی دو سر: برش تیز تخته را می‌پوشانند و فلش اسکرول را در خود دارند */}
+        <div
+          className={`shelf-wall__cap shelf-wall__cap--left${hiddenAtLeft ? ' is-on' : ''}`}
+          style={{ width: CAP_WIDTH, top: AIR_ABOVE - 18 }}
+        >
+          <span className="shelf-wall__cap-arrow">‹</span>
+        </div>
+        <div
+          className={`shelf-wall__cap shelf-wall__cap--right${hiddenAtRight ? ' is-on' : ''}`}
+          style={{ width: CAP_WIDTH, top: AIR_ABOVE - 18 }}
+        >
+          <span className="shelf-wall__cap-arrow">›</span>
+        </div>
       </div>
 
-      <div className={`shelf-wall__edge shelf-wall__edge--left${hiddenAtLeft ? ' is-on' : ''}`}>
-        <span>‹</span>
-      </div>
-      <div className={`shelf-wall__edge shelf-wall__edge--right${hiddenAtRight ? ' is-on' : ''}`}>
-        <span>›</span>
-      </div>
-    </div>
+      {/* پروازهای در جریان — بیرون از overflow قفسه، روی کل صحنه */}
+      {flights.length ? (
+        <div className="shelf-flight-layer" style={rectStyle({ x: 0, y: 0, width: 1920, height: 1080 }, 62)}>
+          {flights.map((f) => (
+            <IngredientFlight key={f.key} flight={f} onLand={onFlightLand} onDone={onFlightDone} />
+          ))}
+        </div>
+      ) : null}
+    </>
   );
 }

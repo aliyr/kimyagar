@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as engine from '../../src/engine';
-import { MAX_MORTAR_UNITS, useGameStore } from '../../src/store/gameStore';
+import {
+  GRIND_RATE,
+  GRIND_THRESHOLDS,
+  MAX_MORTAR_UNITS,
+  MORTAR_GRIND_SECONDS,
+  useGameStore,
+} from '../../src/store/gameStore';
 
 const CHAMOMILE = 'chamomile';
 const MINT = 'mint';
@@ -33,6 +39,7 @@ describe('addUnitToMortar', () => {
       quantity: 1,
       grindState: null,
       grindWork: 0,
+      grinding: false,
     });
   });
 
@@ -70,6 +77,7 @@ describe('addUnitToMortar', () => {
       quantity: 1,
       grindState: null,
       grindWork: 0,
+      grinding: false,
     });
   });
 
@@ -86,6 +94,76 @@ describe('addUnitToMortar', () => {
       grindState: null,
       grindWork: 0,
     });
+  });
+});
+
+describe('auto grinding (classic click flow)', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  function tickFor(seconds: number, dt = 1 / 30) {
+    for (let t = 0; t < seconds - 1e-9; t += dt) useGameStore.getState().tick(dt);
+  }
+
+  it('startGrinding + tick reaches coarse, crushed and fine at the planned times', () => {
+    const { addUnitToMortar, startGrinding } = useGameStore.getState();
+    addUnitToMortar(CHAMOMILE);
+    startGrinding();
+    expect(useGameStore.getState().mortar?.grinding).toBe(true);
+    const [coarse, crushed, fine] = GRIND_THRESHOLDS;
+    tickFor(coarse.work / GRIND_RATE + 0.1);
+    expect(useGameStore.getState().mortar?.grindState).toBe(coarse.state);
+    tickFor(crushed.work / GRIND_RATE - coarse.work / GRIND_RATE);
+    expect(useGameStore.getState().mortar?.grindState).toBe(crushed.state);
+    tickFor(MORTAR_GRIND_SECONDS);
+    const m = useGameStore.getState().mortar;
+    expect(m?.grindState).toBe(fine.state);
+    expect(m?.grindWork).toBeCloseTo(fine.work, 6);
+    // at the cap the auto grind stops by itself and the material waits for a tap
+    expect(m?.grinding).toBe(false);
+  });
+
+  it('does not grind while an overlay pauses the game', () => {
+    const { addUnitToMortar, startGrinding, openOverlayAction } = useGameStore.getState();
+    addUnitToMortar(MINT);
+    startGrinding();
+    openOverlayAction('notebook');
+    tickFor(3);
+    expect(useGameStore.getState().mortar?.grindWork).toBe(0);
+    useGameStore.getState().closeOverlay();
+    tickFor(3);
+    expect(useGameStore.getState().mortar?.grindWork).toBeGreaterThan(0);
+  });
+
+  it('transferMortar clamps an early tap to coarse and stops grinding', () => {
+    const { addUnitToMortar, startGrinding, transferMortar } = useGameStore.getState();
+    addUnitToMortar(MINT);
+    startGrinding();
+    tickFor(0.5);
+    expect(useGameStore.getState().mortar?.grindState).toBeNull();
+    expect(transferMortar()).toBe(true);
+    const m = useGameStore.getState().mortar;
+    expect(m?.grindState).toBe('coarse');
+    expect(m?.grinding).toBe(false);
+    // and the locked mortar can go straight into the cauldron
+    useGameStore.getState().addMortarToCauldron();
+    expect(useGameStore.getState().brew.entries[0]?.grindState).toBe('coarse');
+    expect(useGameStore.getState().mortar).toBeNull();
+  });
+
+  it('transferMortar is a no-op on an empty mortar', () => {
+    expect(useGameStore.getState().transferMortar()).toBe(false);
+  });
+
+  it('adding a unit mid-grind restarts the work but keeps grinding', () => {
+    const { addUnitToMortar, startGrinding } = useGameStore.getState();
+    addUnitToMortar(MINT);
+    startGrinding();
+    tickFor(2.5);
+    expect(useGameStore.getState().mortar?.grindWork).toBeGreaterThan(0);
+    addUnitToMortar(MINT);
+    expect(useGameStore.getState().mortar).toMatchObject({ quantity: 2, grindWork: 0, grinding: true });
   });
 });
 

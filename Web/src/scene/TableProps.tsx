@@ -1,6 +1,6 @@
 /**
  * سه شیء کوچک و کم‌سروصدا (بدون دکمه‌ی بزرگ، همه فیزیکی):
- * - دفترچه‌ی چرمی تکیه‌داده به دیوار ⇒ Overlay دفترچه
+ * - دفترچه‌ی چرمی پایین‌راست (جلوی پیشخوان) ⇒ Overlay دفترچه
  * - دسته‌کاغذ کنار پاتیل ⇒ آنچه تا حالا ریخته‌ای
  * - سطل چوبی ⇒ خالی کردن پاتیل
  */
@@ -17,6 +17,17 @@ export function TableProps() {
   const openOverlay = useGameStore((s) => s.openOverlayAction);
   const resetBrew = useGameStore((s) => s.resetBrew);
   const hasBrew = useGameStore((s) => s.brew.entries.length > 0 || s.mortar !== null);
+  /**
+   * نتیجه‌ی ناموفق/ناقص و Overlay بسته ⇒ صحنه در مکث است و تنها راه ادامه،
+   * خالی‌کردن پاتیل است: سطل بالای Vignette می‌آید و می‌درخشد.
+   */
+  const needsRetry = useGameStore(
+    (s) =>
+      s.openOverlay === null &&
+      s.result !== null &&
+      s.evaluation !== null &&
+      (s.evaluation.band === 'failure' || s.evaluation.band === 'partial'),
+  );
 
   return (
     <>
@@ -24,7 +35,7 @@ export function TableProps() {
         data-testid="notebook-button"
         className="notebook interactive"
         title={uiLabels.notebook}
-        style={rectStyle(PROPS.notebook, 45)}
+        style={rectStyle(PROPS.notebook, 46)}
         {...tapProps(() => openOverlay('notebook'))}
       >
         <span className="notebook__cover">
@@ -50,9 +61,10 @@ export function TableProps() {
 
       <div
         data-testid="reset-button"
-        className={`bucket prop-bucket interactive${hasBrew ? ' is-live' : ''}`}
-        title={uiLabels.resetBrew}
-        style={rectStyle(PROPS.bucket, 45)}
+        data-retry={needsRetry ? 'true' : undefined}
+        className={`bucket prop-bucket interactive${hasBrew ? ' is-live' : ''}${needsRetry ? ' is-retry' : ''}`}
+        title={needsRetry ? uiLabels.retry : uiLabels.resetBrew}
+        style={rectStyle(PROPS.bucket, needsRetry ? 86 : 45)}
         {...tapProps(resetBrew)}
       >
         <ArtLayer src={CLASSIC_ART.bucket} fit="contain" className="prop-bucket-img">
@@ -63,6 +75,7 @@ export function TableProps() {
             <span className="prop-bucket-ph__band prop-bucket-ph__band--bottom" />
           </div>
         </ArtLayer>
+        {needsRetry ? <span className="prop-bucket__retry">{uiLabels.retry}</span> : null}
       </div>
     </>
   );

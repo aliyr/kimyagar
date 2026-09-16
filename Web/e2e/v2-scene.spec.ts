@@ -38,7 +38,7 @@ async function dragJarToMortar(page: Page, jar: Locator, mortar: Locator): Promi
 type KimyagarStore = {
   getState: () => {
     mortar: { quantity: number; ingredientId: string } | null;
-    brew: { entries: { quantity: number }[]; bottled: boolean };
+    brew: { entries: { quantity: number }[]; bottled: boolean; stirCount: number };
     result: unknown;
     addUnitToMortar: (id: string) => void;
     applyGrindWork: (amount: number) => void;
@@ -153,6 +153,65 @@ test.describe('Kimyagar v2 scene skeleton', () => {
       return store.getState().result != null;
     });
     expect(hasResult).toBe(true);
+  });
+
+  test('empty route opens the classic workshop; #/v2 opens v2 flat by default', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('cauldron')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('v2-route-link')).toBeVisible();
+
+    await page.goto('/#/v2');
+    const scene = page.getByTestId('v2-scene');
+    await expect(scene).toBeVisible({ timeout: 20_000 });
+    await expect(scene).toHaveAttribute('data-art-style', 'flat');
+    await expect(page.getByTestId('v2-flat-cauldron-canvas')).toBeVisible();
+  });
+
+  test('art style is remembered: #/v2/pixel then #/v2 stays pixel', async ({ page }) => {
+    await page.goto('/#/v2/pixel');
+    await expect(page.getByTestId('v2-scene')).toHaveAttribute('data-art-style', 'pixel', { timeout: 20_000 });
+    await page.goto('/#/v2');
+    await expect(page.getByTestId('v2-scene')).toHaveAttribute('data-art-style', 'pixel', { timeout: 20_000 });
+    // انتخاب صریح فلت دوباره ذخیره می‌شود
+    await page.goto('/#/v2/flat');
+    await expect(page.getByTestId('v2-scene')).toHaveAttribute('data-art-style', 'flat', { timeout: 20_000 });
+  });
+
+  test('flat cauldron: live canvas, vector jars, auto-stir after drop', async ({ page }) => {
+    await page.goto('/#/v2/flat');
+    await expect(page.getByTestId('v2-flat-cauldron-canvas')).toBeVisible({ timeout: 20_000 });
+    // شیشه‌ی برداری (SVG) به‌جای PNG
+    await expect(page.getByTestId('v2-flat-jar-chamomile').locator('svg').first()).toBeVisible();
+    // هیت‌باکس پاتیل و اهرم‌های حرارت هنوز هستند
+    await expect(page.getByTestId('v2-cauldron')).toBeVisible();
+    await expect(page.getByTestId('heat-high')).toBeVisible();
+
+    const stirBefore = await page.evaluate(() => {
+      const store = (window as unknown as { __kimyagarStore?: KimyagarStore }).__kimyagarStore;
+      if (!store) throw new Error('window.__kimyagarStore is missing');
+      return store.getState().brew.stirCount;
+    });
+    expect(stirBefore).toBe(0);
+
+    // --- store-driven: ریختن یک ماده ⇒ هم‌زدن خودکار پس از فرود ---
+    await page.evaluate(() => {
+      const store = (window as unknown as { __kimyagarStore?: KimyagarStore }).__kimyagarStore;
+      if (!store) throw new Error('window.__kimyagarStore is missing');
+      const s = store.getState();
+      s.addUnitToMortar('saffron');
+      s.applyGrindWork(100);
+      s.addMortarToCauldron();
+    });
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const store = (window as unknown as { __kimyagarStore?: KimyagarStore }).__kimyagarStore;
+            return store?.getState().brew.stirCount ?? -1;
+          }),
+        { timeout: 5_000 },
+      )
+      .toBe(1);
   });
 
   test('style switch smoke: #/v2/pixel renders v2-scene', async ({ page }) => {

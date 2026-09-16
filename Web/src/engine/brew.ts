@@ -118,7 +118,8 @@ export function advanceTime(
   const rate = defs.tuning.heatExposureRate[state.currentHeat];
   const entries = state.entries.map((entry) => {
     const def = ingredientDefOf(defs, entry.ingredientId);
-    const exposure = entry.exposure + dtSeconds * rate;
+    // هر ماده با سرعت خودش دم می‌کشد (extractionSpeed، پیش‌فرض ۱)
+    const exposure = entry.exposure + dtSeconds * rate * (def.extractionSpeed ?? 1);
     const deltaFraction =
       extractionFractionAt(exposure, defs.tuning) -
       extractionFractionAt(entry.exposure, defs.tuning);

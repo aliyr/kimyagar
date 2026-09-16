@@ -1,0 +1,35 @@
+/*
+ * دکمه‌ی تنظیمات — بالا-چپ (فیزیکی)، بیرون از Stage. زیر Overlay ها (z 1000)
+ * و بالای صحنه؛ روی صفحه‌ی گوشی هم در گوشه‌ی امن می‌نشیند.
+ */
+.settings-button {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(233, 217, 180, 0.3);
+  background: radial-gradient(circle at 35% 30%, rgba(80, 52, 24, 0.85), rgba(16, 10, 6, 0.8));
+  color: rgba(233, 217, 180, 0.82);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s ease, color 0.2s ease, transform 0.25s ease;
+}
+
+.settings-button:hover,
+.settings-button:focus-visible {
+  opacity: 1;
+  color: rgba(255, 236, 190, 1);
+  outline: none;
+  transform: rotate(30deg);
+}
+
+.settings-button.is-open {
+  transform: rotate(90deg);
+}

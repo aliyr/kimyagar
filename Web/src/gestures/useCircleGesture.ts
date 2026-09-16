@@ -23,10 +23,20 @@ const MIN_PATH = 220;
 const MIN_STEP = 6;
 const MAX_TURN = Math.PI * 0.55;
 
+/** جابه‌جایی کمتر از این مقدار (پیکسل صحنه) تا رهاکردن ⇒ Tap، نه هم‌زدن */
+const TAP_SLOP = 14;
+
 export interface CircleGestureOptions {
   enabled: boolean;
   onCircle: () => void;
   onActiveChange?: (active: boolean) => void;
+  /** موقعیت اشاره‌گر در فضای صحنه، در هر حرکت (برای دنبال‌کردن قاشق) */
+  onMove?: (point: { x: number; y: number }) => void;
+  /**
+   * Tap بدون حرکت (کمتر از TAP_SLOP) — مثلاً «ریختن در شیشه» روی پاتیل.
+   * وقتی enabled=false هم صدا زده می‌شود تا Tap روی پاتیلِ خالی راهنما نشان دهد.
+   */
+  onTap?: () => void;
 }
 
 export function useCircleGesture(options: CircleGestureOptions) {
@@ -38,14 +48,29 @@ export function useCircleGesture(options: CircleGestureOptions) {
     (e: ReactPointerEvent<HTMLElement>) => {
       if (e.button > 0) return;
       e.stopPropagation();
-      if (!optionsRef.current.enabled) return;
+      if (!optionsRef.current.enabled) {
+        if (optionsRef.current.onTap) {
+          const el = e.currentTarget;
+          const pointerId = e.pointerId;
+          const onUp = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            el.removeEventListener('pointerup', onUp);
+            optionsRef.current.onTap?.();
+          };
+          el.addEventListener('pointerup', onUp);
+        }
+        return;
+      }
 
       const el = e.currentTarget;
       const pointerId = e.pointerId;
-      let last = toScene(e.clientX, e.clientY);
+      const origin = toScene(e.clientX, e.clientY);
+      let last = origin;
       let lastAngle: number | null = null;
       let turned = 0;
       let path = 0;
+      let travelled = 0;
+      let circled = false;
 
       const detach = () => {
         el.removeEventListener('pointermove', onMove);
@@ -58,6 +83,8 @@ export function useCircleGesture(options: CircleGestureOptions) {
       const onMove = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         const point = toScene(ev.clientX, ev.clientY);
+        travelled = Math.max(travelled, Math.hypot(point.x - origin.x, point.y - origin.y));
+        optionsRef.current.onMove?.(point);
         const dx = point.x - last.x;
         const dy = point.y - last.y;
         const step = Math.hypot(dx, dy);
@@ -77,6 +104,7 @@ export function useCircleGesture(options: CircleGestureOptions) {
         if (Math.abs(turned) >= TURN_THRESHOLD && path >= MIN_PATH) {
           turned = 0;
           path = 0;
+          circled = true;
           optionsRef.current.onCircle();
         }
       };
@@ -84,6 +112,9 @@ export function useCircleGesture(options: CircleGestureOptions) {
       const onEnd = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         detach();
+        if (ev.type === 'pointerup' && !circled && travelled < TAP_SLOP) {
+          optionsRef.current.onTap?.();
+        }
       };
 
       el.setPointerCapture(pointerId);
@@ -91,6 +122,7 @@ export function useCircleGesture(options: CircleGestureOptions) {
       el.addEventListener('pointerup', onEnd);
       el.addEventListener('pointercancel', onEnd);
       optionsRef.current.onActiveChange?.(true);
+      optionsRef.current.onMove?.(last);
     },
     [toScene],
   );

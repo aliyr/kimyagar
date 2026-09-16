@@ -17,7 +17,7 @@ import { HEAT_NOTCHES } from '../layout';
 import type { Rect } from '../layout';
 import { rectStyle, vars, zoneStyle } from '../Zone';
 import { useUiState } from '../uiState';
-import { ArtLayerV2, V2_ART, V2_ZONES } from './contracts';
+import { ArtLayerV2, V2_ART, V2_ZONES, useArtStyle } from './contracts';
 
 const NICHE_BOTTLES = ['#7c5a2e', '#2ba09a', '#6e1f2e', '#22508f'];
 
@@ -88,6 +88,8 @@ const FLAMES = [
 export function HeatControlV2() {
   const heat = useGameStore((s) => s.brew.currentHeat);
   const setHeat = useGameStore((s) => s.setHeat);
+  // در سبک فلت، آتش را خودِ صحنه‌ی پخت برداری می‌کشد؛ اینجا فقط هیت‌باکس می‌ماند
+  const flat = useArtStyle() === 'flat';
 
   const cycle = () => setHeat(HEAT_ORDER[(HEAT_ORDER.indexOf(heat) + 1) % HEAT_ORDER.length]);
 
@@ -99,23 +101,25 @@ export function HeatControlV2() {
         style={zoneStyle(V2_ZONES.heatSource)}
         {...tapProps(cycle)}
       >
-        <ArtLayerV2 src={V2_ZONES.heatSource.states[heat]}>
-          <div className="heat__ph">
-            <div className="heat__glow" />
-            <div className="heat__flames">
-              {FLAMES.map((f, i) => (
-                <span
-                  key={i}
-                  className="heat__flame"
-                  style={vars({ '--f-left': `${f.left}%`, '--f-delay': `${f.delay}s` })}
-                />
-              ))}
+        {flat ? null : (
+          <ArtLayerV2 src={V2_ZONES.heatSource.states[heat]}>
+            <div className="heat__ph">
+              <div className="heat__glow" />
+              <div className="heat__flames">
+                {FLAMES.map((f, i) => (
+                  <span
+                    key={i}
+                    className="heat__flame"
+                    style={vars({ '--f-left': `${f.left}%`, '--f-delay': `${f.delay}s` })}
+                  />
+                ))}
+              </div>
+              <div className="heat__log heat__log--a" />
+              <div className="heat__log heat__log--b" />
+              <div className="heat__embers" />
             </div>
-            <div className="heat__log heat__log--a" />
-            <div className="heat__log heat__log--b" />
-            <div className="heat__embers" />
-          </div>
-        </ArtLayerV2>
+          </ArtLayerV2>
+        )}
       </div>
 
       {HEAT_ORDER.map((level, i) => (

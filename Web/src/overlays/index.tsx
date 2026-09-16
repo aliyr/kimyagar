@@ -15,6 +15,7 @@ import { CustomerRequestOverlay } from './CustomerRequest';
 import { ProcessHistoryOverlay } from './ProcessHistory';
 import { NotebookOverlay } from './Notebook';
 import { ResultOverlay } from './ResultScreen';
+import { SettingsOverlay } from './SettingsOverlay';
 import { DiscoveryToast } from './DiscoveryToast';
 
 export { DiscoveryToast };
@@ -27,5 +28,6 @@ export function OverlayHost() {
   if (openOverlay === 'process_history') return <ProcessHistoryOverlay />;
   if (openOverlay === 'notebook') return <NotebookOverlay />;
   if (openOverlay === 'result') return <ResultOverlay />;
+  if (openOverlay === 'settings') return <SettingsOverlay />;
   return null;
 }

@@ -210,176 +210,6 @@
   box-shadow: inset 0 -8px 14px rgba(0, 0, 0, 0.5), 0 10px 18px rgba(0, 0, 0, 0.5);
 }
 
-/* ------------------------------ معجون پاتیل -------------------------- */
-
-.cst-liquid {
-  border-radius: 50%;
-  overflow: hidden;
-  isolation: isolate;
-  pointer-events: none;
-  box-shadow:
-    inset 0 8px 22px rgba(0, 0, 0, 0.55),
-    0 0 0 2px rgba(0, 0, 0, 0.45);
-}
-
-/* لایه‌ی پایه: بیضی رنگی با رنگِ ترکیب مواد (colors.ts) */
-.cst-liquid__base {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(
-    82% 130% at 42% 18%,
-    var(--liquid-light, #6b7059),
-    var(--liquid, #4a5042) 46%,
-    var(--liquid-deep, #2c3027) 100%
-  );
-  transition: background 0.9s ease;
-}
-.cst-liquid.is-burnt .cst-liquid__base {
-  filter: saturate(0.55) brightness(0.82);
-}
-
-/* بافت سطح آرام — luminosity تا رنگ از لایه‌ی پایه بیاید */
-.cst-liquid__still {
-  mix-blend-mode: luminosity;
-  opacity: 0.62;
-  transition: opacity 0.35s ease;
-}
-.cst-liquid.is-boiling .cst-liquid__still {
-  opacity: 0.28;
-}
-.cst-liquid.is-burnt .cst-liquid__still,
-.cst-liquid.is-burnt .cst-liquid__swirl,
-.cst-liquid.is-burnt .cst-liquid__boil {
-  filter: saturate(0.6) brightness(0.8);
-}
-
-/*
- * بافت گرداب: چرخش واقعی با rAF روی transform انجام می‌شود
- * (scaleY پخته‌شده در transform تا چرخش در فضای بیضی درست دیده شود).
- * opacity هم با سرعت زاویه‌ای از JS تنظیم می‌شود.
- */
-.cst-liquid__swirl {
-  position: absolute;
-  object-fit: cover;
-  mix-blend-mode: luminosity;
-  opacity: 0;
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-
-/* دو فریم قل‌قل — crossfade با تعویض کلاس is-on */
-.cst-liquid__boil {
-  mix-blend-mode: luminosity;
-  opacity: 0;
-  transition: opacity 0.22s ease;
-}
-.cst-liquid__boil.is-on {
-  opacity: 0.72;
-}
-
-/* برق نرم سطح */
-.cst-liquid__sheen {
-  position: absolute;
-  left: 10%;
-  top: 12%;
-  width: 46%;
-  height: 36%;
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.2), transparent);
-  filter: blur(7px);
-}
-
-/* حباب‌های CSS — شدت و سرعت از حرارت (در حرارت کم فقط همین‌ها) */
-.cst-bubble {
-  position: absolute;
-  left: var(--b-left, 50%);
-  bottom: 4%;
-  width: var(--b-size, 16px);
-  height: var(--b-size, 16px);
-  border-radius: 50%;
-  border: 2px solid var(--liquid-foam, rgba(255, 255, 255, 0.6));
-  background: radial-gradient(circle at 34% 28%, var(--liquid-foam, rgba(255, 255, 255, 0.5)), transparent 72%);
-  opacity: 0;
-  animation: cst-bubble 2.4s ease-in infinite;
-  animation-duration: calc(var(--b-dur, 2.4s) * var(--bubble-speed, 1));
-  animation-delay: var(--b-delay, 0s);
-}
-.cst-liquid.is-burnt .cst-bubble {
-  animation-timing-function: steps(5, end);
-  border-color: rgba(190, 170, 140, 0.5);
-}
-
-/* درخشش «رسیده» */
-.cst-liquid__shimmer {
-  position: absolute;
-  inset: -12%;
-  background: conic-gradient(from 0deg, transparent 0 22%, rgba(255, 255, 255, 0.2) 34%, transparent 46% 100%);
-  mix-blend-mode: screen;
-  animation: cst-spin 7s linear infinite;
-}
-
-/* پاشش افزودن ماده: قطره‌ی رنگی + ترکش‌ها + موج */
-.cst-splash {
-  position: absolute;
-  inset: 0;
-}
-.cst-splash__drop {
-  position: absolute;
-  left: 50%;
-  top: -80px;
-  margin-left: -26px;
-  width: 52px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--splash-color, var(--liquid-light, #8a7a52));
-  animation: cst-fall 0.2s ease-in 1 forwards;
-}
-.cst-splash__bit {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: var(--sb-size, 13px);
-  height: var(--sb-size, 13px);
-  border-radius: 50%;
-  background: var(--splash-color, #8a7a52);
-  opacity: 0;
-  animation: cst-splash-bit 0.6s ease-out 1 forwards;
-  animation-delay: var(--sb-delay, 0.12s);
-}
-.cst-splash__ring {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  border: 3px solid var(--liquid-foam, rgba(255, 255, 255, 0.6));
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  animation: cst-ripple 1s ease-out 1 forwards;
-}
-.cst-splash__ring:nth-child(3) {
-  animation-delay: 0.16s;
-}
-
-/* -------------------------------- بخار ------------------------------- */
-
-.cst-steam {
-  overflow: visible;
-  pointer-events: none;
-}
-.cst-steam__plume {
-  position: absolute;
-  left: var(--s-left, 50%);
-  bottom: 36%;
-  width: 66px;
-  height: 66px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 248, 235, 0.3), transparent 70%);
-  filter: blur(11px);
-  opacity: 0;
-  animation: cst-steam 5.4s ease-out infinite;
-  animation-delay: var(--s-delay, 0s);
-}
-
 /* ----------------------- شبح ماده‌ی کوبیده در دست --------------------- */
 
 /*
@@ -397,6 +227,344 @@
 /* روی پاتیل: کج‌شدن به نشانه‌ی «آماده‌ی ریختن» */
 .cst-ghost-ground.is-pouring {
   transform: translateY(16%) scale(0.92) rotate(20deg);
+}
+
+/* ---------------------- هاون: فلو کلیکی (کوبش خودکار) ------------------ */
+
+/* هاونِ پر قابل لمس است — درخشش خفیف نشانه‌ی «کلیک کن» */
+.cst-mortar.is-tappable {
+  cursor: pointer;
+}
+.cst-mortar.is-tappable .cst-mortar__glow {
+  border-style: solid;
+  border-width: 3px;
+  border-color: rgba(255, 214, 140, 0.22);
+  box-shadow: 0 0 40px rgba(255, 190, 110, 0.18);
+  animation: cst-breathe 2.2s ease-in-out infinite;
+}
+
+/* جرقه‌های کوبش: ۸ ذره‌ی طلایی که از دهانه به بیرون می‌پرند */
+.cst-mortar__sparks {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.cst-spark {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff4c8, #ffb84a 60%, transparent 72%);
+  box-shadow: 0 0 8px rgba(255, 190, 90, 0.9);
+  opacity: 0;
+  transform: rotate(var(--sp-angle, 0deg)) translateX(0);
+  animation: cst-spark var(--sp-dur, 0.6s) ease-out infinite;
+  animation-delay: var(--sp-delay, 0s);
+}
+@keyframes cst-spark {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--sp-angle, 0deg)) translateX(30px) scale(0.5);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--sp-angle, 0deg)) translateX(118px) scale(0.2);
+  }
+}
+
+/* کوبه هنگام انتقال با قاشق کنار می‌رود (به بالا-راست تکیه می‌دهد) */
+.cst-pestle {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: 78% 12%;
+}
+.cst-pestle.is-aside {
+  transform: translate(64px, -34px) rotate(34deg);
+  pointer-events: none;
+}
+
+/* حلقه‌ی برنجی زمان‌بندی کوبش */
+.cst-ring {
+  pointer-events: none;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+  transition: opacity 0.3s ease;
+}
+.cst-ring__track {
+  fill: none;
+  stroke: rgba(70, 48, 22, 0.75);
+  stroke-width: 4.2;
+  stroke-linecap: round;
+}
+.cst-ring__fill {
+  fill: none;
+  stroke: #d9a641;
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+.cst-ring.is-active .cst-ring__fill {
+  stroke: #f2c45a;
+  filter: drop-shadow(0 0 3px rgba(255, 205, 100, 0.8));
+}
+.cst-ring.is-full .cst-ring__fill {
+  stroke: #ffe28a;
+  animation: cst-breathe 1.8s ease-in-out infinite;
+}
+.cst-ring__notch {
+  stroke: rgba(255, 236, 200, 0.55);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.cst-ring__notch.is-passed {
+  stroke: #ffefb8;
+  stroke-width: 2.4;
+}
+.cst-ring__head {
+  fill: #fff2c6;
+  stroke: #8a5a1a;
+  stroke-width: 0.8;
+}
+
+/* لایه‌ی قاشق سر بزی روی کل صحنه (خودش pointer-events ندارد) */
+.cst-spoon-layer {
+  pointer-events: none;
+  overflow: visible;
+}
+.cst-spoon-transfer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 12px 10px rgba(0, 0, 0, 0.45));
+}
+.cst-spoon-transfer__svg {
+  position: absolute;
+  inset: 0;
+}
+.cst-spoon-transfer__svg svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* توده‌ی ماده‌ی کوبیده در کاسه‌ی قاشق */
+.cst-spoon-transfer__blob {
+  position: absolute;
+  width: 46px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -6px 8px rgba(0, 0, 0, 0.35),
+    inset 0 4px 6px rgba(255, 255, 255, 0.25);
+  filter: saturate(1.1);
+}
+
+/* ------------------------- پاتیل هیبرید (PNG + Canvas) ------------------ */
+
+.cst-cauldron {
+  overflow: visible;
+}
+.cst-cauldron__body {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+.cst-cauldron.can-bottle {
+  cursor: pointer;
+}
+.cst-cauldron-fx {
+  pointer-events: none;
+  will-change: transform;
+}
+/* هاله‌ی طلایی «رسیده — لمس کن» دور دهانه */
+.cst-cauldron__ready {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow:
+    0 0 26px 6px rgba(255, 214, 120, 0.45),
+    inset 0 0 22px rgba(255, 230, 160, 0.35);
+  transition: opacity 0.6s ease;
+}
+.cst-cauldron.is-ready .cst-cauldron__ready {
+  opacity: 1;
+  animation: cst-breathe 2.4s ease-in-out infinite;
+}
+.hint--bottle {
+  color: #ffe7b0;
+}
+
+/* ------------------------- توالی ریختن و تحویل --------------------------- */
+
+.cst-pour {
+  pointer-events: none;
+  overflow: visible;
+}
+.cst-pour__stream {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.cst-pour__stream.is-on {
+  opacity: 1;
+}
+.cst-pour__stream path {
+  fill: none;
+  stroke-linecap: round;
+}
+.cst-pour__stream-glow {
+  stroke: var(--liquid-light, #8a7a52);
+  stroke-width: 26;
+  opacity: 0.35;
+  filter: blur(6px);
+}
+.cst-pour__stream-core {
+  stroke: var(--liquid, #4a5042);
+  stroke-width: 14;
+  stroke-dasharray: 24 10;
+  animation: cst-stream-flow 0.5s linear infinite;
+}
+.cst-pour__stream-sheen {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 3;
+  stroke-dasharray: 18 30;
+  animation: cst-stream-flow 0.35s linear infinite;
+  transform: translate(-3px, -2px);
+}
+@keyframes cst-stream-flow {
+  to {
+    stroke-dashoffset: -34;
+  }
+}
+
+/* شیشه‌ی خالی روی میز — هنگام ریختن برداشته می‌شود و بعد از تحویل، شیشه‌ی تازه‌ای می‌آید */
+.cst-shelf-bottle {
+  transition: opacity 0.45s ease 0.35s;
+}
+.cst-shelf-bottle.is-taken {
+  opacity: 0;
+  transition: opacity 0.08s linear;
+}
+
+.cst-pour__bottle {
+  position: absolute;
+  transition:
+    left var(--deliver-ms, 1s) cubic-bezier(0.3, 0.9, 0.35, 1),
+    top var(--deliver-ms, 1s) cubic-bezier(0.55, 0, 0.6, 1),
+    width var(--deliver-ms, 1s) ease,
+    height var(--deliver-ms, 1s) ease;
+  filter: drop-shadow(0 12px 12px rgba(0, 0, 0, 0.5));
+}
+/* برداشتن از روی میز: از جای شیشه‌ی تزئینی تا زیر لبه‌ی پاتیل (قوس کوچک، کج‌شدن ملایم) */
+.cst-pour__bottle.is-fetching {
+  animation: cst-bottle-fetch var(--fetch-ms, 0.5s) cubic-bezier(0.35, 0.05, 0.25, 1) both;
+}
+@keyframes cst-bottle-fetch {
+  0% {
+    transform: translate(var(--fetch-dx, 0), var(--fetch-dy, 0)) rotate(0deg);
+  }
+  55% {
+    transform: translate(calc(var(--fetch-dx, 0) * 0.45), calc(var(--fetch-dy, 0) * 0.45 - 48px)) rotate(-7deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+.cst-pour__bottle .zone-art {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+/* در برداشتن/پرشدن شیشه بی‌در است؛ در تحویل چوب‌پنبه با یک «پُق» می‌نشیند */
+.cst-pour__glass--corked {
+  opacity: 0;
+}
+.cst-pour__bottle.is-delivering .cst-pour__glass--corked {
+  opacity: 1;
+  animation: cst-cork-pop 0.28s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.cst-pour__bottle.is-delivering .cst-pour__glass--open {
+  opacity: 0;
+}
+@keyframes cst-cork-pop {
+  0% {
+    transform: translateY(-14px) scaleY(1.06);
+  }
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+}
+.cst-pour__bottle.is-delivering {
+  animation: cst-bottle-slide var(--deliver-ms, 1s) ease-in-out both;
+}
+/* سطح معجون داخل شیشه — پشت شیشه، با screen تا از پشت شیشه دیده شود */
+.cst-pour__fill {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: 9%;
+  height: 0;
+  z-index: 1;
+  border-radius: 40% 40% 44% 44% / 24% 24% 40% 40%;
+  background: linear-gradient(180deg, var(--liquid-light, #8a7a52), var(--liquid, #4a5042) 60%, var(--liquid-deep, #2a2f26));
+  box-shadow: inset 0 4px 6px rgba(255, 255, 255, 0.45);
+  transition: height var(--stream-ms, 1.2s) linear;
+}
+.cst-pour__bottle.is-filling .cst-pour__fill,
+.cst-pour__bottle.is-delivering .cst-pour__fill {
+  height: 62%;
+}
+.cst-pour__bottle.is-delivering .cst-pour__fill {
+  transition: none;
+}
+.cst-pour__gloss {
+  position: absolute;
+  left: 26%;
+  top: 22%;
+  width: 12%;
+  height: 50%;
+  z-index: 3;
+  border-radius: 40%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  filter: blur(1px);
+}
+.cst-pour__shadow {
+  position: absolute;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), transparent);
+  animation: cst-fade-simple var(--deliver-ms, 1s) ease-out both;
+}
+@keyframes cst-bottle-slide {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  35% {
+    transform: translateY(-70px) rotate(-6deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+@keyframes cst-fade-simple {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ------------------------------ Keyframes ---------------------------- */
@@ -494,72 +662,6 @@
   }
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes cst-bubble {
-  0% {
-    transform: translateY(0) scale(0.35);
-    opacity: 0;
-  }
-  22% {
-    opacity: calc(var(--bubble-intensity, 0.6) * 0.9);
-  }
-  100% {
-    transform: translateY(-62px) scale(1.05);
-    opacity: 0;
-  }
-}
-
-@keyframes cst-steam {
-  0% {
-    transform: translate(0, 0) scale(0.5);
-    opacity: 0;
-  }
-  22% {
-    opacity: 0.45;
-  }
-  100% {
-    transform: translate(-34px, -280px) scale(2);
-    opacity: 0;
-  }
-}
-
-@keyframes cst-fall {
-  from {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-  to {
-    transform: translateY(96px) scale(0.5);
-    opacity: 0;
-  }
-}
-
-@keyframes cst-splash-bit {
-  0% {
-    transform: translate(-50%, -50%) scale(0.6);
-    opacity: 0;
-  }
-  14% {
-    opacity: 0.95;
-  }
-  100% {
-    transform: translate(calc(-50% + var(--sb-x, 0px)), calc(-50% + var(--sb-y, -40px))) scale(0.4);
-    opacity: 0;
-  }
-}
-
-@keyframes cst-ripple {
-  from {
-    width: 40px;
-    height: 16px;
-    opacity: 0.9;
-  }
-  to {
-    width: 330px;
-    height: 116px;
-    opacity: 0;
   }
 }
 
