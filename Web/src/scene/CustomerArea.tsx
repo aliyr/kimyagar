@@ -18,8 +18,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { QualityBand } from '../engine/types';
-import { CLASSIC_ART, SCENE_ZONES, artUrl } from './artManifest';
-import { ArtLayer, rectStyle, useArt, zoneStyle } from './Zone';
+import { CLASSIC_ART, SCENE_ZONES } from './artManifest';
+import { rectStyle, useArt, zoneStyle } from './Zone';
+import { preloadArt } from './preloadArt';
+import { useUiState } from './uiState';
 import './classic-ambience.css';
 
 const APPEARANCE_STATES = SCENE_ZONES.customer.states as Record<string, string | undefined>;
@@ -27,8 +29,10 @@ const APPEARANCE_STATES = SCENE_ZONES.customer.states as Record<string, string |
 /** باید با مدت انیمیشن‌های cust-enter / cust-leave در CSS هم‌خوان بماند */
 const ENTER_MS = 1100;
 const LEAVE_MS = 900;
+/** اگر تصویر نیامد، ورود را برای همیشه قفل نکن */
+const ENTER_FALLBACK_MS = 2200;
 
-type Phase = 'enter' | 'idle' | 'react' | 'leave';
+type Phase = 'wait' | 'enter' | 'idle' | 'react' | 'leave';
 type Emotion = 'happy' | 'sad';
 
 function emotionForBand(band: QualityBand): Emotion {
@@ -63,8 +67,14 @@ export function CustomerArea() {
   const shownRef = useRef(shown);
   shownRef.current = shown;
 
-  const [phase, setPhase] = useState<Phase>('enter');
+  const [phase, setPhase] = useState<Phase>('wait');
   const [emotion, setEmotion] = useState<Emotion | null>(null);
+  const sceneArtReady = useUiState((s) => s.sceneArtReady);
+  const setCustomerArtReady = useUiState((s) => s.setCustomerArtReady);
+
+  const idleSrc = APPEARANCE_STATES[shown.appearance];
+  const idleArt = useArt(idleSrc, { fit: 'contain' });
+  const counterArt = useArt(SCENE_ZONES.customerCounter.img);
 
   // واکنش: evaluation که آمد، احساس را قفل می‌کنیم؛ رفتنش (Reset) به idle برمی‌گردد
   useEffect(() => {
@@ -83,14 +93,31 @@ export function CustomerArea() {
   // (این افکت بعد از افکت واکنش اجرا می‌شود تا در nextCustomer فاز leave برنده شود)
   useEffect(() => {
     if (customerIndex === shownRef.current.index) return;
+    setCustomerArtReady(null);
     setPhase('leave');
     const timer = window.setTimeout(() => {
       setShown({ index: customerIndex, appearance });
       setEmotion(null);
-      setPhase('enter');
+      setPhase('wait');
     }, LEAVE_MS);
     return () => window.clearTimeout(timer);
-  }, [customerIndex, appearance]);
+  }, [customerIndex, appearance, setCustomerArtReady]);
+
+  // اسپرایت + لایه‌های کارگاه decode شدند ⇒ ورود و دوربین با هم
+  useEffect(() => {
+    if (phase !== 'wait') return;
+    const tryEnter = () => {
+      if (!useUiState.getState().sceneArtReady) return;
+      setCustomerArtReady(shown.index);
+      setPhase('enter');
+    };
+    if (idleArt.loaded) {
+      tryEnter();
+      return;
+    }
+    const fallback = window.setTimeout(tryEnter, ENTER_FALLBACK_MS);
+    return () => window.clearTimeout(fallback);
+  }, [phase, idleArt.loaded, sceneArtReady, shown.index, setCustomerArtReady]);
 
   // پایان ورود ⇒ نفس‌کشیدن
   useEffect(() => {
@@ -99,14 +126,18 @@ export function CustomerArea() {
     return () => window.clearTimeout(timer);
   }, [phase, shown.index]);
 
-  // Preload هر دو حالت احساسی تا Crossfade بی‌درنگ باشد
+  // حالت‌های احساسی همین مشتری + ظاهر مشتری بعدی تا ورود بعدی بی‌درنگ باشد
   useEffect(() => {
-    if (typeof Image === 'undefined') return;
-    for (const e of ['happy', 'sad'] as const) {
-      const img = new Image();
-      img.src = artUrl(CLASSIC_ART.customerEmotion(shown.appearance, e));
-    }
-  }, [shown.appearance]);
+    const customers = useGameStore.getState().defs.customers;
+    const next = customers[(shown.index + 1) % customers.length];
+    void preloadArt([
+      CLASSIC_ART.customerEmotion(shown.appearance, 'happy'),
+      CLASSIC_ART.customerEmotion(shown.appearance, 'sad'),
+      APPEARANCE_STATES[next?.appearance],
+      next ? CLASSIC_ART.customerEmotion(next.appearance, 'happy') : undefined,
+      next ? CLASSIC_ART.customerEmotion(next.appearance, 'sad') : undefined,
+    ]);
+  }, [shown.index, shown.appearance]);
 
   const emotionArt = useArt(
     emotion ? CLASSIC_ART.customerEmotion(shown.appearance, emotion) : undefined,
@@ -136,14 +167,15 @@ export function CustomerArea() {
               data-testid="customer-emotion"
               data-emotion={emotion ?? undefined}
             >
-              <ArtLayer key={shown.appearance} src={APPEARANCE_STATES[shown.appearance]}>
+              {idleArt.node}
+              {idleArt.loaded ? null : (
                 <div className="customer__ph">
                   <span className="customer__drape" />
                   <span className="customer__body" />
                   <span className="customer__head" />
                   <span className="customer__rim" />
                 </div>
-              </ArtLayer>
+              )}
               {emotionArt.node}
             </div>
             {reacting && emotion === 'happy'
@@ -178,13 +210,14 @@ export function CustomerArea() {
       ) : null}
 
       <div className="counter" style={zoneStyle(SCENE_ZONES.customerCounter)}>
-        <ArtLayer src={SCENE_ZONES.customerCounter.img}>
+        {counterArt.node}
+        {counterArt.loaded ? null : (
           <div className="counter__ph">
             <div className="counter__slab" />
             <div className="counter__front" />
             <div className="counter__scale" />
           </div>
-        </ArtLayer>
+        )}
       </div>
     </>
   );

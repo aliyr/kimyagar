@@ -213,6 +213,9 @@
   position: absolute;
   inset: 0;
 }
+.cust-sprite > .zone-art {
+  object-position: center bottom;
+}
 .cust-walk {
   will-change: transform, opacity;
 }
@@ -239,6 +242,11 @@
   to {
     opacity: 0;
   }
+}
+
+/* --- فاز انتظار: اسپرایت هنوز decode نشده؛ دیده نشود تا ورود روی تصویر واقعی باشد --- */
+.cust-root[data-phase='wait'] {
+  visibility: hidden;
 }
 
 /* --- فاز ورود: راه‌رفتن از لبه‌ی راست --- */

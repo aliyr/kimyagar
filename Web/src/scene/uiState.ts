@@ -18,6 +18,17 @@ export type TransferPhase = null | 'scoop' | 'carry' | 'drop';
 /** فازهای ریختن دیگ ⇒ شیشه ⇒ مشتری (کلاسیک) */
 export type PourPhase = null | 'tilt' | 'stream' | 'deliver';
 
+/**
+ * نمای دوربین سینمایی (کلاسیک): Stage کل صحنه را حول نقطه‌ی (x,y) با `zoom`
+ * بزرگ می‌کند و در `ms` میلی‌ثانیه به آن می‌رسد. null ⇒ نمای عادی.
+ */
+export interface CameraShot {
+  x: number;
+  y: number;
+  zoom: number;
+  ms: number;
+}
+
 export interface DragState {
   kind: DragKind;
   ingredientId?: IngredientId;
@@ -48,6 +59,17 @@ export interface UiState {
   transfer: TransferPhase;
   /** ریختن دیگ ⇒ شیشه ⇒ مشتری (کلاسیک) */
   pour: PourPhase;
+  /** نمای دوربین سینمایی (Stage آن را اعمال می‌کند) */
+  camera: CameraShot | null;
+  /** نوارهای سینمایی بالا/پایین */
+  letterbox: boolean;
+  /** لایه‌های ثابت کارگاه (میز، قفسه، دیگ، پیشخوان…) decode شده‌اند */
+  sceneArtReady: boolean;
+  /**
+   * customerIndex همان مشتری‌ای که اسپرایتش decode شده.
+   * null یعنی هنوز آماده نیست — دوربین ورود نباید شروع شود.
+   */
+  customerArtReady: number | null;
 
   beginDrag: (d: Omit<DragState, 'over'>) => void;
   updateDrag: (x: number, y: number, over: DropTargetId | null) => void;
@@ -57,6 +79,9 @@ export interface UiState {
   setPouring: (v: boolean) => void;
   setTransfer: (phase: TransferPhase) => void;
   setPour: (phase: PourPhase) => void;
+  setCamera: (shot: CameraShot | null, letterbox?: boolean) => void;
+  setSceneArtReady: (ready: boolean) => void;
+  setCustomerArtReady: (index: number | null) => void;
   pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse' | 'grindTickPulse') => void;
 }
 
@@ -72,6 +97,10 @@ export const useUiState = create<UiState>((set) => ({
   grindTickPulse: 0,
   transfer: null,
   pour: null,
+  camera: null,
+  letterbox: false,
+  sceneArtReady: false,
+  customerArtReady: null,
 
   beginDrag: (d) => set({ drag: { ...d, over: null } }),
   updateDrag: (x, y, over) =>
@@ -82,5 +111,8 @@ export const useUiState = create<UiState>((set) => ({
   setPouring: (v) => set({ pouring: v }),
   setTransfer: (phase) => set({ transfer: phase }),
   setPour: (phase) => set({ pour: phase, pouring: phase !== null }),
+  setCamera: (shot, letterbox) => set((s) => ({ camera: shot, letterbox: letterbox ?? s.letterbox })),
+  setSceneArtReady: (ready) => set({ sceneArtReady: ready }),
+  setCustomerArtReady: (index) => set({ customerArtReady: index }),
   pulse: (key) => set((s) => ({ [key]: s[key] + 1 }) as Partial<UiState>),
 }));

@@ -45,14 +45,33 @@ export interface ArtOptions {
   className?: string;
 }
 
+const decodingImgs = new WeakSet<HTMLImageElement>();
+
+function markDecoded(
+  img: HTMLImageElement,
+  forSrc: string,
+  setReadyFor: (src: string) => void,
+) {
+  if (decodingImgs.has(img)) return;
+  decodingImgs.add(img);
+  const done = () => setReadyFor(forSrc);
+  if (typeof img.decode === 'function') {
+    void img.decode().then(done, done);
+    return;
+  }
+  done();
+}
+
 /**
  * یک لایه‌ی هنری + خبر از بارشدنش.
- * تا وقتی تصویر نیامده (یا وجود ندارد) loaded=false می‌ماند تا صحنه
+ * تا وقتی تصویر decode نشده loaded=false می‌ماند تا صحنه
  * placeholder خودش را نشان دهد؛ تصویر که آمد، سرِ جای همان Zone می‌نشیند.
+ * decode (نه فقط onLoad) تا دوربین/ورود روی پیکسل‌های خام نرود.
  */
 export function useArt(src: string | undefined, options: ArtOptions = {}) {
-  const [loaded, setLoaded] = useState(false);
+  const [readyFor, setReadyFor] = useState<string | undefined>(undefined);
   const fit = options.fit ?? 'contain';
+  const loaded = Boolean(src) && readyFor === src;
 
   const node = src ? (
     <img
@@ -60,8 +79,15 @@ export function useArt(src: string | undefined, options: ArtOptions = {}) {
       className={`zone-art zone-art--${fit}${options.className ? ` ${options.className}` : ''}`}
       src={artUrl(src)}
       alt=""
-      onLoad={() => setLoaded(true)}
-      onError={() => setLoaded(false)}
+      onLoad={(e) => markDecoded(e.currentTarget, src, setReadyFor)}
+      onError={() => setReadyFor((cur) => (cur === src ? undefined : cur))}
+      ref={(el) => {
+        // تصویر کش‌شده گاهی onLoad را قبل از وصل‌شدن handler می‌زند
+        if (!el || readyFor === src) return;
+        if (el.complete && el.naturalWidth > 0) {
+          markDecoded(el, src, setReadyFor);
+        }
+      }}
     />
   ) : null;
 

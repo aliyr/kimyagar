@@ -61,16 +61,32 @@ export function IngredientFlight({
       if (k >= 1) {
         if (!landed) {
           landed = true;
-          cbs.current.onLand(flight);
-          cbs.current.onDone(flight.key);
+          try {
+            cbs.current.onLand(flight);
+          } finally {
+            cbs.current.onDone(flight.key);
+          }
         }
         return;
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, [flight]);
+    // اگر rAF وسط راه قطع شود (مثلاً با زوم سینمایی)، فرود را از دست ندهیم
+    const failsafe = window.setTimeout(() => {
+      if (landed) return;
+      landed = true;
+      try {
+        cbs.current.onLand(flight);
+      } finally {
+        cbs.current.onDone(flight.key);
+      }
+    }, FLIGHT_MS + 80);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(failsafe);
+    };
+  }, [flight.key]);
 
   return (
     <div

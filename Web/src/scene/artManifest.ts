@@ -126,7 +126,8 @@ export const SCENE_ZONES = {
   },
   customer: {
     id: 'customer',
-    x: 1520, y: 210, width: 340, height: 520, z: 15,
+    /* پایین تصویر ≈ سطح پیشخوان تا کمر پشت پیشخوان بنشیند، نه در هوا */
+    x: 1510, y: 248, width: 350, height: 512, z: 15,
     states: {
       woman_elder: 'customer/customer_woman_elder.png',
       man_worker: 'customer/customer_man_worker.png',

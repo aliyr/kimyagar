@@ -19,10 +19,14 @@ import { CustomerArea } from './CustomerArea';
 import { ShelfStationClassic } from './ShelfStationClassic';
 import { GoalNote } from './GoalNote';
 import { DragGhost } from './DragGhost';
+import { BurntSmoke } from './BurntSmoke';
+import { Cinematic } from './Cinematic';
+import { ScenePreload } from './ScenePreload';
 
 export function WorkshopScene() {
   return (
     <>
+      <ScenePreload />
       <Backdrop />
       <ContactShadows />
       <StoveHole />
@@ -32,9 +36,11 @@ export function WorkshopScene() {
       <CauldronStation />
       <MortarStation />
       <BottlingSequence />
+      <BurntSmoke />
       <TableProps />
       <GoalNote />
       <DragGhost />
+      <Cinematic />
     </>
   );
 }

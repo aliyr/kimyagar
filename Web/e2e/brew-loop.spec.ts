@@ -82,6 +82,7 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     await cauldron.click();
     const pouring = page.getByTestId('pouring');
     await expect(pouring).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByTestId('cine-bars')).toHaveClass(/is-on/);
     await expect(pouring).toHaveAttribute('data-phase', 'stream', { timeout: 3_000 });
     await expect(pouring).toHaveAttribute('data-phase', 'deliver', { timeout: 4_000 });
 

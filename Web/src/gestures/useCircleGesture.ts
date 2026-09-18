@@ -40,7 +40,7 @@ export interface CircleGestureOptions {
 }
 
 export function useCircleGesture(options: CircleGestureOptions) {
-  const { toScene } = useStageSpace();
+  const { capture } = useStageSpace();
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
@@ -64,6 +64,7 @@ export function useCircleGesture(options: CircleGestureOptions) {
 
       const el = e.currentTarget;
       const pointerId = e.pointerId;
+      const { toScene } = capture();
       const origin = toScene(e.clientX, e.clientY);
       let last = origin;
       let lastAngle: number | null = null;
@@ -124,7 +125,7 @@ export function useCircleGesture(options: CircleGestureOptions) {
       optionsRef.current.onActiveChange?.(true);
       optionsRef.current.onMove?.(last);
     },
-    [toScene],
+    [capture],
   );
 
   return { onPointerDown };

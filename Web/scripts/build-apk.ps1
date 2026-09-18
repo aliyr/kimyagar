@@ -1,7 +1,18 @@
 $ErrorActionPreference = 'Stop'
 
-$javaHome = Join-Path $env:LOCALAPPDATA 'Java\jdk-21.0.8+9'
-$androidHome = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
+$javaRoot = Join-Path $env:LOCALAPPDATA 'Java'
+$jdk21 = Get-ChildItem $javaRoot -Directory -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -like 'jdk-21*' -and (Test-Path (Join-Path $_.FullName 'bin\java.exe')) } |
+  Sort-Object Name -Descending |
+  Select-Object -First 1
+$javaHome = if ($jdk21) {
+  $jdk21.FullName
+} elseif ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
+  $env:JAVA_HOME
+} else {
+  throw "JDK 21 not found under $javaRoot"
+}
+$androidHome = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
 $webRoot = Split-Path $PSScriptRoot -Parent
 $androidRoot = Join-Path $webRoot 'android'
 $outDir = Join-Path $webRoot 'apk'
@@ -19,7 +30,8 @@ if (-not (Test-Path (Join-Path $androidHome 'platforms\android-36'))) {
 }
 
 Set-Location $androidRoot
-& .\gradlew.bat assembleDebug --no-daemon
+Write-Host "Using JAVA_HOME=$javaHome"
+& .\gradlew.bat assembleDebug --no-daemon "-Dorg.gradle.java.home=$javaHome"
 if ($LASTEXITCODE -ne 0) { throw "gradlew assembleDebug failed" }
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null

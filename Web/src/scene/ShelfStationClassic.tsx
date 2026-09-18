@@ -90,7 +90,7 @@ function Jar({
   scrollBy: (dxScene: number) => void;
   onTap: (ingredient: IngredientDefinition, from: { x: number; y: number }) => void;
 }) {
-  const { toScene } = useStageSpace();
+  const { capture } = useStageSpace();
   const openOverlay = useGameStore((s) => s.openOverlayAction);
   const inMortar = useGameStore((s) => s.mortar?.ingredientId === ingredient.id);
   const art = useArt(`cabinet/jar_${ingredient.id}.png`);
@@ -104,6 +104,7 @@ function Jar({
 
       const el = e.currentTarget;
       const pointerId = e.pointerId;
+      const { toScene } = capture();
       const start = toScene(e.clientX, e.clientY);
       let last = start;
       let mode: 'pending' | 'scroll' | 'held' = 'pending';
@@ -162,7 +163,7 @@ function Jar({
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointercancel', onCancel);
     },
-    [toScene, scrollBy, ingredient, openOverlay, onTap],
+    [capture, scrollBy, ingredient, openOverlay, onTap],
   );
 
   return (
@@ -197,7 +198,7 @@ function Jar({
 let flightSeq = 0;
 
 export function ShelfStationClassic() {
-  const { toScene } = useStageSpace();
+  const { capture } = useStageSpace();
   const ingredients = useGameStore((s) => s.defs.ingredients);
   const [flights, setFlights] = useState<FlightSpec[]>([]);
 
@@ -252,6 +253,7 @@ export function ShelfStationClassic() {
       if (e.button > 0) return;
       const el = e.currentTarget;
       const pointerId = e.pointerId;
+      const { toScene } = capture();
       let lastX = toScene(e.clientX, e.clientY).x;
 
       const detach = () => {
@@ -276,7 +278,7 @@ export function ShelfStationClassic() {
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointercancel', onUp);
     },
-    [toScene, scrollBy],
+    [capture, scrollBy],
   );
 
   // نشانه‌ی کشف‌پذیری اسکرول: فلش داخل سرپوشِ سمتی که شیشه‌ی پنهان دارد

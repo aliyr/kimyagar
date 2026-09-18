@@ -49,6 +49,57 @@
   pointer-events: auto;
 }
 
+/*
+ * لایه‌ی دوربین سینمایی: کل محتوا را حول نقطه‌ی تمرکز بزرگ می‌کند.
+ * pointer-events: none تا لایه‌های تزئینی جلوی لمس را نگیرند؛ .interactive همچنان auto است.
+ */
+.scene-camera {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 50%;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.45, 0.05, 0.18, 1);
+  backface-visibility: hidden;
+}
+
+/* نوارهای سینمایی — بیرون از زوم، روی لبه‌ی قاب ۱۶:۹ */
+.cine-bars {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+}
+.cine-bars__top,
+.cine-bars__bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #050302;
+  transition: height 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cine-bars__top {
+  top: 0;
+}
+.cine-bars__bottom {
+  bottom: 0;
+}
+.cine-bars.is-on .cine-bars__top,
+.cine-bars.is-on .cine-bars__bottom {
+  height: 72px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-camera {
+    transition: none;
+  }
+  .cine-bars__top,
+  .cine-bars__bottom {
+    transition: none;
+  }
+}
+
 .zone-art {
   position: absolute;
   inset: 0;

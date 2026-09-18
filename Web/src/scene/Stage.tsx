@@ -9,17 +9,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { SCENE_HEIGHT, SCENE_WIDTH } from './artManifest';
+import { useUiState } from './uiState';
 
-export interface StageSpace {
-  /** مختصات اشاره‌گر (client) → مختصات منطقی صحنه */
+export interface CapturedSpace {
   toScene: (clientX: number, clientY: number) => { x: number; y: number };
-  /** ضریب مقیاس فعلی صحنه */
   scale: () => number;
+}
+
+export interface StageSpace extends CapturedSpace {
+  /**
+   * نگاشت را در همین لحظه قفل می‌کند تا وسط انیمیشن دوربین سینمایی
+   * (تغییر getBoundingClientRect) یک Tap بی‌حرکت، اسکرول حساب نشود.
+   */
+  capture: () => CapturedSpace;
 }
 
 const identitySpace: StageSpace = {
   toScene: (x, y) => ({ x, y }),
   scale: () => 1,
+  capture: () => identitySpace,
 };
 
 const StageContext = createContext<StageSpace>(identitySpace);
@@ -59,6 +67,10 @@ function fitStage(): Fit {
 
 export function Stage({ paused, children }: { paused: boolean; children: ReactNode }) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
+  /** لایه‌ی دوربین سینمایی: zoom/pan حول نقطه‌ی تمرکز (uiState.camera) */
+  const cameraRef = useRef<HTMLDivElement | null>(null);
+  const camera = useUiState((s) => s.camera);
+  const letterbox = useUiState((s) => s.letterbox);
   const [fit, setFit] = useState<Fit>(fitStage);
 
   useEffect(() => {
@@ -72,8 +84,9 @@ export function Stage({ paused, children }: { paused: boolean; children: ReactNo
     };
   }, []);
 
+  // اندازه‌گیری روی لایه‌ی دوربین: در میانه‌ی یک نمای سینمایی هم نگاشت اشاره‌گر دقیق می‌ماند
   const measure = useCallback(() => {
-    const el = sceneRef.current;
+    const el = cameraRef.current ?? sceneRef.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
     const s = rect.width / SCENE_WIDTH;
@@ -81,14 +94,20 @@ export function Stage({ paused, children }: { paused: boolean; children: ReactNo
   }, []);
 
   const space = useMemo<StageSpace>(
-    () => ({
-      toScene: (clientX, clientY) => {
-        const m = measure();
-        if (!m) return { x: clientX, y: clientY };
-        return { x: (clientX - m.rect.left) / m.s, y: (clientY - m.rect.top) / m.s };
-      },
-      scale: () => measure()?.s ?? 1,
-    }),
+    () => {
+      const from = (m: { rect: DOMRect; s: number } | null) => ({
+        toScene: (clientX: number, clientY: number) => {
+          if (!m) return { x: clientX, y: clientY };
+          return { x: (clientX - m.rect.left) / m.s, y: (clientY - m.rect.top) / m.s };
+        },
+        scale: () => m?.s ?? 1,
+      });
+      return {
+        toScene: (clientX, clientY) => from(measure()).toScene(clientX, clientY),
+        scale: () => measure()?.s ?? 1,
+        capture: () => from(measure()),
+      };
+    },
     [measure],
   );
 
@@ -106,8 +125,23 @@ export function Stage({ paused, children }: { paused: boolean; children: ReactNo
           transform: `scale(${fit.scale})`,
         }}
       >
-        <StageContext.Provider value={space}>{children}</StageContext.Provider>
+        <div
+          ref={cameraRef}
+          className={`scene-camera${camera ? ' is-shot' : ''}`}
+          data-testid="scene-camera"
+          style={{
+            transformOrigin: camera ? `${camera.x}px ${camera.y}px` : `${SCENE_WIDTH / 2}px ${SCENE_HEIGHT / 2}px`,
+            transform: camera ? `scale(${camera.zoom})` : 'scale(1)',
+            transitionDuration: `${camera?.ms ?? 900}ms`,
+          }}
+        >
+          <StageContext.Provider value={space}>{children}</StageContext.Provider>
+        </div>
         <div className="scene-vignette" />
+        <div className={`cine-bars${letterbox ? ' is-on' : ''}`} data-testid="cine-bars" aria-hidden>
+          <div className="cine-bars__top" />
+          <div className="cine-bars__bottom" />
+        </div>
       </div>
     </div>
   );
