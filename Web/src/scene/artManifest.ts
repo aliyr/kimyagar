@@ -115,13 +115,14 @@ export const SCENE_ZONES = {
     x: 1080, y: 560, width: 200, height: 240, z: 32,
   },
   /**
-   * پیشخوان: Zone با همان نسبت تصویر (652×620) و لبه‌ی پایین کمی زیر لبه‌ی صحنه،
-   * تا پایه‌هایش روی زمین کارگاه بنشیند و «شناور» دیده نشود. مشتری (z=15) پشت
-   * آن می‌ایستد و از کمر به پایین پنهان می‌شود.
+   * پیشخوان: جای مشتری ثابت است. پایینِ پیکسل‌های دیده‌شونده‌ی تصویر روی
+   * y=1085 می‌نشیند؛ یعنی فقط ۵px از خودِ پیشخوان زیر لبه‌ی صحنه (۱۰۸۰) است
+   * و بریده می‌شود، نه اینکه کل پیشخوان ۵px پایین بیاید.
+   * مشتری (z=15) پشت آن می‌ایستد و از کمر به پایین پنهان می‌شود.
    */
   customerCounter: {
     id: 'customer_counter',
-    x: 1430, y: 599, width: 510, height: 485, z: 20,
+    x: 1430, y: 603, width: 510, height: 485, z: 20,
     img: 'customer/counter.png',
   },
   customer: {
@@ -212,4 +213,24 @@ export const CLASSIC_ART = {
    */
   customerEmotion: (appearance: string, emotion: 'happy' | 'sad') =>
     `customer/customer_${appearance}_${emotion}.png` as const,
+} as const;
+
+/**
+ * لایه‌های سردر دکان — تولید در tools/build_gate_layers.mjs.
+ * متن فارسی روی تابلو، پلاک و پوست در Runtime می‌نشیند؛ پنجره‌ی در شفاف است.
+ * فریم‌های شعله بوم مشترک دارند (لنگر پایین-وسط).
+ */
+export const GATE_ART = {
+  doorWest: 'gate/door_west.png',
+  doorEast: 'gate/door_east.png',
+  lintel: 'gate/lintel.png',
+  sill: 'gate/sill.png',
+  sign: 'gate/sign.png',
+  plaque: 'gate/plaque.png',
+  seal: 'gate/seal.png',
+  parchment: 'gate/parchment.png',
+  drop: 'gate/drop.png',
+  customerShadow: 'gate/customer_shadow.png',
+  candle: 'gate/candle.png',
+  flames: ['gate/flame_1.png', 'gate/flame_2.png', 'gate/flame_3.png'],
 } as const;

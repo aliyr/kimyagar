@@ -11,7 +11,7 @@
  */
 
 import { FLAT_POT_OFFSET, FLAT_SCENE_SIZE } from '../art/flat/kit/scene.ts';
-import type { MouthGeometry } from '../art/flat/kit/scene.ts';
+import type { DropOverride, FlatCookingScene, MouthGeometry } from '../art/flat/kit/scene.ts';
 import { POT_GEOMETRY } from '../art/flat/kit/props.ts';
 import { SCENE_ZONES } from './artManifest';
 
@@ -102,6 +102,23 @@ export function sceneToKit(point: { x: number; y: number }): { x: number; y: num
 /** زاویه‌ی نقطه‌ی صحنه نسبت به دهانه (بیضی ⇒ دایره‌ی واحد؛ 0 = راست، ساعت‌گرد روی صفحه) */
 export function classicSpoonAngleFor(point: { x: number; y: number }): number {
   return Math.atan2((point.y - CLASSIC_MOUTH.y) / CLASSIC_MOUTH.ry, (point.x - CLASSIC_MOUTH.x) / CLASSIC_MOUTH.rx);
+}
+
+/**
+ * قاشق مواد را داخل دیگ ریخته است. `drop` کیت همیشه از بالای قاب می‌افتد؛
+ * این تابع همان فرود را قبل از نقاشی تمام می‌کند تا افتادن دوم دیده نشود.
+ */
+export function settlePouredIngredient(
+  scene: FlatCookingScene,
+  ingredientId: string,
+  override?: DropOverride,
+): void {
+  scene.drop(ingredientId, override);
+  scene.update(0);
+  const falling = (scene as unknown as { falling: { y: number } | null }).falling;
+  if (!falling) return;
+  falling.y = scene.surfaceY + 40;
+  scene.update(0.016);
 }
 
 /** پیشرفت فرورفتن یک ماده: Exposure نسبت به آستانه‌ی «رسیده» (۰..۱) */

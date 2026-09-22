@@ -65,7 +65,16 @@ function fitStage(): Fit {
   return { scale, left, top };
 }
 
-export function Stage({ paused, children }: { paused: boolean; children: ReactNode }) {
+export function Stage({
+  paused,
+  children,
+  foreground,
+}: {
+  paused: boolean;
+  children: ReactNode;
+  /** روی قاب صحنه، بیرون از لایه‌ی دوربین (سردر دکان) */
+  foreground?: ReactNode;
+}) {
   const sceneRef = useRef<HTMLDivElement | null>(null);
   /** لایه‌ی دوربین سینمایی: zoom/pan حول نقطه‌ی تمرکز (uiState.camera) */
   const cameraRef = useRef<HTMLDivElement | null>(null);
@@ -123,6 +132,7 @@ export function Stage({ paused, children }: { paused: boolean; children: ReactNo
           left: fit.left,
           top: fit.top,
           transform: `scale(${fit.scale})`,
+          ['--scene-scale' as string]: String(fit.scale),
         }}
       >
         <div
@@ -142,6 +152,7 @@ export function Stage({ paused, children }: { paused: boolean; children: ReactNo
           <div className="cine-bars__top" />
           <div className="cine-bars__bottom" />
         </div>
+        {foreground}
       </div>
     </div>
   );

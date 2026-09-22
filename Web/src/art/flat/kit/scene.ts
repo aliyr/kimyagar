@@ -399,9 +399,13 @@ export class FlatCookingScene {
     if (this.externalProgress) this.done = done;
   }
 
-  /** Burnt brew: steam turns to grey smoke and rises a little thicker. */
+  /** Burnt brew: steam turns to grey smoke, thicker rise, celebration sparkles go away. */
   setBurnt(burnt: boolean): void {
     this.burnt = burnt;
+    if (burnt) {
+      this.sparkles = [];
+      this.sparkleTimer = 0;
+    }
   }
 
   private bubbleY(b: Bubble, t: number): number {
@@ -550,6 +554,11 @@ export class FlatCookingScene {
 
   get isStirring(): boolean {
     return this.spoonMode === 'stir';
+  }
+
+  /** Alive celebration sparkles (empty after `setBurnt(true)`). */
+  get sparkleCount(): number {
+    return this.sparkles.length;
   }
 
   /* ---------------------------------------------------------------- */
@@ -816,16 +825,19 @@ export class FlatCookingScene {
     } else if (!this.done && this.fire.intensity > 0.8 && this.boilTime >= BOIL_UNTIL_DONE && !this.bits.length && this.added.size) {
       this.done = true;
     }
-    if (!this.done) return;
-    this.sparkleTimer += dt * 7;
-    while (this.sparkleTimer >= 1) {
-      this.sparkleTimer -= 1;
-      const rim = POT_GEOMETRY.rim;
-      this.sparkles.push({
-        x: rim.cx + this.rng.range(-rim.rx + 10, rim.rx - 10),
-        y: this.surfaceY + this.rng.range(-this.mouth.ry - 12, this.mouth.ry + 16),
-        age: 0,
-      });
+    // Celebrate only while done and not burnt. Leftover sparkles always age so
+    // turning `done` off (or burning) never freezes them on screen.
+    if (this.done && !this.burnt) {
+      this.sparkleTimer += dt * 7;
+      while (this.sparkleTimer >= 1) {
+        this.sparkleTimer -= 1;
+        const rim = POT_GEOMETRY.rim;
+        this.sparkles.push({
+          x: rim.cx + this.rng.range(-rim.rx + 10, rim.rx - 10),
+          y: this.surfaceY + this.rng.range(-this.mouth.ry - 12, this.mouth.ry + 16),
+          age: 0,
+        });
+      }
     }
     for (const s of this.sparkles) s.age += dt;
     this.sparkles = this.sparkles.filter((s) => s.age < SPARKLE_LIFE);

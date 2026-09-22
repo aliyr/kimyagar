@@ -14,6 +14,7 @@ import { useEffect, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { CLASSIC_MOUTH } from './classicCauldronGeometry';
 import { SCENE_ZONES } from './artManifest';
+import { useRouteKind } from '../route';
 import { useUiState } from './uiState';
 import type { CameraShot } from './uiState';
 
@@ -49,13 +50,14 @@ export function Cinematic() {
   const sceneArtReady = useUiState((s) => s.sceneArtReady);
   const customerArtReady = useUiState((s) => s.customerArtReady);
   const setCamera = useUiState((s) => s.setCamera);
+  const routeKind = useRouteKind();
   const prevPour = useRef(pour);
 
   // ورود فقط وقتی اسپرایت همین مشتری و لایه‌های کارگاه decode شده‌اند
   const enterReady = sceneArtReady && customerArtReady === customerIndex;
 
   useEffect(() => {
-    if (prefersReducedMotion() || !enterReady) return;
+    if (routeKind === 'gate' || prefersReducedMotion() || !enterReady) return;
     setCamera(ENTER, true);
     const hold = window.setTimeout(() => {
       // اگر ریختن شروع شده، نمای ورود نباید دوربین را پس بکشد
@@ -63,13 +65,13 @@ export function Cinematic() {
       setCamera(null, false);
     }, 1700);
     return () => window.clearTimeout(hold);
-  }, [customerIndex, enterReady, setCamera]);
+  }, [customerIndex, enterReady, setCamera, routeKind]);
 
   // ریختن و تحویل — فقط وقتی فاز بطری واقعاً عوض شود، تا با ورود تداخل نکند
   useEffect(() => {
     const prev = prevPour.current;
     prevPour.current = pour;
-    if (prefersReducedMotion()) return;
+    if (routeKind === 'gate' || prefersReducedMotion()) return;
     if (pour === 'tilt' || pour === 'stream') {
       setCamera(POUR, true);
       return;
@@ -81,7 +83,7 @@ export function Cinematic() {
     if (prev !== null && pour === null) {
       setCamera(null, false);
     }
-  }, [pour, setCamera]);
+  }, [pour, setCamera, routeKind]);
 
   return null;
 }

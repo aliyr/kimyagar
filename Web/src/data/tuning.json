@@ -5,7 +5,9 @@
     { "quantity": 1.5, "factor": 1.4 },
     { "quantity": 2.0, "factor": 1.7 },
     { "quantity": 3.0, "factor": 2.15 },
-    { "quantity": 4.0, "factor": 2.4 }
+    { "quantity": 4.0, "factor": 2.4 },
+    { "quantity": 5.0, "factor": 2.55 },
+    { "quantity": 6.0, "factor": 2.68 }
   ],
   "heatExposureRate": { "low": 0.6, "medium": 1.0, "high": 1.6 },
   "stageThresholds": { "extracting": 4, "ready": 14, "overprocessed": 42 },

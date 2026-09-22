@@ -19,6 +19,7 @@ const WORKSHOP_LAYERS = [
   SCENE_ZONES.mortar.img,
   CLASSIC_ART.mortar.back,
   CLASSIC_ART.mortar.front,
+  ...CLASSIC_ART.mortar.pestleFrames,
   SCENE_ZONES.bottleShelf.img,
   SCENE_ZONES.customerCounter.img,
   SCENE_ZONES.goalNote.img,

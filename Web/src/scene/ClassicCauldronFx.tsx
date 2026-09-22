@@ -4,7 +4,8 @@
  * (classicCauldronGeometry).
  *
  * پل store ⇒ صحنه (همان قرارداد v2/FlatCauldron به‌علاوه‌ی «حقیقت بازی»):
- * - ورودی تازه در brew.entries ⇒ scene.drop(id, {tint}) + هم‌زدن خودکار.
+ * - ورودی تازه در brew.entries ⇒ اگر قاشق ریخته، بدون افتادن دوباره داخل دیگ می‌نشیند؛
+ *   وگرنه scene.drop. بعد هم‌زدن خودکار.
  * - currentHeat ⇒ setHeatLevel؛ bottled ⇒ آتش خاموش.
  * - حالت پیشرفت بیرونی: هر ماده به نسبت exposure/آستانه‌ی «رسیده» فرو می‌رود
  *   (setIngredientProgress)؛ همه رسیده ⇒ شمسه (setDone)؛ سوخته ⇒ دود خاکستری
@@ -26,7 +27,7 @@ import { useFlatCanvas } from '../art/flat/react/useFlatCanvas';
 import { seedForCustomer } from '../art/flat/react/flatSeed';
 import { flatHeatLevel } from '../art/flat/react/heatLevel';
 import { burntLiquid } from './v2/flatCauldronGeometry';
-import { CLASSIC_FX_RECT, CLASSIC_POT_BASE, sinkProgress } from './classicCauldronGeometry';
+import { CLASSIC_FX_RECT, CLASSIC_POT_BASE, settlePouredIngredient, sinkProgress } from './classicCauldronGeometry';
 import { SCENE_ZONES } from './artManifest';
 import { rectStyle } from './Zone';
 import { useUiState } from './uiState';
@@ -87,7 +88,7 @@ export function ClassicCauldronFx({
     scene.setHeatLevel(bottled ? 0 : flatHeatLevel(heat));
   }, [scene, heat, bottled]);
 
-  // سوخته ⇒ رنگ مایع + دود خاکستری؛ رسیده ⇒ شمسه
+  // سوخته ⇒ رنگ مایع + دود خاکستری و خاموشی شمسه؛ رسیده ⇒ شمسه
   useEffect(() => {
     scene.setLiquidAdjust(overprocessed ? burntLiquid : null);
     scene.setBurnt(overprocessed);
@@ -127,14 +128,16 @@ export function ClassicCauldronFx({
       const kitIngredient = flatIngredientById(entry.ingredientId);
       if (!kitIngredient) continue;
       const baseBits = kitIngredient.bits;
-      scene.drop(entry.ingredientId, {
+      const spec = {
         tint: def?.color ?? kitIngredient.tint,
         strength: kitIngredient.strength * (0.8 + 0.2 * entry.quantity),
         bits: {
           count: Math.round(baseBits.count * (0.75 + 0.25 * entry.quantity)),
           colors: def ? [...baseBits.colors, def.color] : baseBits.colors,
         },
-      });
+      };
+      if (useUiState.getState().transfer === 'drop') settlePouredIngredient(scene, entry.ingredientId, spec);
+      else scene.drop(entry.ingredientId, spec);
       dropped++;
     }
     if (dropped > 0) {
@@ -179,6 +182,7 @@ export function ClassicCauldronFx({
       if (canvas) {
         canvas.style.transformOrigin = FX_ORIGIN;
         canvas.style.transform = transform;
+        canvas.dataset.sparkles = String(scene.sparkleCount);
       }
       return scene.render();
     },

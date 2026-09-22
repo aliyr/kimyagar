@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as engine from '../../src/engine';
+import { quantityFactorFor } from '../../src/engine/curves';
 import {
+  CLASSIC_MAX_MORTAR_UNITS,
   GRIND_RATE,
   GRIND_THRESHOLDS,
   MAX_MORTAR_UNITS,
@@ -187,5 +189,131 @@ describe('addMortarToCauldron with quantity 3', () => {
     expect(entries[0]?.quantity).toBe(3);
     expect(entries[0]?.ingredientId).toBe(CHAMOMILE);
     expect(useGameStore.getState().mortar).toBeNull();
+  });
+});
+
+describe('classic mixed mortar', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  function tickFor(seconds: number, dt = 1 / 30) {
+    for (let t = 0; t < seconds - 1e-9; t += dt) useGameStore.getState().tick(dt);
+  }
+
+  it('mixes ingredients up to 6 and keeps each grind', () => {
+    const { addClassicUnit, startGrinding } = useGameStore.getState();
+    addClassicUnit('saffron');
+    startGrinding();
+    tickFor(MORTAR_GRIND_SECONDS + 0.2);
+    expect(useGameStore.getState().mortar?.portions?.[0]?.grindWork).toBeCloseTo(3.6, 1);
+    addClassicUnit('poppy');
+    addClassicUnit('poppy');
+    const portions = useGameStore.getState().mortar?.portions ?? [];
+    expect(portions.map((portion) => portion.ingredientId)).toEqual(['saffron', 'poppy']);
+    expect(portions[0]?.grindWork).toBeGreaterThan(3);
+    expect(portions[1]).toMatchObject({ quantity: 2, grindWork: 0 });
+    expect(useGameStore.getState().mortar?.quantity).toBe(3);
+  });
+
+  it('the seventh unit does not fit', () => {
+    const { addClassicUnit } = useGameStore.getState();
+    for (let i = 0; i < CLASSIC_MAX_MORTAR_UNITS; i++) addClassicUnit(CHAMOMILE);
+    const before = useGameStore.getState().mortar;
+    addClassicUnit(MINT);
+    expect(useGameStore.getState().mortar).toEqual(before);
+    expect(useGameStore.getState().mortar?.quantity).toBe(6);
+  });
+
+  it('two raw units take about twice as long to go fine', () => {
+    const { addClassicUnit, startGrinding } = useGameStore.getState();
+    addClassicUnit(CHAMOMILE);
+    addClassicUnit(CHAMOMILE);
+    startGrinding();
+    tickFor(MORTAR_GRIND_SECONDS + 0.2);
+    expect(useGameStore.getState().mortar?.grindState).not.toBe('fine');
+    tickFor(MORTAR_GRIND_SECONDS + 0.4);
+    expect(useGameStore.getState().mortar?.grindState).toBe('fine');
+    expect(useGameStore.getState().mortar?.grinding).toBe(false);
+  });
+
+  it('pours each ingredient with its own grind into the pot', () => {
+    const { addClassicUnit, applyGrindWork, transferMortar, addMortarToCauldron } = useGameStore.getState();
+    addClassicUnit('saffron');
+    applyGrindWork(3.6);
+    addClassicUnit('chamomile');
+    addClassicUnit('chamomile');
+    transferMortar();
+    addMortarToCauldron();
+    const entries = useGameStore.getState().brew.entries;
+    expect(entries.map((entry) => [entry.ingredientId, entry.quantity, entry.grindState])).toEqual([
+      ['saffron', 1, 'fine'],
+      ['chamomile', 2, 'coarse'],
+    ]);
+  });
+
+  it('a finished ingredient does not slow the next one, and steeping stays per pour', () => {
+    const { addClassicUnit, startGrinding, transferMortar, addMortarToCauldron } = useGameStore.getState();
+    addClassicUnit('saffron');
+    startGrinding();
+    tickFor(MORTAR_GRIND_SECONDS + 0.3);
+    expect(useGameStore.getState().mortar?.portions?.[0]?.grindWork).toBeCloseTo(3.6, 1);
+
+    addClassicUnit('poppy');
+    startGrinding();
+    tickFor(MORTAR_GRIND_SECONDS + 0.3);
+    const ground = useGameStore.getState().mortar?.portions ?? [];
+    expect(ground.find((portion) => portion.ingredientId === 'saffron')?.grindWork).toBeCloseTo(3.6, 1);
+    expect(ground.find((portion) => portion.ingredientId === 'poppy')?.grindWork).toBeCloseTo(3.6, 1);
+
+    transferMortar();
+    addMortarToCauldron();
+    tickFor(4);
+    const steeped = useGameStore.getState().brew.entries;
+    const saffron = steeped.find((entry) => entry.ingredientId === 'saffron');
+    const poppy = steeped.find((entry) => entry.ingredientId === 'poppy');
+    expect(saffron?.grindState).toBe('fine');
+    expect(poppy?.grindState).toBe('fine');
+    expect(saffron?.exposure ?? 0).toBeGreaterThan(poppy?.exposure ?? 0);
+    const tuning = useGameStore.getState().defs.tuning;
+    const coarsePoppy = 3.3 * quantityFactorFor(1, tuning) * 0.5 * tuning.extractionFraction.fresh;
+    expect(poppy?.contributions.pain_relief ?? 0).toBeGreaterThan(coarsePoppy * 1.5);
+
+    addClassicUnit('borage');
+    addClassicUnit('chamomile');
+    addClassicUnit('chamomile');
+    transferMortar();
+    addMortarToCauldron();
+    const poured = useGameStore.getState().brew.entries;
+    expect(poured.map((entry) => [entry.ingredientId, entry.quantity, entry.grindState])).toEqual([
+      ['saffron', 1, 'fine'],
+      ['poppy', 1, 'fine'],
+      ['borage', 1, 'coarse'],
+      ['chamomile', 2, 'coarse'],
+    ]);
+    expect(poured.find((entry) => entry.ingredientId === 'saffron')?.exposure).toBeCloseTo(saffron?.exposure ?? 0, 4);
+    expect(poured.find((entry) => entry.ingredientId === 'borage')?.exposure).toBe(0);
+    const chamomile = poured.find((entry) => entry.ingredientId === 'chamomile');
+    const calm = 3 * quantityFactorFor(2, tuning) * tuning.extractionFraction.fresh;
+    expect(chamomile?.contributions.calm).toBeCloseTo(calm, 4);
+
+    tickFor(3);
+    const later = useGameStore.getState().brew.entries;
+    const saffronLater = later.find((entry) => entry.ingredientId === 'saffron');
+    const chamomileLater = later.find((entry) => entry.ingredientId === 'chamomile');
+    expect(saffronLater?.exposure ?? 0).toBeGreaterThan((saffron?.exposure ?? 0) + 1);
+    expect(chamomileLater?.exposure ?? 0).toBeGreaterThan(2);
+    expect(chamomileLater?.exposure ?? 0).toBeLessThan(saffronLater?.exposure ?? 0);
+  });
+
+  it('six units are stronger than four and less than double three', () => {
+    const tuning = useGameStore.getState().defs.tuning;
+    const three = quantityFactorFor(3, tuning);
+    const four = quantityFactorFor(4, tuning);
+    const five = quantityFactorFor(5, tuning);
+    const six = quantityFactorFor(6, tuning);
+    expect(five).toBeGreaterThan(four);
+    expect(six).toBeGreaterThan(five);
+    expect(six).toBeLessThan(three * 2);
   });
 });

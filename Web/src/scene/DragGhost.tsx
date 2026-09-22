@@ -12,6 +12,8 @@ import { CLASSIC_ART, artUrl } from './artManifest';
 import { useArt, vars } from './Zone';
 import { useUiState } from './uiState';
 import './classic-stations.css';
+import { MortarPileView } from './MortarPileView';
+import { useMortarChips, useMortarUnits } from './mortarPile';
 
 const SIZES = {
   jar: { width: 150, height: 150 },
@@ -21,13 +23,11 @@ const SIZES = {
 };
 
 export function DragGhost() {
+  const ghostChips = useMortarChips();
+  const ghostUnits = useMortarUnits();
   const drag = useUiState((s) => s.drag);
   const ingredient = useGameStore((s) =>
     drag?.ingredientId ? s.ingredientById(drag.ingredientId) : undefined,
-  );
-  /** واحدهای هاون هنگام درگ (هاون تا Drop خالی نمی‌شود) */
-  const mortarUnits = useGameStore((s) =>
-    s.mortar ? (Math.min(3, Math.max(1, Math.round(s.mortar.quantity))) as 1 | 2 | 3) : 1,
   );
   const jarArt = useArt(
     drag?.kind === 'jar' && drag.ingredientId
@@ -38,9 +38,6 @@ export function DragGhost() {
 
   if (!drag) return null;
   const size = SIZES[drag.kind];
-  const groundSrc =
-    drag.kind === 'ground' ? artUrl(CLASSIC_ART.mortar.contents(mortarUnits, 'ground')) : undefined;
-
   return (
     <div
       className={`ghost ghost--${drag.kind}${drag.over ? ' is-over' : ''}`}
@@ -69,18 +66,15 @@ export function DragGhost() {
           <span className="jar__label">{ingredient?.nameFa}</span>
         </>
       ) : null}
-      {drag.kind === 'ground' && groundSrc ? (
-        <span
-          className={`cst-ghost-ground${drag.over === 'cauldron' ? ' is-pouring' : ''}`}
-        >
-          <span
-            className="cst-contents__color"
-            style={{
-              WebkitMaskImage: `url("${groundSrc}")`,
-              maskImage: `url("${groundSrc}")`,
-            }}
+      {drag.kind === 'ground' ? (
+        <span className={`cst-ghost-ground${drag.over === 'cauldron' ? ' is-pouring' : ''}`}>
+          <MortarPileView
+            chips={ghostChips}
+            settled
+            compact
+            rawSrc={artUrl(CLASSIC_ART.mortar.contents(ghostUnits, 'raw'))}
+            groundSrc={artUrl(CLASSIC_ART.mortar.contents(ghostUnits, 'ground'))}
           />
-          <img className="cst-fit cst-contents__texture" src={groundSrc} alt="" draggable={false} />
         </span>
       ) : null}
       {drag.kind === 'bottle' ? (

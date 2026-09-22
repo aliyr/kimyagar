@@ -6,18 +6,18 @@
  *   scoop  (۰   – ۰٫۴۵ث): قاشق از بالا وارد کاسه‌ی هاون می‌شود؛ توده‌ی رنگ ماده
  *                        در کاسه‌ی قاشق ظاهر می‌شود (onScoop).
  *   carry  (۰٫۴۵– ۱٫۱۵ث): روی قوسی تا دهانه‌ی پاتیل می‌رود.
- *   drop   (۱٫۱۵– ۱٫۶۵ث): کج می‌شود؛ در لحظه‌ی ریختن onDrop (addMortarToCauldron
- *                        + شلپ) و توده محو می‌شود؛ سپس قاشق بالا می‌رود و محو
- *                        می‌شود (onDone). از اینجا قاشق Canvas کیت با scene.stir
- *                        ادامه می‌دهد.
+ *   drop   : کج می‌شود و مواد از کاسه‌ی قاشق داخل دهانه‌ی دیگ می‌افتند.
+ *            onDrop وقتی مواد به سطح می‌رسند (نه یک افتادن دوم از بالای دیگ).
+ *            سپس قاشق بالا می‌رود و محو می‌شود (onDone).
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SPOON_GEOMETRY, SPOON_SIZE } from '../art/flat/kit/props.ts';
 import { FlatSvg } from '../art/flat/react/FlatSvg';
 import { classicSpoonShape } from './classicSpoon';
-import { centerOf, PROPS } from './layout';
+import { SCENE_ZONES } from './artManifest';
 import { CLASSIC_MOUTH } from './classicCauldronGeometry';
+import { BOWL_MORTAR, scoopRest, scoopUnderSpoon, type MortarChip } from './mortarPile';
 import type { TransferPhase } from './uiState';
 import './classic-stations.css';
 
@@ -27,17 +27,31 @@ const SPOON_BOX = 250;
 const BOWL_FX = SPOON_GEOMETRY.bowl.cx / SPOON_SIZE;
 const BOWL_FY = SPOON_GEOMETRY.bowl.cy / SPOON_SIZE;
 
-const T_SCOOP = 0.45;
+const T_IN = 0.32;
+const T_STIR = 1.6;
+const T_SCOOP = T_IN + T_STIR;
 const T_CARRY = 0.7;
-const T_DROP = 0.5;
+const T_DROP = 0.88;
 const T_EXIT = 0.35;
 const TOTAL = T_SCOOP + T_CARRY + T_DROP + T_EXIT;
-/** لحظه‌ی ریختن داخل فاز drop (کسر) */
-const DROP_AT = 0.42;
+/** کج‌شدن تمام می‌شود و مواد شروع به افتادن از قاشق می‌کنند (کسر فاز drop) */
+const DROP_AT = 0.46;
+const LAND = {
+  x: CLASSIC_MOUTH.x,
+  y: CLASSIC_MOUTH.y + CLASSIC_MOUTH.ry * 0.22,
+};
 
-const MORTAR_MOUTH = centerOf(PROPS.mortarContents);
-const START = { x: MORTAR_MOUTH.x, y: MORTAR_MOUTH.y - 6 };
-const END = { x: CLASSIC_MOUTH.x - CLASSIC_MOUTH.rx * 0.35, y: CLASSIC_MOUTH.y - 24 };
+const MORTAR = SCENE_ZONES.mortar;
+/** سر قاشق داخل هاون، کمی بالاتر از سطح مواد. */
+const MORTAR_LIFT = 28;
+const START = {
+  x: MORTAR.x + ((BOWL_MORTAR.left + BOWL_MORTAR.width / 2) / 100) * MORTAR.width,
+  y: MORTAR.y + ((BOWL_MORTAR.top + BOWL_MORTAR.height * 0.68) / 100) * MORTAR.height - MORTAR_LIFT,
+};
+const ORBIT_X = MORTAR.width * (BOWL_MORTAR.width / 100) * 0.3;
+const ORBIT_Y = MORTAR.height * (BOWL_MORTAR.height / 100) * 0.28;
+/** ریختن از کمی بالای دهانه، تا مواد از قاشق داخل دیگ بیفتند. */
+const END = { x: CLASSIC_MOUTH.x - CLASSIC_MOUTH.rx * 0.35, y: CLASSIC_MOUTH.y - 68 };
 /** نقطه‌ی کنترل قوس حمل: بالای مسیر */
 const CONTROL = { x: (START.x + END.x) / 2, y: Math.min(START.y, END.y) - 230 };
 
@@ -52,6 +66,36 @@ function bezier(t: number) {
     x: u * u * START.x + 2 * u * t * CONTROL.x + t * t * END.x,
     y: u * u * START.y + 2 * u * t * CONTROL.y + t * t * END.y,
   };
+}
+
+import { MortarPileView } from './MortarPileView';
+import { useMortarUnits } from './mortarPile';
+import { CLASSIC_ART, artUrl } from './artManifest';
+
+/** از هر ماده یکی‌یکی برمی‌دارد تا رنگ‌های ریز بین تکه‌های درشت گم نشوند. */
+function pourSample(list: MortarChip[], limit: number): MortarChip[] {
+  const groups = new Map<string, MortarChip[]>();
+  for (const chip of list) {
+    const id = chip.ingredientId ?? chip.color ?? chip.kind;
+    const group = groups.get(id);
+    if (group) group.push(chip);
+    else groups.set(id, [chip]);
+  }
+  const ordered = [...groups.values()];
+  for (const group of ordered) group.sort((a, b) => b.w * b.h - a.w * a.h);
+  const picked: MortarChip[] = [];
+  let progressed = true;
+  while (picked.length < limit && progressed) {
+    progressed = false;
+    for (const group of ordered) {
+      if (picked.length >= limit) break;
+      const chip = group.shift();
+      if (!chip) continue;
+      picked.push(chip);
+      progressed = true;
+    }
+  }
+  return picked;
 }
 
 export function SpoonTransfer({
@@ -70,19 +114,80 @@ export function SpoonTransfer({
   const shape = useMemo(() => classicSpoonShape(), []);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const blobRef = useRef<HTMLSpanElement | null>(null);
+  const fallRef = useRef<HTMLDivElement | null>(null);
+  const carriedUnits = useMortarUnits();
+  const carriedRaw = artUrl(CLASSIC_ART.mortar.contents(carriedUnits, 'raw'));
+  const carriedGround = artUrl(CLASSIC_ART.mortar.contents(carriedUnits, 'ground'));
+  const scoopedRef = useRef<MortarChip[]>([]);
+  const [spoonChips, setSpoonChips] = useState<MortarChip[]>([]);
+  const shownChips = pourSample(spoonChips, 16)
+    .map((chip, index) => {
+      const angle = index * 2.399;
+      const rad = Math.sqrt((index + 0.5) / 16);
+      return {
+        ...chip,
+        x: 50 + Math.cos(angle) * rad * 18,
+        y: 46 + Math.sin(angle) * rad * 14,
+        w: Math.min(26, Math.max(9, chip.w * 0.4)),
+        h: Math.min(30, Math.max(11, chip.h * 0.4)),
+      };
+    });
   const callbacks = useRef({ onPhase, onScoop, onDrop, onDone });
   callbacks.current = { onPhase, onScoop, onDrop, onDone };
 
   useEffect(() => {
     const root = rootRef.current;
     const blob = blobRef.current;
-    if (!root || !blob) return;
+    const fall = fallRef.current;
+    if (!root || !blob || !fall) return;
+    root.style.setProperty('--ing-color', color);
+    fall.style.setProperty('--ing-color', color);
     let raf = 0;
     const t0 = performance.now();
     let phase: TransferPhase = 'scoop';
     let scooped = false;
+    let swept = false;
+    let released = false;
     let dropped = false;
     let finished = false;
+    const releasePour = () => {
+      const list = pourSample(scoopedRef.current, 12);
+      fall.replaceChildren();
+      if (list.length === 0) {
+        dropped = true;
+        callbacks.current.onDrop();
+        return;
+      }
+      const n = list.length;
+      list.forEach((chip, i) => {
+        const angle = i * 2.399;
+        const rad = Math.sqrt((i + 0.5) / n);
+        const el = document.createElement('span');
+        el.className = `cst-chip is-${chip.kind}`;
+        const w = Math.min(36, Math.max(18, chip.w * 0.5));
+        const h = Math.min(30, Math.max(14, chip.h * 0.46));
+        el.style.left = `${END.x + Math.cos(angle) * rad * 26}px`;
+        el.style.top = `${END.y + Math.sin(angle) * rad * 10}px`;
+        el.style.width = `${w}px`;
+        el.style.height = `${h}px`;
+        el.style.transition = 'none';
+        el.style.setProperty('--rot', `${chip.rot}deg`);
+        if (chip.color) el.style.setProperty('--ing-color', chip.color);
+        const colorEl = document.createElement('span');
+        colorEl.className = 'cst-chip__color';
+        el.appendChild(colorEl);
+        fall.appendChild(el);
+      });
+    };
+    const take = (list: MortarChip[]) => {
+      if (list.length === 0) return;
+      scoopedRef.current = [...scoopedRef.current, ...list];
+      setSpoonChips(scoopedRef.current);
+      if (!scooped) {
+        scooped = true;
+        callbacks.current.onScoop();
+      }
+    };
     callbacks.current.onPhase('scoop');
 
     const frame = (now: number) => {
@@ -93,18 +198,22 @@ export function SpoonTransfer({
       let opacity = 1;
       let blobScale = 0;
 
-      if (t < T_SCOOP) {
-        // ورود از بالا به کاسه‌ی هاون
-        const k = easeOut(t / T_SCOOP);
-        y = START.y - 220 * (1 - k);
-        rot = -12 * (1 - k);
-        if (t > T_SCOOP * 0.7) {
-          blobScale = clamp01((t - T_SCOOP * 0.7) / (T_SCOOP * 0.3));
-          if (!scooped) {
-            scooped = true;
-            callbacks.current.onScoop();
-          }
+      if (t < T_IN) {
+        const k = easeOut(t / T_IN);
+        y = START.y - 210 * (1 - k);
+        rot = -22 * (1 - k);
+      } else if (t < T_SCOOP) {
+        const k = (t - T_IN) / T_STIR;
+        const ang = k * Math.PI * 2;
+        x = START.x + Math.cos(ang) * ORBIT_X;
+        y = START.y + Math.sin(ang) * ORBIT_Y;
+        rot = 18 * Math.sin(ang);
+        take(scoopUnderSpoon(x, y));
+        if (k > 0.86 && !swept) {
+          swept = true;
+          take(scoopRest());
         }
+        blobScale = scoopedRef.current.length === 0 ? 0 : Math.min(1, 0.45 + scoopedRef.current.length / 10);
       } else if (t < T_SCOOP + T_CARRY) {
         if (phase !== 'carry') {
           phase = 'carry';
@@ -123,15 +232,31 @@ export function SpoonTransfer({
           callbacks.current.onPhase('drop');
         }
         const k = (t - T_SCOOP - T_CARRY) / T_DROP;
-        x = END.x + 10 * easeOut(k);
+        x = END.x + 10 * easeOut(Math.min(1, k / DROP_AT));
         y = END.y;
-        rot = 75 * easeInOut(clamp01(k / 0.6));
-        if (k >= DROP_AT && !dropped) {
+        rot = 75 * easeInOut(clamp01(k / DROP_AT));
+        if (k >= DROP_AT && !released) {
+          released = true;
+          releasePour();
+        }
+        if (released && !dropped) {
+          const pour = clamp01((k - DROP_AT) / (1 - DROP_AT));
+          const eased = pour * pour;
+          fall.style.transform = `translate(${((LAND.x - END.x) * eased).toFixed(1)}px, ${((LAND.y - END.y) * eased).toFixed(1)}px)`;
+          fall.style.opacity = pour < 0.72 ? '1' : (1 - (pour - 0.72) / 0.28).toFixed(3);
+          if (pour >= 0.92) {
+            dropped = true;
+            fall.style.opacity = '0';
+            callbacks.current.onDrop();
+          }
+        }
+        blobScale = released ? 0 : 1;
+      } else if (t < TOTAL) {
+        if (released && !dropped) {
           dropped = true;
+          fall.style.opacity = '0';
           callbacks.current.onDrop();
         }
-        blobScale = dropped ? Math.max(0, 1 - (k - DROP_AT) / 0.25) : 1;
-      } else if (t < TOTAL) {
         const k = easeIn((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT);
         x = END.x + 10;
         y = END.y - 160 * k;
@@ -154,6 +279,7 @@ export function SpoonTransfer({
   }, []);
 
   return (
+    <>
     <div
       ref={rootRef}
       data-testid="spoon-transfer"
@@ -172,10 +298,14 @@ export function SpoonTransfer({
         style={{
           left: `${BOWL_FX * 100}%`,
           top: `${BOWL_FY * 100 - 3}%`,
-          background: color,
+          background: 'transparent',
           transform: 'translate(-50%, -50%) scale(0)',
         }}
-      />
+      >
+        <MortarPileView chips={shownChips} settled compact rawSrc={carriedRaw} groundSrc={carriedGround} />
+      </span>
     </div>
+    <div ref={fallRef} className="cst-spoon-fall" />
+    </>
   );
 }

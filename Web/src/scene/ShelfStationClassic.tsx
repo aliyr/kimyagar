@@ -7,9 +7,9 @@
  *
  * ژست روی شیشه:
  *   - Tap (رهاکردن پیش از عبور از slop و پیش از LONG_PRESS_MS) ⇒ یک واحد ماده
- *     با IngredientFlight تا هاون پرواز می‌کند؛ با فرود: addUnitToMortar +
- *     startGrinding (کوبش خودکار). اگر هاون با همین ماده پُر باشد (سقف
- *     MAX_MORTAR_UNITS) پروازی نیست و لرزش «جا ندارد» پخش می‌شود.
+ *     با IngredientFlight تا هاون پرواز می‌کند؛ با فرود: addClassicUnit +
+ *     startGrinding (کوبش خودکار). اگر مجموع واحدهای هاون به سقف
+ *     CLASSIC_MAX_MORTAR_UNITS رسیده باشد پروازی نیست و لرزش «جا ندارد» پخش می‌شود.
  *   - نگه‌داشتن (LONG_PRESS_MS) بدون حرکت ⇒ Overlay جزئیات ماده.
  *   - عبور از slop (هر جهت) ⇒ اسکرول افقی قفسه. Drag شیشه دیگر وجود ندارد.
  * کشیدن روی پس‌زمینه‌ی قفسه ⇒ همیشه اسکرول.
@@ -23,7 +23,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import { MAX_MORTAR_UNITS, useGameStore } from '../store/gameStore';
+import { CLASSIC_MAX_MORTAR_UNITS, useGameStore } from '../store/gameStore';
 import type { IngredientDefinition } from '../engine/types';
 import { useStageSpace } from './Stage';
 import { useUiState } from './uiState';
@@ -224,7 +224,10 @@ export function ShelfStationClassic() {
     if (store.openOverlay !== null || store.result !== null) return;
     if (ui.transfer !== null) return; // قاشق در راه است؛ کمی صبر
     const before = store.mortar;
-    if (before && before.ingredientId === ingredient.id && before.quantity >= MAX_MORTAR_UNITS) {
+    const filled = before?.portions
+      ? before.portions.reduce((sum, portion) => sum + portion.quantity, 0)
+      : (before?.quantity ?? 0);
+    if (before && filled >= CLASSIC_MAX_MORTAR_UNITS) {
       ui.pulse('mortarShakePulse');
       return;
     }
@@ -238,7 +241,7 @@ export function ShelfStationClassic() {
   const onFlightLand = useCallback((flight: FlightSpec) => {
     const store = useGameStore.getState();
     if (store.openOverlay !== null || store.result !== null) return;
-    store.addUnitToMortar(flight.ingredientId);
+    store.addClassicUnit(flight.ingredientId);
     store.startGrinding();
     sfx.jarDrop();
   }, []);

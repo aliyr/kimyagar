@@ -61,6 +61,9 @@ export const quantityLabels: Record<Quantity, string> = {
   1.5: '۱٫۵',
   2: '۲',
   3: 'سه واحد',
+  4: 'چهار واحد',
+  5: 'پنج واحد',
+  6: 'شش واحد',
 };
 
 export const processEventLabels: Record<ProcessEventType, string> = {
@@ -73,6 +76,12 @@ export const processEventLabels: Record<ProcessEventType, string> = {
 
 export const uiLabels = {
   gameTitle: 'کیمیاگر',
+  gateSubtitle: 'دکان عطاری، هنوز باز نشده',
+  gateStart: 'شروع بازی',
+  gateStages: 'مراحل',
+  gateScores: 'امتیازها',
+  gateSealed: 'هنوز مهر نشده',
+  gateReturn: 'سردر',
   bottleAction: 'بطری کردن',
   stirHint: 'برای هم‌زدن، انگشتت را دور پاتیل بچرخان',
   grindHint: 'برای کوبیدن، دسته‌هاون را بچرخان',

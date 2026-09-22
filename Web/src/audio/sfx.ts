@@ -311,6 +311,15 @@ export const sfx = {
     tone(c, { freq: 1200, dur: 0.12, type: 'triangle', gain: 0.16 });
     noiseBurst(c, { dur: 0.08, type: 'highpass', freq: 3000, gain: 0.12 });
   },
+  /** زنگ کوتاه دکان — ضربه و دو هارمونیک میرا، بدون فایل صوتی */
+  shopBell(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.03, type: 'highpass', freq: 3000, gain: 0.06 });
+    tone(c, { freq: 988, dur: 1.35, type: 'sine', gain: 0.16 });
+    tone(c, { freq: 1480, dur: 0.9, type: 'sine', gain: 0.07, at: 0.01 });
+    tone(c, { freq: 1976, dur: 0.45, type: 'sine', gain: 0.035, at: 0.012 });
+  },
   /** شمسه‌ی «رسیده»: آرپژ سینوسی کوتاه */
   sparkle(): void {
     const c = live();

@@ -433,11 +433,12 @@
 .kimi-switch {
   position: relative;
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 0.45rem;
-  min-width: 5.6rem;
+  justify-content: flex-end;
+  min-width: 5.8rem;
   height: 2rem;
-  padding: 0 0.6rem 0 2.1rem;
+  padding-inline: 2.15rem 0.55rem;
   border-radius: 999px;
   border: 1px solid #8a6a2c;
   background: linear-gradient(#cdb58a, #b59c6f);
@@ -445,6 +446,11 @@
   font-size: 0.85rem;
   font-weight: 600;
   transition: background 0.2s ease, color 0.2s ease;
+}
+
+.kimi-switch__text {
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .kimi-switch__knob {
@@ -456,13 +462,14 @@
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff5dc, #c9a45a 70%, #8a6a2c);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  transition: transform 0.2s ease;
+  transition: inset-inline-start 0.2s ease, inset-inline-end 0.2s ease;
 }
 
 .kimi-switch.is-on {
   background: linear-gradient(#5fa88a, #3d7f68);
   color: #f6ecd2;
-  padding: 0 2.1rem 0 0.6rem;
+  justify-content: flex-start;
+  padding-inline: 0.55rem 2.15rem;
 }
 
 .kimi-switch.is-on .kimi-switch__knob {

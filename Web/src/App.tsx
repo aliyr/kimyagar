@@ -11,7 +11,7 @@
  * صحنه فقط کمی تیره (Vignette) می‌شود تا حس «خروج از کارگاه» ایجاد نشود.
  *
  * روتینگ سبک بر پایه‌ی hash (بدون کتابخانه؛ منطق در route.ts):
- * - '' یا '#/'                  ⇒ کارگاه کلاسیک (روت اصلی)
+ * - '' یا '#/' یا '#/gate'      ⇒ سردر دکان؛ کارگاه کلاسیک پشت در است و tick نمی‌خورد
  * - '#/classic'                 ⇒ کارگاه کلاسیک (نام صریح)
  * - '#/v2'                      ⇒ صحنه‌ی نسخه ۲ با سبک ذخیره‌شده (پیش‌فرض: فلت)
  * - '#/v2/flat|pixel|engraved'  ⇒ صحنه‌ی نسخه ۲ با آن سبک
@@ -22,10 +22,13 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from './store/gameStore';
 import { OverlayHost, DiscoveryToast } from './overlays';
 import { DebugMount } from './debug';
+import { uiLabels } from './data/labels';
 import { SettingsButton } from './ui/SettingsButton';
 import { Stage } from './scene/Stage';
+import { GateScreen } from './scene/GateScreen';
 import { WorkshopScene } from './scene/WorkshopScene';
 import { WorkshopSceneV2 } from './scene/v2/WorkshopSceneV2';
+import { useUiState } from './scene/uiState';
 import { DEFAULT_ART_STYLE, StyleContext } from './scene/v2/contracts';
 import type { ArtStyle } from './scene/v2/contracts';
 import { readStoredArtStyle, storeArtStyle } from './scene/v2/artStyleStorage';
@@ -47,7 +50,7 @@ function useHashRoute(): Route {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  // سبک صریحِ آدرس (#/v2/<style>) ذخیره می‌شود تا روت خالی همان را باز کند
+  // سبک صریحِ آدرس (#/v2/<style>) ذخیره می‌شود تا #/v2 همان را باز کند
   useEffect(() => {
     if (route.kind === 'v2' && hashNamesStyle(window.location.hash)) storeArtStyle(route.artStyle);
   }, [route]);
@@ -55,8 +58,9 @@ function useHashRoute(): Route {
   return route;
 }
 
-function useGameClock() {
+function useGameClock(hold: boolean) {
   useEffect(() => {
+    if (hold) return;
     let last = performance.now();
     let raf = 0;
     const loop = (now: number) => {
@@ -67,13 +71,19 @@ function useGameClock() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [hold]);
 }
 
 export default function App() {
-  useGameClock();
   const route = useHashRoute();
+  const atGate = route.kind === 'gate';
+  useGameClock(atGate);
   const paused = useGameStore((s) => s.openOverlay !== null || s.result !== null);
+
+  useEffect(() => {
+    if (!atGate) return;
+    useUiState.getState().setCamera(null, false);
+  }, [atGate]);
 
   // سبک در سطح App تا Overlayها (نتیجه، دفترچه) هم آن را ببینند
   const artStyle: ArtStyle = route.kind === 'v2' ? route.artStyle : DEFAULT_ART_STYLE;
@@ -82,17 +92,24 @@ export default function App() {
     <StyleContext.Provider value={artStyle}>
       <RouteKindContext.Provider value={route.kind}>
         <div className="stage-root" data-route={route.kind}>
-          <Stage paused={paused}>
+          <Stage paused={paused} foreground={atGate ? <GateScreen /> : null}>
             {route.kind === 'v2' ? (
               <WorkshopSceneV2 artStyle={route.artStyle} />
             ) : (
-              <WorkshopScene />
+              <div className={atGate ? 'workshop-behind-gate' : undefined}>
+                <WorkshopScene />
+              </div>
             )}
           </Stage>
           {route.kind === 'classic' ? (
-            <a data-testid="v2-route-link" className="v2-route-link" href="#/v2">
-              نسخه ۲
-            </a>
+            <div className="classic-corner-links">
+              <a data-testid="back-to-gate" className="gate-return" href="#/">
+                {uiLabels.gateReturn}
+              </a>
+              <a data-testid="v2-route-link" className="v2-route-link" href="#/v2">
+                نسخه ۲
+              </a>
+            </div>
           ) : null}
           <SettingsButton />
           <OverlayHost />

@@ -3,7 +3,7 @@ import { quantityLabels } from '../../src/data/labels';
 import { formatQuantity } from '../../src/overlays/format';
 import type { Quantity } from '../../src/engine/types';
 
-const ALL_QUANTITIES: Quantity[] = [0.5, 1, 1.5, 2, 3];
+const ALL_QUANTITIES: Quantity[] = [0.5, 1, 1.5, 2, 3, 4, 5, 6];
 
 describe('quantity labels', () => {
   it('covers every Quantity including 3', () => {

@@ -11,6 +11,7 @@ import { potShape } from '../../src/art/flat/kit/props.ts';
 import { hexToRgb } from '../../src/art/flat/kit/color.ts';
 import { parseRoute, hashNamesStyle } from '../../src/route';
 import { FLAT_MOUTH_CENTER, burntLiquid, spoonAngleFor } from '../../src/scene/v2/flatCauldronGeometry';
+import { settlePouredIngredient } from '../../src/scene/classicCauldronGeometry';
 import { SHELF_INGREDIENT_ORDER } from '../../src/scene/v2/contracts';
 
 describe('seedForCustomer', () => {
@@ -37,6 +38,15 @@ describe('FlatCookingScene game API', () => {
     const dt = 1 / 60;
     for (let t = 0; t < seconds; t += dt) scene.update(dt);
   }
+
+  it('settlePouredIngredient lands in the pot without staying in the falling phase', () => {
+    const scene = new FlatCookingScene(4);
+    settlePouredIngredient(scene, 'mint', { tint: '#22aa55' });
+    expect(scene.phase).not.toBe('dropping');
+    expect(scene.recipe.map((item) => item.id)).toEqual(['mint']);
+    scene.update(0.4);
+    expect(scene.phase).not.toBe('dropping');
+  });
 
   it('drop() honours a tint override so the liquid follows the game colour', () => {
     const scene = new FlatCookingScene(3);
@@ -145,6 +155,40 @@ describe('FlatCookingScene game API', () => {
     expect(collectIds(scene.render()).length).toBeGreaterThan(0);
   });
 
+  function layerById(shape: { id?: string; children?: readonly unknown[] }, id: string): { id?: string; children?: readonly unknown[] } | null {
+    if (shape.id === id) return shape;
+    for (const c of shape.children ?? []) {
+      const hit = layerById(c as { id?: string; children?: readonly unknown[] }, id);
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  it('setBurnt clears done sparkles instead of leaving them frozen', () => {
+    const scene = new FlatCookingScene({ seed: 2 });
+    scene.setExternalProgress(true);
+    scene.setHeatLevel(0);
+    scene.setDone(true);
+    runFor(scene, 0.5);
+    expect(layerById(scene.render(), 'steam-and-sparkles')?.children?.length).toBeGreaterThan(0);
+    expect(scene.sparkleCount).toBeGreaterThan(0);
+    scene.setBurnt(true);
+    expect(scene.sparkleCount).toBe(0);
+    expect(layerById(scene.render(), 'steam-and-sparkles')).toBeNull();
+  });
+
+  it('turning done off lets leftover sparkles fade instead of freezing', () => {
+    const scene = new FlatCookingScene({ seed: 2 });
+    scene.setExternalProgress(true);
+    scene.setHeatLevel(0);
+    scene.setDone(true);
+    runFor(scene, 0.25);
+    expect(layerById(scene.render(), 'steam-and-sparkles')?.children?.length).toBeGreaterThan(0);
+    scene.setDone(false);
+    runFor(scene, 1);
+    expect(layerById(scene.render(), 'steam-and-sparkles')).toBeNull();
+  });
+
   it('squash getter follows the landing impact spring', () => {
     const scene = new FlatCookingScene(11);
     expect(scene.squash).toEqual({ x: 1, y: 1 });
@@ -179,10 +223,11 @@ describe('flat SVG markup', () => {
 });
 
 describe('hash routing', () => {
-  it('empty route is classic; #/v2 opens v2 with the stored (or default flat) style', () => {
-    expect(parseRoute('')).toEqual({ kind: 'classic' });
-    expect(parseRoute('#/')).toEqual({ kind: 'classic' });
-    expect(parseRoute('', 'pixel')).toEqual({ kind: 'classic' });
+  it('empty route is the shop gate; #/classic stays classic; #/v2 opens the stored style', () => {
+    expect(parseRoute('')).toEqual({ kind: 'gate' });
+    expect(parseRoute('#/')).toEqual({ kind: 'gate' });
+    expect(parseRoute('#/gate')).toEqual({ kind: 'gate' });
+    expect(parseRoute('', 'pixel')).toEqual({ kind: 'gate' });
     expect(parseRoute('#/classic')).toEqual({ kind: 'classic' });
     expect(parseRoute('#/v2')).toEqual({ kind: 'v2', artStyle: 'flat' });
     expect(parseRoute('#/v2', 'pixel')).toEqual({ kind: 'v2', artStyle: 'pixel' });

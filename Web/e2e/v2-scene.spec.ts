@@ -155,10 +155,16 @@ test.describe('Kimyagar v2 scene skeleton', () => {
     expect(hasResult).toBe(true);
   });
 
-  test('empty route opens the classic workshop; #/v2 opens v2 flat by default', async ({ page }) => {
+  test('empty route opens the shop gate; #/classic opens the workshop; #/v2 opens v2 flat by default', async ({ page }) => {
     await page.goto('/');
+    await expect(page.getByTestId('gate-screen')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('gate-candle')).toBeVisible();
+    await expect(page.getByTestId('v2-route-link')).toHaveCount(0);
+
+    await page.goto('/#/classic');
     await expect(page.getByTestId('cauldron')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('v2-route-link')).toBeVisible();
+    await expect(page.getByTestId('back-to-gate')).toBeVisible();
 
     await page.goto('/#/v2');
     const scene = page.getByTestId('v2-scene');

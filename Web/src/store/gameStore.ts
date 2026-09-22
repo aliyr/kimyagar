@@ -33,18 +33,31 @@ export type OverlayId =
   | 'result'
   | 'settings';
 
+/** یک ماده‌ی داخل هاون کلاسیک؛ کوبشش مستقل از بقیه است. */
+export interface MortarPortion {
+  ingredientId: IngredientId;
+  quantity: Quantity;
+  /** کار مطلق. سقف نرم = ۳٫۶ × تعداد واحد. */
+  grindWork: number;
+}
+
 export interface MortarState {
   ingredientId: IngredientId;
   quantity: Quantity;
   /** null یعنی هنوز کوبیده نشده (قابل افزودن به پاتیل نیست) */
   grindState: GrindState | null;
-  /** کار انباشته‌ی کوبش؛ آستانه‌ها در GRIND_THRESHOLDS */
+  /**
+   * v2: کار مطلق تا ۳٫۶.
+   * کلاسیک (با portions): کار نرمال‌شده‌ی عقب‌مانده‌ترین ماده، برای حلقه‌ی کوبش.
+   */
   grindWork: number;
   /**
    * کوبش خودکار در جریان است (کلاسیک): tick با نرخ GRIND_RATE کار می‌افزاید تا
    * سقف؛ با رسیدن به سقف یا با transferMortar خاموش می‌شود.
    */
   grinding: boolean;
+  /** فقط کلاسیک. هر ماده واحد و کوبش خودش را دارد. */
+  portions?: MortarPortion[];
 }
 
 export interface RecordedRecipe {
@@ -52,8 +65,10 @@ export interface RecordedRecipe {
   finalHeat: HeatLevel;
 }
 
-/** سقف واحدهای هاون (هر درگ-اند-دراپ شیشه = ۱ واحد) — کلاسیک و v2 */
+/** سقف واحدهای هاون v2 (هر درگ-اند-دراپ شیشه = ۱ واحد از یک ماده) */
 export const MAX_MORTAR_UNITS = 3;
+/** سقف مجموع واحدهای هاون کلاسیک؛ یک ماده هم می‌تواند هر ۶ تا را پر کند */
+export const CLASSIC_MAX_MORTAR_UNITS = 6;
 
 /** آستانه‌های کار کوبش برای رسیدن به هر Grind State */
 export const GRIND_THRESHOLDS: { state: GrindState; work: number }[] = [
@@ -63,8 +78,8 @@ export const GRIND_THRESHOLDS: { state: GrindState; work: number }[] = [
 ];
 
 /** پنجره‌ی کوبش خودکار کلاسیک: در این مدت کار از ۰ به سقف (نرم) می‌رسد */
-export const MORTAR_GRIND_SECONDS = 7;
-/** نرخ کار کوبش خودکار (کار بر ثانیه) ⇒ درشت ≈ ۱٫۹ث، نیم‌کوب ≈ ۴٫۳ث، نرم = ۷ث */
+export const MORTAR_GRIND_SECONDS = 3.5;
+/** نرخ کار کوبش خودکار (کار بر ثانیه) ⇒ درشت ≈ ۱ث، نیم‌کوب ≈ ۲٫۱ث، نرم = ۳٫۵ث */
 export const GRIND_RATE = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work / MORTAR_GRIND_SECONDS;
 
 export function grindStateForWork(work: number): GrindState | null {
@@ -73,6 +88,46 @@ export function grindStateForWork(work: number): GrindState | null {
     if (work >= t.work) result = t.state;
   }
   return result;
+}
+
+const FINE_WORK = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work;
+
+function portionFine(quantity: number): number {
+  return FINE_WORK * quantity;
+}
+
+/** کار به اندازه‌ی خطای اعشار به سقف رسیده؛ باید نرم حساب شود. */
+function portionReachedFine(portion: MortarPortion): boolean {
+  return portion.grindWork >= portionFine(portion.quantity) - 1e-4;
+}
+
+/** درجه‌ی کوبش یک ماده از روی کار مطلق و تعداد واحدش. */
+export function portionGrindState(portion: MortarPortion): GrindState | null {
+  if (portionReachedFine(portion)) return 'fine';
+  return grindStateForWork(portion.grindWork / portion.quantity);
+}
+
+function portionNorm(portion: MortarPortion): number {
+  if (portionReachedFine(portion)) return FINE_WORK;
+  return portion.grindWork / portion.quantity;
+}
+
+function classicMortar(portions: MortarPortion[], grinding: boolean): MortarState {
+  const active = portions.filter((p) => !portionReachedFine(p));
+  const focus = active.reduce<MortarPortion | null>((least, portion) => {
+    if (!least || portionNorm(portion) < portionNorm(least)) return portion;
+    return least;
+  }, null) ?? portions[0];
+  const total = portions.reduce((sum, portion) => sum + portion.quantity, 0);
+  const norm = Math.min(FINE_WORK, portionNorm(focus));
+  return {
+    ingredientId: focus.ingredientId,
+    quantity: total as Quantity,
+    grindState: portionGrindState(focus),
+    grindWork: norm,
+    grinding: grinding && active.length > 0,
+    portions,
+  };
 }
 
 export interface GameState {
@@ -106,11 +161,16 @@ export interface GameState {
   /** برداشتن ماده از قفسه و گذاشتن در هاون (جایگزین محتوای قبلی هاون) */
   pickIngredient: (id: IngredientId) => void;
   /**
-   * افزودن ۱ واحد با هر درگ-اند-دراپ (کلاسیک و v2).
+   * افزودن ۱ واحد (v2).
    * همان ماده ⇒ ۱+ واحد تا سقف MAX_MORTAR_UNITS (بیشتر: بی‌اثر، UI لرزش می‌دهد).
    * ماده‌ی متفاوت ⇒ جایگزینی کامل با ۱ واحد. افزودن واحد جدید کوبش را ریست می‌کند.
    */
   addUnitToMortar: (id: IngredientId) => void;
+  /**
+   * افزودن ۱ واحد به هاون کلاسیک. ماده‌ی دیگر قاطی می‌شود و کوبش خودش را از صفر
+   * شروع می‌کند؛ کوبش بقیه‌ی مواد دست نمی‌خورد. مجموع بیش از ۶ تا بی‌اثر است.
+   */
+  addClassicUnit: (id: IngredientId) => void;
   setQuantity: (q: Quantity) => void;
   /** اعمال کار کوبش (از Gesture هاون یا tick کوبش خودکار) */
   applyGrindWork: (amount: number) => void;
@@ -179,7 +239,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   addUnitToMortar: (id) =>
     set((s) => {
-      if (!s.mortar || s.mortar.ingredientId !== id) {
+      if (!s.mortar || s.mortar.ingredientId !== id || s.mortar.portions) {
         return {
           mortar: { ingredientId: id, quantity: 1, grindState: null, grindWork: 0, grinding: false },
         };
@@ -193,13 +253,50 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
+  addClassicUnit: (id) =>
+    set((s) => {
+      const existing = s.mortar?.portions ?? (s.mortar
+        ? [{
+            ingredientId: s.mortar.ingredientId,
+            quantity: s.mortar.quantity,
+            grindWork: s.mortar.grindWork * s.mortar.quantity,
+          }]
+        : []);
+      const total = existing.reduce((sum, portion) => sum + portion.quantity, 0);
+      if (total >= CLASSIC_MAX_MORTAR_UNITS) return {};
+      const portions = existing.map((portion) => ({ ...portion }));
+      const found = portions.find((portion) => portion.ingredientId === id);
+      if (found) {
+        found.quantity = (found.quantity + 1) as Quantity;
+        found.grindWork = 0;
+      } else {
+        portions.push({ ingredientId: id, quantity: 1, grindWork: 0 });
+      }
+      return { mortar: classicMortar(portions, s.mortar?.grinding ?? false) };
+    }),
+
   setQuantity: (q) =>
     set((s) => (s.mortar ? { mortar: { ...s.mortar, quantity: q } } : {})),
 
   applyGrindWork: (amount) =>
     set((s) => {
       if (!s.mortar) return {};
-      const maxWork = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work;
+      if (s.mortar.portions) {
+        const active = s.mortar.portions.filter((portion) => !portionReachedFine(portion));
+        if (active.length === 0) return { mortar: classicMortar(s.mortar.portions, false) };
+        const activeQty = active.reduce((sum, portion) => sum + portion.quantity, 0);
+        const portions = s.mortar.portions.map((portion) => {
+          if (portionReachedFine(portion)) return portion;
+          const cap = portionFine(portion.quantity);
+          const next = portion.grindWork + amount * (portion.quantity / activeQty);
+          return {
+            ...portion,
+            grindWork: next >= cap - 1e-4 ? cap : next,
+          };
+        });
+        return { mortar: classicMortar(portions, s.mortar.grinding) };
+      }
+      const maxWork = FINE_WORK;
       const grindWork = Math.min(s.mortar.grindWork + amount, maxWork);
       return {
         mortar: {
@@ -214,14 +311,27 @@ export const useGameStore = create<GameState>((set, get) => ({
   startGrinding: () =>
     set((s) => {
       if (!s.mortar) return {};
-      const maxWork = GRIND_THRESHOLDS[GRIND_THRESHOLDS.length - 1].work;
-      if (s.mortar.grindWork >= maxWork) return {};
+      if (s.mortar.portions) {
+        const pending = s.mortar.portions.some((portion) => !portionReachedFine(portion));
+        if (!pending) return { mortar: classicMortar(s.mortar.portions, false) };
+        return { mortar: { ...classicMortar(s.mortar.portions, true), grinding: true } };
+      }
+      if (s.mortar.grindWork >= FINE_WORK) return {};
       return { mortar: { ...s.mortar, grinding: true } };
     }),
 
   transferMortar: () => {
     const s = get();
     if (!s.mortar || s.brew.bottled) return false;
+    if (s.mortar.portions) {
+      const coarse = GRIND_THRESHOLDS[0].work;
+      const portions = s.mortar.portions.map((portion) => ({
+        ...portion,
+        grindWork: Math.max(portion.grindWork, coarse * portion.quantity),
+      }));
+      set({ mortar: classicMortar(portions, false) });
+      return true;
+    }
     set({
       mortar: {
         ...s.mortar,
@@ -238,7 +348,19 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   addMortarToCauldron: () => {
     const s = get();
-    if (!s.mortar || !s.mortar.grindState || s.brew.bottled) return;
+    if (!s.mortar || s.brew.bottled) return;
+    if (s.mortar.portions) {
+      let brew = s.brew;
+      const ids = new Set(s.usedIngredientIds);
+      for (const portion of s.mortar.portions) {
+        const grindState = portionGrindState(portion) ?? GRIND_THRESHOLDS[0].state;
+        brew = engine.addIngredient(brew, portion.ingredientId, portion.quantity, grindState, s.defs);
+        ids.add(portion.ingredientId);
+      }
+      set({ brew, mortar: null, usedIngredientIds: [...ids] });
+      return;
+    }
+    if (!s.mortar.grindState) return;
     const brew = engine.addIngredient(
       s.brew,
       s.mortar.ingredientId,

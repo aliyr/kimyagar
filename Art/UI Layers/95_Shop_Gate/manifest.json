@@ -1,0 +1,20 @@
+{
+  "layer": "shop_gate",
+  "notes": "لایه‌های سردر. متن فارسی در Runtime روی تابلو، پلاک و پوست می‌نشیند. پنجره‌ی در شفاف است.",
+  "files": [
+    "door_west.png",
+    "door_east.png",
+    "lintel.png",
+    "sill.png",
+    "sign.png",
+    "plaque.png",
+    "seal.png",
+    "parchment.png",
+    "drop.png",
+    "customer_shadow.png",
+    "candle.png",
+    "flame_1.png",
+    "flame_2.png",
+    "flame_3.png"
+  ]
+}

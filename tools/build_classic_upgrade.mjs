@@ -72,20 +72,21 @@ async function lightMaster(name, pad = 4) {
 
 /**
  * هندسه‌ی هاون برنجی کلاسیک (کسرهایی از ارتفاع بدنه‌ی trim شده):
- * دهانه‌ی داخلی از ~۰٫۰۵ تا ~۰٫۳۱ ارتفاع؛ دیواره‌ی جلو از ~۰٫۲۹ به پایین.
+ * دهانه‌ی داخلی از ~۰٫۰۵ تا ~۰٫۳۱ ارتفاع. لبه‌ی نزدیک (highlight) حدود
+ * ۰٫۲۹۴ تا ۰٫۳۲۲ است؛ بالای آن داخل کاسه فقط روی mortar_back می‌ماند.
  */
 const GEOM = {
   pad: 14,
-  frontFadeStart: 0.27, // بالاتر: دیواره‌ی جلو کاملاً شفاف (دهانه‌ی باز)
-  frontFadeEnd: 0.4, // پایین‌تر: کاملاً کدر
+  frontFadeStart: 0.278, // هنوز داخل کاسه: کاملاً شفاف
+  frontFadeEnd: 0.305, // قلّه‌ی لبه‌ی نزدیک و دیواره‌ی جلو: کاملاً مات
   heapAnchor: 0.52, // خط کف تپه‌ی محتوا (پشت دیواره‌ی جلو پنهان می‌شود)
   heapHeights: { 1: 0.26, 2: 0.34, 3: 0.43 },
   heapMaxWidth: 0.78,
 };
 
-async function buildMortarSet() {
+async function mortarCanvas() {
   const bodySrc = join(WEB_ART, 'mortar', 'mortar_body.png');
-  if (!existsSync(bodySrc)) { console.warn('MISSING mortar_body.png'); return; }
+  if (!existsSync(bodySrc)) { console.warn('MISSING mortar_body.png'); return null; }
   const bodyTrim = await sharp(bodySrc).ensureAlpha().trim({ threshold: 8 }).png().toBuffer();
   const meta = await sharp(bodyTrim).metadata();
   const W = meta.width, H = meta.height;
@@ -93,14 +94,15 @@ async function buildMortarSet() {
   const blank = {
     create: { width: CW, height: CH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   };
-
   const backBuf = await sharp(blank)
     .composite([{ input: bodyTrim, left: GEOM.pad, top: GEOM.pad }])
     .png()
     .toBuffer();
-  await saveOut(backBuf, '40_Mortar/mortar_back.png', 'mortar/mortar_back.png', 'mortar_body.png', 'full body on shared canvas');
+  return { backBuf, blank, W, H, CW, CH };
+}
 
-  // دیواره‌ی جلو: فقط نوار پایینی با محوشدگی نرم به سمت دهانه
+/** نیمهٔ نزدیک: از لبه‌ی جلوی دهانه به پایین مات است تا مواد و سر کوبه پشتش بمانند. */
+async function frontFromBack(backBuf, H) {
   const { data, info } = await sharp(backBuf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const y1 = GEOM.pad + GEOM.frontFadeStart * H;
   const y2 = GEOM.pad + GEOM.frontFadeEnd * H;
@@ -112,10 +114,36 @@ async function buildMortarSet() {
       data[o] = Math.round(data[o] * t);
     }
   }
-  const frontBuf = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })
-    .png()
-    .toBuffer();
-  await saveOut(frontBuf, '40_Mortar/mortar_front.png', 'mortar/mortar_front.png', 'mortar_body.png', `front wall band (fade ${GEOM.frontFadeStart}–${GEOM.frontFadeEnd})`);
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
+
+async function buildMortarFront() {
+  const canvas = await mortarCanvas();
+  if (!canvas) return;
+  const frontBuf = await frontFromBack(canvas.backBuf, canvas.H);
+  await saveOut(
+    frontBuf,
+    '40_Mortar/mortar_front.png',
+    'mortar/mortar_front.png',
+    'mortar_body.png',
+    `front wall from near lip (fade ${GEOM.frontFadeStart}–${GEOM.frontFadeEnd})`,
+  );
+}
+
+async function buildMortarSet() {
+  const canvas = await mortarCanvas();
+  if (!canvas) return;
+  const { backBuf, blank, W, H, CW } = canvas;
+  await saveOut(backBuf, '40_Mortar/mortar_back.png', 'mortar/mortar_back.png', 'mortar_body.png', 'full body on shared canvas');
+
+  const frontBuf = await frontFromBack(backBuf, H);
+  await saveOut(
+    frontBuf,
+    '40_Mortar/mortar_front.png',
+    'mortar/mortar_front.png',
+    'mortar_body.png',
+    `front wall from near lip (fade ${GEOM.frontFadeStart}–${GEOM.frontFadeEnd})`,
+  );
 
   for (const state of ['raw', 'ground']) {
     const heapTrim = await lightMaster(`classic_heap_${state}.png`);
@@ -282,6 +310,11 @@ async function buildSingles() {
 }
 
 async function main() {
+  if (process.argv.includes('--front-only')) {
+    await buildMortarFront();
+    console.log('\nfront only done.');
+    return;
+  }
   await buildMortarSet();
   await buildPestleFrames();
   await buildPotionSet();

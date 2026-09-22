@@ -2,7 +2,7 @@
  * پرواز ماده از شیشه تا دهانه‌ی هاون (فلو کلیکی کلاسیک).
  *
  * آیکون برداری ماده (کیت فلت) روی یک قوس سهمی از مرکز شیشه تا دهانه‌ی هاون
- * می‌رود (~۵۵۰ms، rAF)، کمی می‌چرخد و در انتها کوچک می‌شود. در لحظه‌ی فرود
+ * می‌رود (~۱۸۰ms، rAF)، کمی می‌چرخد و در انتها کوچک می‌شود. در لحظه‌ی فرود
  * `onLand` صدا زده می‌شود (افزودن به هاون + شروع کوبش خودکار) و سپس `onDone`
  * تا میزبان آن را از فهرست پروازها بردارد.
  */
@@ -13,7 +13,7 @@ import { centerOf, PROPS } from './layout';
 import { vars } from './Zone';
 import './classic-ambience.css';
 
-export const FLIGHT_MS = 550;
+export const FLIGHT_MS = 180;
 const ICON = 96;
 const TARGET = centerOf(PROPS.mortarContents);
 

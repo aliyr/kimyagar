@@ -19,17 +19,20 @@ async function storeState(page: Page) {
 
 /** Tap شیشه ⇒ پرواز ماده تا هاون ⇒ فرود (پایان پرواز). */
 async function tapJarAndLand(page: Page, jar: Locator): Promise<void> {
+  await expect(jar).toBeVisible();
   await jar.click();
   const flight = page.getByTestId('ingredient-flight');
-  await expect(flight).toBeVisible({ timeout: 3_000 });
-  await expect(flight).toBeHidden({ timeout: 5_000 });
-  await pause(page, 60);
+  await flight.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
+  if ((await flight.count()) > 0) {
+    await expect(flight).toBeHidden({ timeout: 5_000 });
+  }
+  await pause(page, 80);
 }
 
 test.describe('Kimyagar brew loop (classic, click flow)', () => {
   test.beforeEach(async ({ page }) => {
-    // روت خالی حالا کارگاه کلاسیک است
-    await page.goto('/');
+    // #/classic کارگاه را بدون سردر باز می‌کند
+    await page.goto('/#/classic');
     await expect(page.getByTestId('stage')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('furnace')).toBeVisible();
   });
@@ -97,21 +100,56 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     await expect(result).toBeHidden();
   });
 
-  test('mortar unit cap stays at 3 after a fourth jar tap', async ({ page }) => {
+  test('classic mortar leans empty then splits a few large pieces inside the bowl', async ({ page }) => {
+    const jar = page.getByTestId('jar-chamomile');
+    const mortar = page.getByTestId('mortar');
+    const pestle = page.getByTestId('pestle');
+    await expect(pestle).toBeVisible();
+    await expect(jar).toBeVisible();
+    await expect(mortar).toHaveAttribute('data-mortar-units', '0');
+    await page.waitForFunction(() => {
+      const back = document.querySelector('[data-testid="mortar"] img.zone-art');
+      return back instanceof HTMLImageElement && back.complete && back.naturalWidth > 80;
+    });
+    await pause(page, 240);
+    await page.screenshot({ path: 'screenshots/classic-flow/workshop_empty.png' });
+    await mortar.screenshot({ path: 'screenshots/classic-flow/mortar_empty.png' });
+
+    await tapJarAndLand(page, jar);
+    await expect(mortar).toHaveAttribute('data-mortar-units', '1');
+    await expect(mortar).toHaveAttribute('data-grinding', 'true');
+    await expect(page.getByTestId('mortar-contents-raw')).toBeVisible();
+
+    const chips = mortar.locator('.cst-bowl:not(.is-compact) .cst-chip');
+    await expect(chips.first()).toBeVisible();
+    const start = await chips.count();
+    expect(start).toBeGreaterThanOrEqual(3);
+    expect(start).toBeLessThanOrEqual(16);
+    await page.screenshot({ path: 'screenshots/classic-flow/workshop_pieces.png' });
+    await mortar.screenshot({ path: 'screenshots/classic-flow/mortar_pieces.png' });
+
+    await pause(page, 2400);
+    const later = await chips.count();
+    expect(later).toBeGreaterThanOrEqual(start);
+    await page.screenshot({ path: 'screenshots/classic-flow/workshop_grinding.png' });
+    await mortar.screenshot({ path: 'screenshots/classic-flow/mortar_grinding.png' });
+  });
+
+  test('mortar unit cap stays at 6 after a seventh jar tap', async ({ page }) => {
     const jar = page.getByTestId('jar-chamomile');
     const mortar = page.getByTestId('mortar');
     await expect(jar).toBeVisible();
     await expect(mortar).toBeVisible();
 
-    for (let i = 0; i < 3; i++) await tapJarAndLand(page, jar);
-    await expect(mortar).toHaveAttribute('data-mortar-units', '3');
+    for (let i = 0; i < 6; i++) await tapJarAndLand(page, jar);
+    await expect(mortar).toHaveAttribute('data-mortar-units', '6');
 
-    // چهارمین Tap: پروازی نیست، هاون «جا ندارد» می‌لرزد
+    // هفتمین Tap: پروازی نیست، هاون «جا ندارد» می‌لرزد
     await jar.click();
     await pause(page, 400);
     await expect(page.getByTestId('ingredient-flight')).toHaveCount(0);
-    await expect(mortar).toHaveAttribute('data-mortar-units', '3');
-    expect((await storeState(page)).mortar?.quantity).toBe(3);
+    await expect(mortar).toHaveAttribute('data-mortar-units', '6');
+    expect((await storeState(page)).mortar?.quantity).toBe(6);
   });
 
   test('early mortar tap clamps grind to coarse and still transfers', async ({ page }) => {
@@ -250,5 +288,61 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     const history = page.getByTestId('overlay-process_history');
     await expect(history).toBeVisible();
     await expect(history).toContainText('هنوز چیزی در پاتیل نریخته‌ای');
+  });
+
+  test('ready sparkles leave when the brew burns instead of freezing', async ({ page }) => {
+    type Harness = {
+      setState: (partial: Record<string, unknown>) => void;
+      getState: () => {
+        closeOverlay: () => void;
+        addMortarToCauldron: () => void;
+        setHeat: (heat: string) => void;
+        tick: (dt: number) => void;
+      };
+    };
+    const seedReady = async (extraTick: number) => {
+      await page.evaluate((dt) => {
+        const store = (window as unknown as { __kimyagarStore?: Harness }).__kimyagarStore;
+        if (!store) throw new Error('window.__kimyagarStore is missing');
+        store.getState().closeOverlay();
+        if (dt === 0) {
+          store.setState({
+            mortar: {
+              ingredientId: 'chamomile',
+              quantity: 1,
+              grindState: 'fine',
+              grindWork: 4,
+              grinding: false,
+            },
+          });
+          store.getState().addMortarToCauldron();
+          store.getState().setHeat('high');
+        } else {
+          store.getState().tick(dt);
+        }
+      }, extraTick);
+    };
+
+    await seedReady(0);
+    expect((await storeState(page)).entries).toBe(1);
+
+    const cauldron = page.getByTestId('cauldron');
+    const fx = page.getByTestId('cauldron-fx-canvas');
+    const smoke = page.getByTestId('burnt-smoke');
+    await expect(fx).toBeVisible();
+
+    await pause(page, 1100);
+    await seedReady(10);
+    await expect(cauldron).toHaveAttribute('data-ready', 'true');
+    await expect(smoke).not.toHaveAttribute('data-on');
+    await expect(fx).toHaveAttribute('data-sparkles', /[1-9]/);
+
+    await seedReady(20);
+    await expect(smoke).toHaveAttribute('data-on', 'true');
+    await expect(cauldron).not.toHaveAttribute('data-ready', 'true');
+    await expect(fx).toHaveAttribute('data-sparkles', '0');
+    await pause(page, 400);
+    await expect(fx).toHaveAttribute('data-sparkles', '0');
+    await page.screenshot({ path: 'screenshots/classic-flow/verify_burnt_no_sparkles.png', fullPage: true });
   });
 });
