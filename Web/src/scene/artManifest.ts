@@ -234,3 +234,24 @@ export const GATE_ART = {
   candle: 'gate/candle.png',
   flames: ['gate/flame_1.png', 'gate/flame_2.png', 'gate/flame_3.png'],
 } as const;
+
+/**
+ * لایه‌های اینترو (نمای بیرونی دکان در بازار) — تولید در tools/build_intro_layers.mjs.
+ * facade آسمان و دهانه‌ی در را شفاف دارد؛ لنگه‌های در، تابلو، پوست و سایه‌ی
+ * رهگذر از GATE_ART می‌آیند. map_open و ledger_open بدون trim هستند تا مختصات
+ * مُهرها و خط‌ها روی قاب ۱۶:۹ ثابت بماند. تیتر «کیمیاگر» تصویر نیست؛ با
+ * Vazirmatn روی تابلو حروف‌چینی می‌شود (intro.css: .intro__logo).
+ */
+export const INTRO_ART = {
+  facade: 'intro/facade.png',
+  skyFx: 'intro/sky_fx.png',
+  lantern: 'intro/lantern.png',
+  knocker: 'intro/knocker.png',
+  plaque: 'intro/plaque.png',
+  mapRolled: 'intro/map_rolled.png',
+  mapOpen: 'intro/map_open.png',
+  ledgerClosed: 'intro/ledger_closed.png',
+  ledgerOpen: 'intro/ledger_open.png',
+  catSleep: 'intro/cat_sleep.png',
+  catAwake: 'intro/cat_awake.png',
+} as const;

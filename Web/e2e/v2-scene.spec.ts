@@ -158,7 +158,7 @@ test.describe('Kimyagar v2 scene skeleton', () => {
   test('empty route opens the shop gate; #/classic opens the workshop; #/v2 opens v2 flat by default', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('gate-screen')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId('gate-candle')).toBeVisible();
+    await expect(page.getByTestId('gate-start')).toBeVisible();
     await expect(page.getByTestId('v2-route-link')).toHaveCount(0);
 
     await page.goto('/#/classic');
@@ -171,6 +171,59 @@ test.describe('Kimyagar v2 scene skeleton', () => {
     await expect(scene).toBeVisible({ timeout: 20_000 });
     await expect(scene).toHaveAttribute('data-art-style', 'flat');
     await expect(page.getByTestId('v2-flat-cauldron-canvas')).toBeVisible();
+  });
+
+  test('intro: knocker enters the classic workshop (first run boot, then fast path)', async ({ page }) => {
+    // اولین اجرا: boot ~۲٫۶ ثانیه، درکوب تا پایان boot غیرفعال است
+    await page.goto('/');
+    const intro = page.getByTestId('gate-screen');
+    await expect(intro).toBeVisible({ timeout: 20_000 });
+    await expect(intro).toHaveAttribute('data-phase', 'idle', { timeout: 10_000 });
+    await expect(page.getByTestId('workshop-dusk')).toBeVisible();
+
+    const start = page.getByTestId('gate-start');
+    await expect(start).toBeEnabled();
+    await start.click();
+    await expect(intro).toHaveAttribute('data-phase', /opening|entering/);
+    await expect.poll(() => page.evaluate(() => window.location.hash), { timeout: 8_000 }).toBe('#/classic');
+    await expect(page.getByTestId('cauldron')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('gate-screen')).toHaveCount(0);
+
+    // بازگشت به سردر: flag دیده‌شده ست شده ⇒ بدون boot، مستقیم idle
+    await page.getByTestId('back-to-gate').click();
+    await expect(page.getByTestId('gate-screen')).toHaveAttribute('data-phase', 'idle', { timeout: 5_000 });
+    expect(await page.evaluate(() => window.localStorage.getItem('kimiagar.intro.seen'))).toBeTruthy();
+  });
+
+  test('intro: market map and ledger panels open and close', async ({ page }) => {
+    await page.goto('/');
+    const intro = page.getByTestId('gate-screen');
+    await expect(intro).toHaveAttribute('data-phase', 'idle', { timeout: 15_000 });
+
+    // نقشه‌ی بازار (مراحل): مُهر دکان فعال، بقیه قفل
+    await page.getByTestId('gate-stages').click();
+    const map = page.getByTestId('gate-stages-panel');
+    await expect(map).toBeVisible();
+    await expect(page.getByTestId('gate-stages')).toHaveAttribute('aria-expanded', 'true');
+    await expect(map.getByTestId('gate-stage-shop')).toBeVisible();
+    await map.getByTestId('gate-panel-close').click();
+    await expect(map).toHaveCount(0);
+
+    // دفتر حساب (امتیازها): حالت خالی
+    await page.getByTestId('gate-scores').click();
+    const ledger = page.getByTestId('gate-scores-panel');
+    await expect(ledger).toBeVisible();
+    await expect(ledger.getByTestId('gate-ledger-empty')).toBeVisible();
+    // لمس پرده‌ی پشت پنل هم می‌بندد
+    await page.getByTestId('gate-panel-scrim').click({ position: { x: 5, y: 5 } });
+    await expect(ledger).toHaveCount(0);
+
+    // ورق عطار: لمس ⇒ بزرگ (aria-expanded)، لمس بیرون ⇒ برمی‌گردد
+    const quote = page.getByTestId('gate-quote');
+    await quote.click();
+    await expect(quote).toHaveAttribute('aria-expanded', 'true');
+    await page.locator('.intro__quote-backdrop').click({ position: { x: 5, y: 5 } });
+    await expect(quote).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('art style is remembered: #/v2/pixel then #/v2 stays pixel', async ({ page }) => {

@@ -1564,6 +1564,36 @@
   opacity: 1;
 }
 
+/* لینک‌های گوشه‌ی کارگاه کلاسیک: «سردر» و «نسخه ۲» — بیرون از Stage */
+.classic-corner-links {
+  position: fixed;
+  z-index: 70;
+  inset-inline-end: 14px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.classic-corner-links .v2-route-link,
+.classic-corner-links .gate-return {
+  position: static;
+  padding: 5px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(233, 217, 180, 0.22);
+  background: rgba(16, 10, 6, 0.55);
+  color: rgba(233, 217, 180, 0.6);
+  font-size: 14px;
+  font-family: inherit;
+  text-decoration: none;
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+.classic-corner-links .v2-route-link:hover,
+.classic-corner-links .gate-return:hover {
+  opacity: 1;
+  color: rgba(233, 217, 180, 0.95);
+}
+
 /* ------------------------------ Keyframes --------------------------- */
 
 @keyframes kg-drawer {

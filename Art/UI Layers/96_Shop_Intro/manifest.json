@@ -1,0 +1,18 @@
+{
+  "layer": "shop_intro",
+  "notes": "لایه‌های اینترو (نمای بیرونی دکان). facade آسمان و دهانه‌ی در شفاف دارد؛ لنگه‌های در از gate/ می‌آیند. map_open و ledger_open بدون trim تا مختصات ثابت بماند. اسپرایت‌ها تا ~۲× اندازه‌ی نمایش کوچک شده‌اند. logo.png فقط رفرنس است (وب آن را نمی‌برد؛ تیتر با فونت Vazirmatn).",
+  "files": [
+    "facade.png",
+    "sky_fx.png",
+    "lantern.png",
+    "knocker.png",
+    "plaque.png",
+    "map_rolled.png",
+    "map_open.png",
+    "ledger_closed.png",
+    "ledger_open.png",
+    "cat_sleep.png",
+    "cat_awake.png",
+    "logo.png"
+  ]
+}

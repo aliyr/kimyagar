@@ -72,8 +72,11 @@ function getNoise(c: Ctx): AudioBuffer {
 export function unlockAudio(): void {
   const c = ensureContext();
   if (!c) return;
-  if (c.state === 'suspended') void c.resume();
   unlocked = true;
+  if (c.state === 'suspended') {
+    // resume ناهمگام است؛ صداهای پیوسته بعد از running شدن شروع شوند
+    void c.resume().then(applyAmbience, applyAmbience);
+  }
   applyAmbience();
 }
 
@@ -101,6 +104,30 @@ function live(): Ctx | null {
   const c = ensureContext();
   if (!c || !master || c.state !== 'running') return null;
   return c;
+}
+
+const liveHooks = new Set<() => void>();
+
+/**
+ * برای ماژول‌های صدای محیطی دیگر (audio/ambience): context زنده و master gain.
+ * null یعنی هنوز باز نشده یا صدا خاموش است.
+ */
+export function getLiveAudio(): { ctx: AudioContext; master: GainNode; noise: AudioBuffer } | null {
+  const c = live();
+  if (!c || !master) return null;
+  return { ctx: c, master, noise: getNoise(c) };
+}
+
+/**
+ * هر بار که صدا «زنده» می‌شود (اولین لمس، یا روشن‌شدن از تنظیمات) صدا زده
+ * می‌شود تا صداهای پیوسته‌ی معطل شروع شوند. تابع لغو برمی‌گرداند.
+ */
+export function onAudioLive(cb: () => void): () => void {
+  liveHooks.add(cb);
+  if (live()) cb();
+  return () => {
+    liveHooks.delete(cb);
+  };
 }
 
 /** انفجار نویز کوتاه با فیلتر — پایه‌ی ضربه/شلپ/کوبش */
@@ -249,6 +276,7 @@ function applyAmbience(): void {
     }
     return;
   }
+  for (const cb of liveHooks) cb();
   if (!rumbleGain) rumbleGain = noiseLoop(c, { freq: 150, q: 0.9, lfoHz: 2.3, lfoDepth: 45 });
   if (!roarGain) roarGain = noiseLoop(c, { freq: 300, q: 0.6, lfoHz: 0.45, lfoDepth: 120 });
   rumbleGain.gain.setTargetAtTime(simmerLevel * 0.11, c.currentTime, 0.3);
@@ -270,6 +298,13 @@ export const sfx = {
     const c = live();
     if (!c) return;
     noiseBurst(c, { dur: 0.12, type: 'bandpass', freq: 1800, q: 1.2, gain: 0.25 });
+  },
+  /** خش‌خش ورق پوستی (بزرگ/کوچک شدن ورق عطار) */
+  paperRustle(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.22, type: 'highpass', freq: 2600, gain: 0.12 });
+    noiseBurst(c, { dur: 0.14, type: 'bandpass', freq: 3800, q: 0.8, gain: 0.08 });
   },
   /** برداشتن با قاشق */
   scoop(): void {
@@ -319,6 +354,58 @@ export const sfx = {
     tone(c, { freq: 988, dur: 1.35, type: 'sine', gain: 0.16 });
     tone(c, { freq: 1480, dur: 0.9, type: 'sine', gain: 0.07, at: 0.01 });
     tone(c, { freq: 1976, dur: 0.45, type: 'sine', gain: 0.035, at: 0.012 });
+  },
+  /** کوبه‌ی درکوب برنجی روی چوب: تق بم + زنگ کوتاه حلقه */
+  knock(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.11, type: 'lowpass', freq: 700, freqEnd: 160, gain: 0.6 });
+    tone(c, { freq: 150, dur: 0.16, type: 'triangle', gain: 0.28, freqEnd: 70 });
+    // برخورد حلقه با پلاک: زنگ فلزی نازک و میرا
+    tone(c, { freq: 1840, dur: 0.22, type: 'sine', gain: 0.05, at: 0.006 });
+    tone(c, { freq: 2760, dur: 0.14, type: 'sine', gain: 0.025, at: 0.008 });
+  },
+  /** میوی گربه‌ی دکان: دو سینوسی با خیز و افت، کمی لرزش */
+  meow(): void {
+    const c = live();
+    if (!c) return;
+    const base = 520 + Math.random() * 90;
+    const dur = 0.42 + Math.random() * 0.12;
+    const osc = c.createOscillator();
+    osc.type = 'sawtooth';
+    const t0 = c.currentTime;
+    osc.frequency.setValueAtTime(base * 0.8, t0);
+    osc.frequency.exponentialRampToValueAtTime(base * 1.35, t0 + dur * 0.35);
+    osc.frequency.exponentialRampToValueAtTime(base * 0.7, t0 + dur);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(1400, t0);
+    lp.frequency.exponentialRampToValueAtTime(2600, t0 + dur * 0.4);
+    lp.frequency.exponentialRampToValueAtTime(900, t0 + dur);
+    lp.Q.value = 3;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.11, t0 + 0.05);
+    g.gain.setValueAtTime(0.11, t0 + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(lp).connect(g).connect(master!);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+  },
+  /** جرجر زنجیر تابلو در باد: چند کلیک فلزی ریز پشت‌سرهم با زنگ ضعیف */
+  chainCreak(): void {
+    const c = live();
+    if (!c) return;
+    const n = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const at = i * (0.05 + Math.random() * 0.07);
+      window.setTimeout(() => {
+        const c2 = live();
+        if (!c2) return;
+        noiseBurst(c2, { dur: 0.02, type: 'bandpass', freq: 2400 + Math.random() * 1800, q: 6, gain: 0.05 });
+        tone(c2, { freq: 3100 + Math.random() * 900, dur: 0.12, type: 'sine', gain: 0.012 });
+      }, at * 1000);
+    }
   },
   /** شمسه‌ی «رسیده»: آرپژ سینوسی کوتاه */
   sparkle(): void {

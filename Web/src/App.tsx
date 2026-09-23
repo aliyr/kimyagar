@@ -11,7 +11,7 @@
  * صحنه فقط کمی تیره (Vignette) می‌شود تا حس «خروج از کارگاه» ایجاد نشود.
  *
  * روتینگ سبک بر پایه‌ی hash (بدون کتابخانه؛ منطق در route.ts):
- * - '' یا '#/' یا '#/gate'      ⇒ سردر دکان؛ کارگاه کلاسیک پشت در است و tick نمی‌خورد
+ * - '' یا '#/' یا '#/gate'      ⇒ سردر دکان (scene/intro/IntroScreen)؛ کارگاه کلاسیک تیره پشت در است و tick نمی‌خورد
  * - '#/classic'                 ⇒ کارگاه کلاسیک (نام صریح)
  * - '#/v2'                      ⇒ صحنه‌ی نسخه ۲ با سبک ذخیره‌شده (پیش‌فرض: فلت)
  * - '#/v2/flat|pixel|engraved'  ⇒ صحنه‌ی نسخه ۲ با آن سبک
@@ -25,7 +25,8 @@ import { DebugMount } from './debug';
 import { uiLabels } from './data/labels';
 import { SettingsButton } from './ui/SettingsButton';
 import { Stage } from './scene/Stage';
-import { GateScreen } from './scene/GateScreen';
+import { IntroScreen } from './scene/intro/IntroScreen';
+import { useIntroState } from './scene/intro/introState';
 import { WorkshopScene } from './scene/WorkshopScene';
 import { WorkshopSceneV2 } from './scene/v2/WorkshopSceneV2';
 import { useUiState } from './scene/uiState';
@@ -79,6 +80,7 @@ export default function App() {
   const atGate = route.kind === 'gate';
   useGameClock(atGate);
   const paused = useGameStore((s) => s.openOverlay !== null || s.result !== null);
+  const entering = useIntroState((s) => s.phase === 'entering');
 
   useEffect(() => {
     if (!atGate) return;
@@ -92,12 +94,14 @@ export default function App() {
     <StyleContext.Provider value={artStyle}>
       <RouteKindContext.Provider value={route.kind}>
         <div className="stage-root" data-route={route.kind}>
-          <Stage paused={paused} foreground={atGate ? <GateScreen /> : null}>
+          <Stage paused={paused} foreground={atGate ? <IntroScreen /> : null}>
             {route.kind === 'v2' ? (
               <WorkshopSceneV2 artStyle={route.artStyle} />
             ) : (
               <div className={atGate ? 'workshop-behind-gate' : undefined}>
                 <WorkshopScene />
+                {/* تیرگی کارگاه پشت درِ بسته؛ در فاز ورود برمی‌خیزد تا از آستانه، کارگاه روشن دیده شود */}
+                {atGate ? <div className={`workshop-dusk${entering ? ' is-lifting' : ''}`} data-testid="workshop-dusk" /> : null}
               </div>
             )}
           </Stage>
@@ -111,7 +115,8 @@ export default function App() {
               </a>
             </div>
           ) : null}
-          <SettingsButton />
+          {/* روی سردر، فانوس کوچکِ خودِ صحنه تنظیمات را باز می‌کند */}
+          {atGate ? null : <SettingsButton />}
           <OverlayHost />
           <DiscoveryToast />
           <DebugMount />

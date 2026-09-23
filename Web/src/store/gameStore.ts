@@ -24,6 +24,7 @@ import type {
   Quantity,
 } from '../engine/types';
 import { loadDefinitions } from '../data';
+import { useProgressStore } from './progressStore';
 
 export type OverlayId =
   | 'ingredient_detail'
@@ -201,14 +202,30 @@ export interface GameState {
   closeOverlay: () => void;
   popDiscovery: () => void;
   toggleDebug: () => void;
+  /** «دکان تازه»: پیشرفت ماندگار و وضعیت نشست از نو (از سردر) */
+  startFresh: () => void;
   /** پیشروی زمان — فقط وقتی Pause نیست اثر دارد. B در حلقه‌ی rAF صدا می‌زند */
   tick: (dtSeconds: number) => void;
+}
+
+/** پیشرفت ذخیره‌شده ⇒ بخشِ ماندگار وضعیت اولیه (دیگ و هاون همیشه خالی) */
+function persistedSlice() {
+  const p = useProgressStore.getState().progress;
+  return {
+    customerIndex: p.customerIndex,
+    discoveredTagIds: p.discoveredTagIds,
+    usedIngredientIds: p.usedIngredientIds,
+  };
+}
+
+/** نشان‌ها و مواد آزموده را در پیشرفت ماندگار می‌نویسد */
+function persistDiscoveries(discoveredTagIds: string[], usedIngredientIds: IngredientId[]): void {
+  useProgressStore.getState().setDiscoveries(discoveredTagIds, usedIngredientIds);
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
   defs: loadDefinitions(),
   brew: engine.createBrew(),
-  customerIndex: 0,
   cabinetOpen: false,
   mortar: null,
   openOverlay: null,
@@ -216,10 +233,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   result: null,
   evaluation: null,
   discoveryQueue: [],
-  discoveredTagIds: [],
-  usedIngredientIds: [],
   lastRecipe: null,
   debugOpen: false,
+  ...persistedSlice(),
 
   currentCustomer: () => {
     const { defs, customerIndex } = get();
@@ -357,7 +373,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         brew = engine.addIngredient(brew, portion.ingredientId, portion.quantity, grindState, s.defs);
         ids.add(portion.ingredientId);
       }
-      set({ brew, mortar: null, usedIngredientIds: [...ids] });
+      const usedIngredientIds = [...ids];
+      set({ brew, mortar: null, usedIngredientIds });
+      persistDiscoveries(s.discoveredTagIds, usedIngredientIds);
       return;
     }
     if (!s.mortar.grindState) return;
@@ -368,13 +386,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       s.mortar.grindState,
       s.defs,
     );
-    set({
-      brew,
-      mortar: null,
-      usedIngredientIds: s.usedIngredientIds.includes(s.mortar.ingredientId)
-        ? s.usedIngredientIds
-        : [...s.usedIngredientIds, s.mortar.ingredientId],
-    });
+    const usedIngredientIds = s.usedIngredientIds.includes(s.mortar.ingredientId)
+      ? s.usedIngredientIds
+      : [...s.usedIngredientIds, s.mortar.ingredientId];
+    set({ brew, mortar: null, usedIngredientIds });
+    persistDiscoveries(s.discoveredTagIds, usedIngredientIds);
   },
 
   setHeat: (h) => set((s) => ({ brew: engine.setHeat(s.brew, h, s.defs) })),
@@ -389,15 +405,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     const newDiscoveries = result.discoveries.filter(
       (d) => !s.discoveredTagIds.includes(d.id),
     );
+    const discoveredTagIds = [
+      ...s.discoveredTagIds,
+      ...newDiscoveries.filter((d) => d.kind === 'quality_tag').map((d) => d.id),
+    ];
+    if (discoveredTagIds.length !== s.discoveredTagIds.length) {
+      persistDiscoveries(discoveredTagIds, s.usedIngredientIds);
+    }
     set({
       brew: { ...s.brew, bottled: true },
       result,
       evaluation: null,
       discoveryQueue: [...s.discoveryQueue, ...newDiscoveries],
-      discoveredTagIds: [
-        ...s.discoveredTagIds,
-        ...newDiscoveries.filter((d) => d.kind === 'quality_tag').map((d) => d.id),
-      ],
+      discoveredTagIds,
       lastRecipe: {
         entries: s.brew.entries.map((e) => ({
           ingredientId: e.ingredientId,
@@ -416,17 +436,44 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (!s.result) return;
     const evaluation = engine.evaluate(s.result, s.currentCustomer(), s.defs);
     set({ evaluation });
+    useProgressStore.getState().recordScore({
+      customerId: evaluation.customerId,
+      score: evaluation.score,
+      band: evaluation.band,
+      at: Date.now(),
+    });
   },
 
-  nextCustomer: () =>
-    set((s) => ({
-      customerIndex: s.customerIndex + 1,
+  nextCustomer: () => {
+    const customerIndex = get().customerIndex + 1;
+    set({
+      customerIndex,
       brew: engine.createBrew(),
       result: null,
       evaluation: null,
       mortar: null,
       openOverlay: null,
-    })),
+    });
+    useProgressStore.getState().setCustomerIndex(customerIndex);
+  },
+
+  startFresh: () => {
+    useProgressStore.getState().resetProgress();
+    set({
+      brew: engine.createBrew(),
+      customerIndex: 0,
+      cabinetOpen: false,
+      mortar: null,
+      openOverlay: null,
+      inspectedIngredientId: null,
+      result: null,
+      evaluation: null,
+      discoveryQueue: [],
+      discoveredTagIds: [],
+      usedIngredientIds: [],
+      lastRecipe: null,
+    });
+  },
 
   resetBrew: () =>
     set(() => ({
