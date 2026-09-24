@@ -21,7 +21,7 @@
  * left/translate مطلق است تا از direction مستقل بماند.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { CLASSIC_MAX_MORTAR_UNITS, useGameStore } from '../store/gameStore';
 import type { IngredientDefinition } from '../engine/types';
@@ -30,6 +30,7 @@ import { useUiState } from './uiState';
 import { CLASSIC_ART, SCENE_ZONES } from './artManifest';
 import { ArtLayer, rectStyle, useArt, vars } from './Zone';
 import { IngredientFlight } from './IngredientFlight';
+import { mortarFx } from './MortarFx';
 import type { FlightSpec } from './IngredientFlight';
 import { sfx } from '../audio/sfx';
 import { haptic } from '../platform/haptics';
@@ -95,6 +96,13 @@ function Jar({
   const inMortar = useGameStore((s) => s.mortar?.ingredientId === ingredient.id);
   const art = useArt(`cabinet/jar_${ingredient.id}.png`);
   const [pressed, setPressed] = useState(false);
+  /** تکان کوتاه شیشه بعد از Tap (ماده از آن بیرون پرید) */
+  const [tapped, setTapped] = useState(false);
+  useEffect(() => {
+    if (!tapped) return;
+    const t = window.setTimeout(() => setTapped(false), 280);
+    return () => window.clearTimeout(t);
+  }, [tapped]);
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -150,6 +158,7 @@ function Jar({
         // Tap ⇒ افزودن به هاون با پرواز از مرکز شیشه
         const r = el.getBoundingClientRect();
         const from = toScene(r.left + r.width / 2, r.top + r.height * 0.45);
+        setTapped(true);
         onTap(ingredient, from);
       };
 
@@ -169,7 +178,9 @@ function Jar({
   return (
     <div
       data-testid={`jar-${ingredient.id}`}
-      className={`shelf-jar${pressed ? ' is-pressed' : ''}${inMortar ? ' is-in-mortar' : ''}`}
+      className={`shelf-jar${pressed ? ' is-pressed' : ''}${inMortar ? ' is-in-mortar' : ''}${
+        tapped ? ' is-tapped' : ''
+      }`}
       aria-label={ingredient.nameFa}
       style={{
         left: jarLeft(index, stripWidth),
@@ -243,6 +254,7 @@ export function ShelfStationClassic() {
     if (store.openOverlay !== null || store.result !== null) return;
     store.addClassicUnit(flight.ingredientId);
     store.startGrinding();
+    mortarFx.land(flight.color);
     sfx.jarDrop();
   }, []);
 

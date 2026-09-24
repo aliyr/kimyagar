@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { CLASSIC_ART, SCENE_ZONES } from './artManifest';
+import { allPieceArt } from './mortarLayout';
 import { preloadArt } from './preloadArt';
 import { useUiState } from './uiState';
 
@@ -20,6 +21,7 @@ const WORKSHOP_LAYERS = [
   CLASSIC_ART.mortar.back,
   CLASSIC_ART.mortar.front,
   ...CLASSIC_ART.mortar.pestleFrames,
+  ...allPieceArt(),
   SCENE_ZONES.bottleShelf.img,
   SCENE_ZONES.customerCounter.img,
   SCENE_ZONES.goalNote.img,

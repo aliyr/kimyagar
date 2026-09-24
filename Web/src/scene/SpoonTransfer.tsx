@@ -69,8 +69,8 @@ function bezier(t: number) {
 }
 
 import { MortarPileView } from './MortarPileView';
-import { useMortarUnits } from './mortarPile';
-import { CLASSIC_ART, artUrl } from './artManifest';
+import { mortarFx } from './MortarFx';
+import { pieceUrl } from './mortarLayout';
 
 /** از هر ماده یکی‌یکی برمی‌دارد تا رنگ‌های ریز بین تکه‌های درشت گم نشوند. */
 function pourSample(list: MortarChip[], limit: number): MortarChip[] {
@@ -115,9 +115,6 @@ export function SpoonTransfer({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const blobRef = useRef<HTMLSpanElement | null>(null);
   const fallRef = useRef<HTMLDivElement | null>(null);
-  const carriedUnits = useMortarUnits();
-  const carriedRaw = artUrl(CLASSIC_ART.mortar.contents(carriedUnits, 'raw'));
-  const carriedGround = artUrl(CLASSIC_ART.mortar.contents(carriedUnits, 'ground'));
   const scoopedRef = useRef<MortarChip[]>([]);
   const [spoonChips, setSpoonChips] = useState<MortarChip[]>([]);
   const shownChips = pourSample(spoonChips, 16)
@@ -172,10 +169,20 @@ export function SpoonTransfer({
         el.style.height = `${h}px`;
         el.style.transition = 'none';
         el.style.setProperty('--rot', `${chip.rot}deg`);
+        el.style.setProperty('--hop', '0');
         if (chip.color) el.style.setProperty('--ing-color', chip.color);
-        const colorEl = document.createElement('span');
-        colorEl.className = 'cst-chip__color';
-        el.appendChild(colorEl);
+        if (chip.kind === 'dust') {
+          const colorEl = document.createElement('span');
+          colorEl.className = 'cst-chip__color';
+          el.appendChild(colorEl);
+        } else {
+          el.style.setProperty('--sprite', `url("${pieceUrl(chip.kind, chip.sprite)}")`);
+          const art = document.createElement('span');
+          art.className = 'cst-chip__art';
+          const tint = document.createElement('span');
+          tint.className = 'cst-chip__tint';
+          el.append(art, tint);
+        }
         fall.appendChild(el);
       });
     };
@@ -189,9 +196,20 @@ export function SpoonTransfer({
       }
     };
     callbacks.current.onPhase('scoop');
+    /** دانه‌های پودری که در راه از لبهٔ قاشق می‌ریزند */
+    let trailAcc = 0;
+    let lastNow = t0;
+    const trailColor = () => {
+      const list = scoopedRef.current;
+      if (list.length === 0) return color;
+      const chip = list[Math.floor(Math.random() * list.length)];
+      return chip.color ?? color;
+    };
 
     const frame = (now: number) => {
       const t = (now - t0) / 1000;
+      const dt = Math.min(0.05, (now - lastNow) / 1000);
+      lastNow = now;
       let x = START.x;
       let y = START.y;
       let rot = 0;
@@ -226,6 +244,13 @@ export function SpoonTransfer({
         // کمی به جهت حرکت خم می‌شود
         rot = 8 * Math.sin(k * Math.PI);
         blobScale = 1;
+        // دنبالهٔ پودر: هرچه تکه‌های ریزتر، بیشتر می‌ریزد
+        const fine = scoopedRef.current.filter((chip) => chip.kind === 'dust').length;
+        trailAcc += dt * (6 + Math.min(18, fine * 1.5));
+        while (trailAcc >= 1) {
+          trailAcc -= 1;
+          mortarFx.trail(x + (Math.random() - 0.5) * 26, y + 10, trailColor());
+        }
       } else if (t < T_SCOOP + T_CARRY + T_DROP) {
         if (phase !== 'drop') {
           phase = 'drop';
@@ -247,6 +272,10 @@ export function SpoonTransfer({
           if (pour >= 0.92) {
             dropped = true;
             fall.style.opacity = '0';
+            // حلقه‌های رنگی روی سطح معجون، جای فرود
+            for (let i = 0; i < 3; i++) {
+              mortarFx.ripple(LAND.x + (i - 1) * 16, LAND.y + (i % 2) * 4, trailColor());
+            }
             callbacks.current.onDrop();
           }
         }
@@ -302,7 +331,7 @@ export function SpoonTransfer({
           transform: 'translate(-50%, -50%) scale(0)',
         }}
       >
-        <MortarPileView chips={shownChips} settled compact rawSrc={carriedRaw} groundSrc={carriedGround} />
+        <MortarPileView chips={shownChips} settled compact />
       </span>
     </div>
     <div ref={fallRef} className="cst-spoon-fall" />

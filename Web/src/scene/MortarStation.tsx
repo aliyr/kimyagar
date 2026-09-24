@@ -1,17 +1,17 @@
 /**
- * ایستگاه هاون — فلو کلیکی کلاسیک.
+ * ایستگاه هاون — فلو کلیکی کلاسیک (v3: هاون جامد از زاویهٔ بالاتر).
  *
- * - Tap شیشه در قفسه ⇒ ماده تا هاون پرواز می‌کند (IngredientFlight) و با فرود،
- *   store.startGrinding() کوبش خودکار ۳٫۵ ثانیه‌ای را آغاز می‌کند (tick در store).
- * - هنگام کوبش: سر کوبه روی مواد بیضی دهانه را دور می‌زند (pestle_1)، گرد و خاک، جرقه‌های دور دهانه،
- *   حلقه‌ی برنجی زمان‌بندی (GrindRing) و هر ~۰٫۳۵ث یک «تیک» (صدا/هپتیک).
- * - Tap روی هاون/کوبه ⇒ store.transferMortar() درجه‌ی همان لحظه را قفل می‌کند
- *   (زودتر از آستانه‌ی اول = درشت) و SpoonTransfer قاشق سر بزی را می‌آورد؛
- *   کوبه کنار می‌رود؛ در لحظه‌ی drop: addMortarToCauldron + splashPulse.
- * - بعد از ۳٫۵ ثانیه ماده «نرم» می‌ماند و منتظر Tap.
- * - رندر لایه‌ای روی بوم مشترک (CLASSIC_ART.mortar):
- *     mortar_back ⇒ تکه‌های داخل دهانه ⇒ کوبه ⇒ mortar_front (لبهٔ جلو).
- * - پالس mortarShakePulse (شیشه روی هاونِ پر) ⇒ لرزش کوتاه + «جا ندارد».
+ * - Tap شیشه در قفسه ⇒ تکه‌های ماده تا هاون پرواز می‌کنند (IngredientFlight) و با فرود،
+ *   store.startGrinding() کوبش خودکار را آغاز می‌کند (tick در store).
+ * - هنگام کوبش: کوبه چرخهٔ ضربهٔ فازدار دارد (mortarPile). هر برخورد یک `StrikeEvent`
+ *   می‌دهد ⇒ صدا، هپتیک، لرزش ریز هاون، گرد/جرقه/موج براق (MortarFx)، شکستن تکه‌ها.
+ *   دوربین ملایم روی هاون زوم می‌کند و دور و بر کمی تیره می‌شود.
+ * - Tap روی هاون/کوبه ⇒ store.transferMortar() درجه‌ی همان لحظه را قفل می‌کند و
+ *   SpoonTransfer قاشق سر بزی را می‌آورد؛ در لحظه‌ی drop: addMortarToCauldron + splashPulse.
+ * - لایه‌ها (همه هم‌تراز با بوم مشترک v3):
+ *     mortar_back ⇒ Canvas زیرین (پودر، سایهٔ کوبه، رد پودر) ⇒ تکه‌ها ⇒ کوبه ⇒
+ *     mortar_front (نوار لبهٔ نزدیک) ⇒ Canvas رویین (ذرات) ⇒ حلقهٔ لبه.
+ * - پالس mortarShakePulse (شیشه روی هاونِ پر) ⇒ لرزش + لبریز شدن + «جا ندارد».
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -27,80 +27,42 @@ import { GrindRing } from './GrindRing';
 import { SpoonTransfer } from './SpoonTransfer';
 import { sfx } from '../audio/sfx';
 import { haptic } from '../platform/haptics';
+import { getQuality } from '../platform/quality';
 import './classic-stations.css';
 import { MortarPileView } from './MortarPileView';
+import { MortarFxCanvas, mortarFx } from './MortarFx';
+import { PESTLE_BOX, PESTLE_FRAMES, PESTLE_HEAD_ANCHOR } from './mortarLayout';
 import {
+  clearResidue,
+  mixColors,
   pestleInFront,
   pestleTransform,
   setPestleMode,
+  subscribeStrike,
   syncMortarMix,
   tickMortarVisuals,
   useMortarChips,
   usePestleAim,
+  useResidue,
 } from './mortarPile';
 
 const Z = SCENE_ZONES.mortar.z;
+const ZONE = SCENE_ZONES.mortar;
 
-/** Rect کوبه — نسبی به Zone هاون (layout.PROPS) تا با تغییر اندازه‌ی هاون هم‌راستا بماند */
-const PESTLE_RECT = PROPS.pestle;
-/** هر «ضربه»ی کوبش ⇒ تیک صدا/هپتیک */
-const GRIND_TICK_MS = 1050;
 /** طول لرزش «جا ندارد» — هماهنگ با cst-shake در CSS */
 const SHAKE_MS = 420;
+/** لرزش ریز برخورد کوبه — هماهنگ با cst-strike در CSS */
+const STRIKE_MS = 110;
 /** Tap = رهاکردن بدون جابه‌جایی بیش از این مقدار (پیکسل CSS) */
 const TAP_SLOP_PX = 10;
+/** زوم دوربین هنگام کوبش */
+const CAMERA_ZOOM = 1.3;
+const CAMERA_MS = 650;
+const CAMERA_RETURN_DELAY_MS = 500;
+const CAMERA_FOCUS = { x: ZONE.x + ZONE.width / 2, y: ZONE.y + ZONE.height * 0.45 };
 
-/** گرد هم‌رنگ ماده: چند ذره داخل کاسه، چند ذره که کمی از لبه‌ی هاون بالاتر می‌روند */
-const DUST = [
-  { left: 40, top: 68, rise: -22, delay: 0, dur: 1.05, size: 16 },
-  { left: 58, top: 70, rise: -16, delay: 0.28, dur: 0.95, size: 13 },
-  { left: 50, top: 62, rise: -28, delay: 0.52, dur: 1.1, size: 18 },
-  { left: 46, top: 48, rise: -70, delay: 0.14, dur: 1.2, size: 14 },
-  { left: 62, top: 44, rise: -85, delay: 0.4, dur: 1.25, size: 15 },
-  { left: 34, top: 40, rise: -95, delay: 0.66, dur: 1.3, size: 12 },
-];
-
-/** جرقه‌های ریز دور دهانه (زاویه بر حسب درجه، فاصله‌ی زمانی) */
-const SPARKS = Array.from({ length: 8 }, (_, i) => ({
-  angle: -160 + i * 20 + (i % 2 ? 6 : -6),
-  delay: (i * 0.09) % 0.7,
-  dur: 0.55 + (i % 3) * 0.12,
-}));
-
-/** گرد هر ذره به نسبت واحدهای همان ماده رنگ می‌گیرد. */
-function dustPalette(parts: { quantity: number; color: string }[], count: number): string[] {
-  if (parts.length === 0 || count <= 0) return [];
-  const total = parts.reduce((sum, part) => sum + part.quantity, 0);
-  const raw = parts.map((part) => (count * part.quantity) / total);
-  const counts = raw.map((value) => Math.floor(value));
-  let left = count - counts.reduce((sum, value) => sum + value, 0);
-  const order = raw
-    .map((value, index) => ({ index, frac: value - Math.floor(value) }))
-    .sort((a, b) => b.frac - a.frac);
-  for (const item of order) {
-    if (left <= 0) break;
-    counts[item.index] += 1;
-    left -= 1;
-  }
-  const colors: string[] = [];
-  parts.forEach((part, index) => {
-    for (let i = 0; i < counts[index]; i++) colors.push(part.color);
-  });
-  return colors;
-}
-
-/** شمسه‌های برداشتن: داخل کاسه و روی لبه‌ی هاون، مثل جرقه‌ی پاتیل */
-const SCOOP_GLINTS = [
-  { x: 42, y: 64, delay: 0, size: 18 },
-  { x: 58, y: 70, delay: 0.18, size: 14 },
-  { x: 50, y: 56, delay: 0.34, size: 20 },
-  { x: 34, y: 60, delay: 0.5, size: 13 },
-  { x: 28, y: 28, delay: 0.1, size: 16 },
-  { x: 72, y: 24, delay: 0.28, size: 15 },
-  { x: 50, y: 16, delay: 0.42, size: 18 },
-  { x: 18, y: 36, delay: 0.62, size: 12 },
-  { x: 82, y: 34, delay: 0.22, size: 14 },
-];
+/** شات دوربین فعلی از خودِ هاون است (تا با Cinematic تداخل نکند) */
+let mortarShot = false;
 
 /** Tap ساده با تحمل لرزش انگشت (کوبه/هاون) */
 function useTapWithSlop(onTap: () => void) {
@@ -126,9 +88,13 @@ function useTapWithSlop(onTap: () => void) {
         if (ev.pointerId !== pointerId) return;
         cleanup();
       };
-      el.setPointerCapture(pointerId);
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointercancel', onCancel);
+      try {
+        el.setPointerCapture(pointerId);
+      } catch {
+        /* اشاره‌گر فعال نیست (رویداد مصنوعی) — بدون capture هم Tap کار می‌کند */
+      }
     },
     [onTap],
   );
@@ -137,6 +103,7 @@ function useTapWithSlop(onTap: () => void) {
 export function MortarStation() {
   const mortar = useGameStore((s) => s.mortar);
   const ingredients = useGameStore((s) => s.defs.ingredients);
+  const heat = useGameStore((s) => s.brew.currentHeat);
   const portions = mortar?.portions ?? [];
   const totalUnits = portions.reduce((sum, portion) => sum + portion.quantity, 0);
   const colorOf = (id: string) => ingredients.find((item) => item.id === id)?.color ?? '#8a7a52';
@@ -154,6 +121,7 @@ export function MortarStation() {
   const setTransfer = useUiState((s) => s.setTransfer);
   const mortarShakePulse = useUiState((s) => s.mortarShakePulse);
   const setGrindingUi = useUiState((s) => s.setGrinding);
+  const setCamera = useUiState((s) => s.setCamera);
   const pulse = useUiState((s) => s.pulse);
 
   const grindState = mortar?.grindState ?? null;
@@ -164,11 +132,18 @@ export function MortarStation() {
   const contentsVisible = mortar !== null && (transfer === null || transfer === 'scoop');
   const canTap = mortar !== null && transfer === null && !paused;
   const hasMortar = mortar !== null;
+  const residue = useResidue();
+  const mixColor = portions.length > 0 ? mixColors(portions.map((p) => colorOf(p.ingredientId))) : '#8a7a52';
 
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [pestleArtOk, setPestleArtOk] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const [sweeping, setSweeping] = useState(false);
+  const transferColor = useRef('#8a7a52');
+  if (ingredient) transferColor.current = ingredient.color;
 
   useEffect(() => {
-    const src = artUrl(CLASSIC_ART.mortar.pestleFrames[0]);
+    const src = artUrl(PESTLE_FRAMES[0].file);
     const img = new Image();
     const done = () => {
       if (img.naturalWidth > 0) setPestleArtOk(true);
@@ -182,39 +157,102 @@ export function MortarStation() {
       img.onerror = null;
     };
   }, []);
-  const [shaking, setShaking] = useState(false);
-  const transferColor = useRef('#8a7a52');
-  if (ingredient) transferColor.current = ingredient.color;
 
   useEffect(() => {
     setGrindingUi(grinding);
   }, [grinding, setGrindingUi]);
 
-  // تیک کوبش: صدا + هپتیک سبک + پالس برای دیگر لایه‌ها
+  // برخورد واقعی کوبه ⇒ صدا/هپتیک/ذرات/لرزش ریز (بدون رندر React)
   useEffect(() => {
     if (!grinding) return;
-    const tick = () => {
+    return subscribeStrike((e) => {
+      sfx.grindStrike(e.fineness, e.hits);
+      haptic(e.fineness > 0.66 ? 'light' : 'medium');
+      mortarFx.strike(e);
       pulse('grindTickPulse');
-      sfx.grindTick();
-      haptic('light');
-    };
-    tick();
-    const id = window.setInterval(tick, GRIND_TICK_MS);
-    return () => window.clearInterval(id);
+      const el = rootRef.current;
+      if (el && !getQuality().reducedMotion) {
+        el.classList.remove('is-strike');
+        // reflow تا انیمیشن دوباره شروع شود
+        void el.offsetWidth;
+        el.classList.add('is-strike');
+        window.setTimeout(() => el.classList.remove('is-strike'), STRIKE_MS);
+      }
+    });
   }, [grinding, pulse]);
 
-  // لرزش «جا ندارد» — با هر پالس یک‌بار پخش می‌شود (پالس از قفسه)
+  // لحظهٔ «نرم شد»
+  const wasFine = useRef(false);
+  useEffect(() => {
+    const fine = grindState === 'fine';
+    if (fine && !wasFine.current && hasMortar) {
+      mortarFx.fine(mixColor);
+      sfx.grindFine();
+      haptic('medium');
+    }
+    wasFine.current = fine;
+  }, [grindState, hasMortar, mixColor]);
+
+  // عطر: با نرم‌تر شدن پررنگ‌تر؛ هنگام کوبش بیشتر
+  useEffect(() => {
+    if (!mortar || transfer !== null) {
+      mortarFx.setAroma(0, mixColor);
+      return;
+    }
+    const norm = Math.min(1, (mortar.grindWork ?? 0) / 3.6);
+    mortarFx.setAroma(norm * (grinding ? 1 : 0.55), mixColor);
+  }, [mortar, grinding, transfer, mixColor]);
+  useEffect(() => () => mortarFx.setAroma(0, '#8a7a52'), []);
+
+  // لرزش «جا ندارد» + لبریز شدن — با هر پالس یک‌بار پخش می‌شود (پالس از قفسه)
   useEffect(() => {
     if (mortarShakePulse === 0) return;
     setShaking(true);
+    mortarFx.spill(portions.map((p) => colorOf(p.ingredientId)));
+    sfx.spill();
     const t = window.setTimeout(() => setShaking(false), SHAKE_MS);
     return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mortarShakePulse]);
 
   // اگر وسط انتقال Reset شد (هاون خالی و قاشق هنوز در راه)، انتقال لغو می‌شود
   useEffect(() => {
     if (transfer !== null && mortar === null && transfer !== 'drop') setTransfer(null);
   }, [transfer, mortar, setTransfer]);
+
+  // دوربین: زوم ملایم روی هاون هنگام کوبش؛ بازگشت نرم بعد از پایان؛ فوری با قاشق
+  useEffect(() => {
+    if (getQuality().reducedMotion) return;
+    const cam = useUiState.getState().camera;
+    if (grinding) {
+      if (cam === null || mortarShot) {
+        mortarShot = true;
+        setCamera({ x: CAMERA_FOCUS.x, y: CAMERA_FOCUS.y, zoom: CAMERA_ZOOM, ms: CAMERA_MS }, false);
+      }
+      return;
+    }
+    if (!mortarShot) return;
+    if (transfer !== null) {
+      mortarShot = false;
+      setCamera(null, false);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      if (!mortarShot) return;
+      mortarShot = false;
+      setCamera(null, false);
+    }, CAMERA_RETURN_DELAY_MS);
+    return () => window.clearTimeout(t);
+  }, [grinding, transfer, setCamera]);
+  useEffect(
+    () => () => {
+      if (mortarShot) {
+        mortarShot = false;
+        useUiState.getState().setCamera(null, false);
+      }
+    },
+    [],
+  );
 
   const startTransfer = useCallback(() => {
     if (!canTap) return;
@@ -235,6 +273,21 @@ export function MortarStation() {
   const onScoop = useCallback(() => {
     sfx.scoop();
   }, []);
+
+  const onBrush = useCallback(() => {
+    setSweeping(true);
+    sfx.brushSweep();
+    haptic('light');
+    // فیلم residue جهت‌دار (راست→چپ) پاک می‌شود و در پایان جارو از state هم می‌رود
+    mortarFx.brush(460);
+    window.setTimeout(() => {
+      if (useGameStore.getState().mortar) clearMortar();
+    }, 220);
+    window.setTimeout(() => {
+      clearResidue();
+      setSweeping(false);
+    }, 480);
+  }, [clearMortar]);
 
   const pileChips = useMortarChips();
   const pestleAim = usePestleAim();
@@ -259,6 +312,7 @@ export function MortarStation() {
         color: colorOf(portion.ingredientId),
       })),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mixKey, pileKey]);
   useEffect(() => {
     setPileSettled(false);
@@ -289,29 +343,46 @@ export function MortarStation() {
     return () => window.cancelAnimationFrame(raf);
   }, [grinding, hasMortar, transfer]);
 
-  const artUnits = Math.min(3, Math.max(1, units || 1)) as 1 | 2 | 3;
-  const contentsSrc =
-    units === 0 ? undefined : artUrl(CLASSIC_ART.mortar.contents(artUnits, ready ? 'ground' : 'raw'));
+  const heatGlow = heat === 'high' ? 1 : heat === 'medium' ? 0.6 : 0.3;
+  const showBrush = (mortar !== null || residue !== null) && transfer === null;
 
   return (
     <>
+      {/* تیرگی ملایم دور هاون هنگام کوبش (زیر هاون، روی میز/قفسه؛ بدون گرفتن لمس) */}
       <div
+        className={`cst-focus${grinding ? ' is-on' : ''}`}
+        aria-hidden
+        style={{
+          ...rectStyle({ x: 0, y: 0, width: 1920, height: 1080 }, Z - 1),
+          ...vars({ '--fx': `${CAMERA_FOCUS.x}px`, '--fy': `${CAMERA_FOCUS.y}px` }),
+        }}
+      />
+      <div
+        ref={rootRef}
         data-testid="mortar"
         data-mortar-units={mortar ? totalUnits : 0}
         data-grinding={grinding ? 'true' : undefined}
-        className={`cst-mortar${contentsVisible ? ' is-open' : ''}${shaking ? ' is-shake' : ''}${canTap ? ' is-tappable interactive' : ''}`}
+        className={`cst-mortar${contentsVisible ? ' is-open' : ''}${shaking ? ' is-shake' : ''}${
+          canTap ? ' is-tappable interactive' : ''
+        }${mortar ? '' : ' is-empty'}`}
         style={{
           ...rectStyle(SCENE_ZONES.mortar, Z),
-          ...vars({ '--ing-color': ingredient?.color ?? '#8a7a52' }),
+          ...vars({ '--ing-color': ingredient?.color ?? '#8a7a52', '--heat': heatGlow }),
           overflow: 'visible',
         }}
         onDragStart={(e) => e.preventDefault()}
         onPointerDown={canTap ? onTapPointerDown : undefined}
       >
-        {/* ۱) پشت هاون. موقع پر بودن، دیواره‌ی جلو از همین تصویر بریده می‌شود. */}
+        {/* ۱) بدنهٔ کامل: دیوارهٔ داخلی و کف داخل خودِ تصویرند */}
         <ArtLayer className="cst-mortar__back" src={CLASSIC_ART.mortar.back}>
           <div className="cst-mortar__ph" />
         </ArtLayer>
+        {/* سوسوی برنج با نور کوره + نفس آرام در انتظار */}
+        <div className="cst-mortar__sheen" aria-hidden />
+
+        {/* Canvas زیرین: تودهٔ پودر، سایهٔ زندهٔ کوبه، رد پودر */}
+        <MortarFxCanvas layer="below" z={1} />
+
         {transfer !== null ? (
           <div
             className="cst-spoon-layer"
@@ -321,7 +392,7 @@ export function MortarStation() {
               top: -SCENE_ZONES.mortar.y,
               width: 1920,
               height: 1080,
-              zIndex: transfer === 'scoop' ? 3 : 6,
+              zIndex: transfer === 'scoop' ? 4 : 7,
               pointerEvents: 'none',
             }}
           >
@@ -335,147 +406,80 @@ export function MortarStation() {
           </div>
         ) : null}
 
-        {/* نمای داخل، کف، مواد روی کوبه، بعد گرد و جرقه */}
-        {contentsVisible ? <div className="cst-mortar__cavity" aria-hidden /> : null}
-        {contentsVisible ? <div className="cst-mortar__floor" aria-hidden /> : null}
-
-        {/* ۲) محتوا روی کف داخلی */}
-        {contentsVisible && contentsSrc ? (
+        {/* ۲) تکه‌ها روی کف */}
+        {contentsVisible && units > 0 ? (
           <div
             // قرارداد e2e: «mortar-contents» فقط وقتی ماده درجه گرفته است
             data-testid={ready ? 'mortar-contents' : 'mortar-contents-raw'}
             data-grind={grindState ?? 'whole'}
-            className={`cst-contents${ready ? ' is-ready' : ''}${grinding ? ' is-shaking' : ''}`}
+            className={`cst-contents${ready ? ' is-ready' : ''}${grinding ? ' is-grinding' : ''}`}
           >
-            <MortarPileView
-              chips={pileChips}
-              settled={pileSettled}
-              rawSrc={artUrl(CLASSIC_ART.mortar.contents(artUnits, 'raw'))}
-              groundSrc={artUrl(CLASSIC_ART.mortar.contents(artUnits, 'ground'))}
-            />
+            <MortarPileView chips={pileChips} settled={pileSettled} />
           </div>
         ) : null}
 
-        {/* کوبه: دورِ عقب پشت مواد، دورِ جلو و سکونِ آخر جلوی مواد */}
+        {/* ۳) کوبه: نیمهٔ دورِ مدار پشت مواد، نیمهٔ نزدیک و سکون جلو */}
         <div
           data-testid="pestle"
+          data-frame={pestleAim.frame}
           className={`cst-pestle${canTap ? ' interactive is-usable' : ''}${
             grinding ? ' is-grinding' : ''
           }${transfer !== null ? ' is-aside' : ''}`}
           style={{
             position: 'absolute',
-            left: `${((PESTLE_RECT.x - SCENE_ZONES.mortar.x) / SCENE_ZONES.mortar.width) * 100}%`,
-            top: `${((PESTLE_RECT.y - SCENE_ZONES.mortar.y) / SCENE_ZONES.mortar.height) * 100}%`,
-            width: `${(PESTLE_RECT.width / SCENE_ZONES.mortar.width) * 100}%`,
-            height: `${(PESTLE_RECT.height / SCENE_ZONES.mortar.height) * 100}%`,
+            left: `${PESTLE_BOX.left}%`,
+            top: `${PESTLE_BOX.top}%`,
+            width: `${PESTLE_BOX.width}%`,
+            height: `${PESTLE_BOX.height}%`,
             zIndex: transfer === null && pestleInFront(pestleAim) ? 4 : 2,
-            transformOrigin: '28% 72%',
+            transformOrigin: `${PESTLE_HEAD_ANCHOR.x * 100}% ${PESTLE_HEAD_ANCHOR.y * 100}%`,
             transform: transfer !== null ? undefined : pestleTransform(pestleAim),
           }}
           onPointerDown={canTap ? (event) => { event.stopPropagation(); onTapPointerDown(event); } : undefined}
         >
-        {([1, 2, 3] as const).map((f) => (
-          <img
-            key={f}
-            className="cst-fit"
-            style={{ opacity: f === 1 ? 1 : 0 }}
-            src={artUrl(CLASSIC_ART.mortar.pestleFrames[f - 1])}
-            alt=""
-            draggable={false}
-            onLoad={(event) => {
-              if (event.currentTarget.naturalWidth > 0) setPestleArtOk(true);
-            }}
-          />
-        ))}
-        {pestleArtOk ? null : (
-          <span className="cst-pestle__ph">
-            <span className="cst-pestle__rod" />
-            <span className="cst-pestle__head" />
-          </span>
-        )}
-      </div>
-        {contentsVisible ? null : (
-          <div className="cst-mortar__front">
-            <ArtLayer src={CLASSIC_ART.mortar.front} />
-          </div>
-        )}
+          {PESTLE_FRAMES.map((frame, i) => (
+            <img
+              key={frame.file}
+              className={`cst-fit cst-pestle__frame${pestleAim.frame === i + 1 ? ' is-on' : ''}`}
+              src={artUrl(frame.file)}
+              alt=""
+              draggable={false}
+              onLoad={(event) => {
+                if (event.currentTarget.naturalWidth > 0) setPestleArtOk(true);
+              }}
+            />
+          ))}
+          {pestleArtOk ? null : (
+            <span className="cst-pestle__ph">
+              <span className="cst-pestle__rod" />
+              <span className="cst-pestle__head" />
+            </span>
+          )}
+        </div>
 
-        {(grinding || transfer === 'scoop') ? (
-          <div className="cst-mortar__dust" aria-hidden>
-            {DUST.map((d, i) => {
-              const palette = dustPalette(
-                portions.map((portion) => ({ quantity: portion.quantity, color: colorOf(portion.ingredientId) })),
-                DUST.length,
-              );
-              return (
-              <span
-                key={i}
-                className="cst-dust"
-                style={vars({
-                  '--ing-color': palette[i] ?? ingredient?.color ?? '#8a7a52',
-                  '--d-left': `${d.left}%`,
-                  '--d-top': `${d.top}%`,
-                  '--d-rise': `${d.rise}px`,
-                  '--d-delay': `${d.delay}s`,
-                  '--d-dur': `${d.dur}s`,
-                  '--d-size': `${d.size}px`,
-                })}
-              />
-              );
-            })}
-          </div>
-        ) : null}
+        {/* ۴) نوار لبهٔ نزدیک — مواد و سر کوبه پشت آن می‌مانند */}
+        <div className="cst-mortar__front">
+          <ArtLayer src={CLASSIC_ART.mortar.front} />
+        </div>
 
-        {transfer === 'scoop' ? (
-          <div className="cst-mortar__glints" aria-hidden>
-            {SCOOP_GLINTS.map((g, i) => (
-              <span
-                key={i}
-                className="cst-glint"
-                style={vars({
-                  '--g-x': `${g.x}%`,
-                  '--g-y': `${g.y}%`,
-                  '--g-delay': `${g.delay}s`,
-                  '--g-size': `${g.size}px`,
-                })}
-              />
-            ))}
-          </div>
-        ) : null}
+        {/* ۵) Canvas رویین: گرد، جرقه، عطر، پاف، لبریز، دنبالهٔ قاشق، موج براق */}
+        <MortarFxCanvas layer="above" z={6} />
 
-        {/* جرقه‌های کوبش دور دهانه */}
-        {grinding ? (
-          <div className="cst-mortar__sparks" aria-hidden>
-            {SPARKS.map((s, i) => (
-              <span
-                key={i}
-                className="cst-spark"
-                style={vars({
-                  '--sp-angle': `${s.angle}deg`,
-                  '--sp-delay': `${s.delay}s`,
-                  '--sp-dur': `${s.dur}s`,
-                })}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        <div className="cst-mortar__glow" />
         {shaking ? <div className="cst-mortar__noroom">جا ندارد!</div> : null}
       </div>
 
-      {/* حلقه‌ی برنجی زمان‌بندی — فقط وقتی ماده‌ای در هاون است */}
+      {/* حلقه‌ی زمان‌بندی روی لبهٔ دهانه — فقط وقتی ماده‌ای در هاون است */}
       {mortar && transfer === null ? (
-        <GrindRing work={mortar.grindWork} active={grinding} z={Z + 1} />
+        <GrindRing work={mortar.grindWork} active={grinding} tappable={canTap && !grinding} z={Z + 1} />
       ) : null}
 
-      {/* قلم‌مو: خالی کردن هاون پیش از افزودن (بی‌هزینه) */}
-      {mortar && transfer === null ? (
+      {/* قلم‌مو: خالی کردن هاون / جاروی رد پودر (بی‌هزینه) */}
+      {showBrush ? (
         <div
-          className="brush interactive"
+          className={`brush interactive${sweeping ? ' is-sweeping' : ''}`}
           title="خالی کردن هاون"
           style={rectStyle(PROPS.brush, Z + 1)}
-          {...tapProps(clearMortar)}
+          {...tapProps(onBrush)}
         >
           <span className="brush__handle" />
           <span className="brush__ferrule" />

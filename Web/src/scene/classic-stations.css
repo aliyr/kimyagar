@@ -1,6 +1,6 @@
 /**
- * استایل ایستگاه‌های ارتقایافته‌ی صحنه‌ی کلاسیک — هاون لایه‌ای، معجون لایه‌ای
- * و شبح درگِ ماده‌ی کوبیده‌شده.
+ * استایل ایستگاه‌های ارتقایافته‌ی صحنه‌ی کلاسیک — هاون لایه‌ای v3 (back/front/
+ * کوبه/تکه‌های اسپرایتی)، معجون لایه‌ای و شبح درگِ ماده‌ی کوبیده‌شده.
  *
  * همه‌ی کلاس‌ها با پیشوند cst- هستند تا با scene.css قدیمی تداخل نکنند؛
  * کلاس‌های کهنه‌ی mortar/pestle/ground/liquid دیگر استفاده نمی‌شوند
@@ -41,32 +41,6 @@
   pointer-events: none;
   opacity: 1;
   transition: opacity 0.3s ease;
-}
-.cst-mortar__front.is-striking {
-  animation: cst-rim 0.44s ease-in-out infinite;
-}
-
-/* هاله‌ی مقصد Drop برای شیشه‌ی در دست (جایگزین mortar__glow قدیمی) */
-.cst-mortar__glow {
-  position: absolute;
-  left: -7%;
-  right: -7%;
-  top: 14%;
-  bottom: -4%;
-  border-radius: 44% 44% 50% 50% / 28% 28% 72% 72%;
-  border: 5px dashed transparent;
-  pointer-events: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-.cst-mortar.is-target .cst-mortar__glow {
-  border-color: var(--glow-soft);
-  box-shadow: 0 0 60px var(--glow-soft);
-}
-.cst-mortar.is-target-active .cst-mortar__glow {
-  border-style: solid;
-  border-color: var(--glow);
-  box-shadow: 0 0 100px rgba(111, 227, 214, 0.5), inset 0 0 60px rgba(111, 227, 214, 0.2);
-  animation: cst-pulse 0.9s ease-in-out infinite;
 }
 
 /* حباب کوچک «جا ندارد» هنگام لرزش هاونِ پر */
@@ -113,64 +87,6 @@
 }
 .cst-contents.is-ready {
   cursor: grab;
-}
-.cst-contents.is-shaking {
-  animation: cst-jiggle 0.3s linear infinite;
-}
-.cst-contents__color {
-  position: absolute;
-  inset: 0;
-  background: var(--ing-color, #8a7a52);
-  -webkit-mask-size: contain;
-  -webkit-mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  mask-size: contain;
-  mask-position: center;
-  mask-repeat: no-repeat;
-}
-.cst-contents__texture {
-  mix-blend-mode: luminosity;
-  opacity: 0.85;
-}
-/* درخشش «آماده‌ی برداشتن» دور دهانه پس از کوبیدن کامل */
-.cst-contents.is-ready::after {
-  content: '';
-  position: absolute;
-  left: 16%;
-  right: 16%;
-  top: 26%;
-  height: 26%;
-  border-radius: 50%;
-  box-shadow: 0 0 30px rgba(255, 235, 190, 0.3);
-  animation: cst-breathe 2.6s ease-in-out infinite;
-}
-
-/* گرد هم‌رنگ ماده: داخل کاسه و کمی بالاتر از لبه‌ی هاون */
-.cst-mortar__dust {
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  pointer-events: none;
-  overflow: visible;
-}
-.cst-dust {
-  position: absolute;
-  left: var(--d-left, 50%);
-  top: var(--d-top, 62%);
-  width: var(--d-size, 14px);
-  height: var(--d-size, 14px);
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--ing-color, #c4a15a) 35%, #fffaf0) 0%,
-    var(--ing-color, #c4a15a) 42%,
-    transparent 70%
-  );
-  box-shadow: 0 0 8px color-mix(in srgb, var(--ing-color, #c4a15a) 70%, transparent);
-  opacity: 0;
-  pointer-events: none;
-  animation: cst-dust-rise var(--d-dur, 1.1s) ease-out infinite;
-  animation-delay: var(--d-delay, 0s);
 }
 
 /* -------------------------------- کوبه ------------------------------- */
@@ -250,50 +166,6 @@
 /* هاونِ پر قابل لمس است — درخشش خفیف نشانه‌ی «کلیک کن» */
 .cst-mortar.is-tappable {
   cursor: pointer;
-}
-.cst-mortar.is-tappable .cst-mortar__glow {
-  border-style: solid;
-  border-width: 3px;
-  border-color: rgba(255, 214, 140, 0.22);
-  box-shadow: 0 0 40px rgba(255, 190, 110, 0.18);
-  animation: cst-breathe 2.2s ease-in-out infinite;
-}
-
-/* جرقه‌های کوبش: ۸ ذره‌ی طلایی که از دهانه به بیرون می‌پرند */
-.cst-mortar__sparks {
-  position: absolute;
-  left: 50%;
-  top: 30%;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-}
-.cst-spark {
-  position: absolute;
-  left: -3px;
-  top: -3px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: radial-gradient(circle, #fff4c8, #ffb84a 60%, transparent 72%);
-  box-shadow: 0 0 8px rgba(255, 190, 90, 0.9);
-  opacity: 0;
-  transform: rotate(var(--sp-angle, 0deg)) translateX(0);
-  animation: cst-spark var(--sp-dur, 0.6s) ease-out infinite;
-  animation-delay: var(--sp-delay, 0s);
-}
-@keyframes cst-spark {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--sp-angle, 0deg)) translateX(30px) scale(0.5);
-  }
-  15% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: rotate(var(--sp-angle, 0deg)) translateX(118px) scale(0.2);
-  }
 }
 
 /* کوبه هنگام انتقال با قاشق کنار می‌رود (به بالا-راست تکیه می‌دهد) */
@@ -620,124 +492,6 @@
   }
 }
 
-@keyframes cst-jiggle {
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-  25% {
-    transform: translate(-2px, 1px);
-  }
-  50% {
-    transform: translate(0, 2px);
-  }
-  75% {
-    transform: translate(2px, 1px);
-  }
-}
-
-@keyframes cst-grind {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-  25% {
-    transform: translate(-8px, 4px) rotate(-3deg);
-  }
-  50% {
-    transform: translate(0, 9px) rotate(0deg);
-  }
-  75% {
-    transform: translate(8px, 4px) rotate(3deg);
-  }
-  100% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-}
-
-@keyframes cst-dust-rise {
-  0% {
-    transform: translateY(0) scale(0.55);
-    opacity: 0;
-  }
-  14% {
-    opacity: 0.9;
-  }
-  62% {
-    opacity: 0.72;
-  }
-  100% {
-    transform: translateY(var(--d-rise, -80px)) scale(1.05);
-    opacity: 0;
-  }
-}
-
-/* شمسه‌های ریز موقع برداشتن با قاشق — داخل کاسه و روی هاون */
-.cst-mortar__glints {
-  position: absolute;
-  inset: 0;
-  z-index: 8;
-  pointer-events: none;
-  overflow: visible;
-}
-.cst-glint {
-  position: absolute;
-  left: var(--g-x, 50%);
-  top: var(--g-y, 40%);
-  width: var(--g-size, 16px);
-  height: var(--g-size, 16px);
-  margin: calc(var(--g-size, 16px) / -2) 0 0 calc(var(--g-size, 16px) / -2);
-  opacity: 0;
-  animation: cst-glint 0.85s ease-in-out infinite;
-  animation-delay: var(--g-delay, 0s);
-}
-/* شمسه‌ی هشت‌پر طلایی، مثل جرقه‌ی پاتیل */
-.cst-glint::before,
-.cst-glint::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: #ffe08a;
-  clip-path: polygon(
-    50% 0%,
-    62.2% 20.4%,
-    85.4% 14.6%,
-    79.6% 37.8%,
-    100% 50%,
-    79.6% 62.2%,
-    85.4% 85.4%,
-    62.2% 79.6%,
-    50% 100%,
-    37.8% 79.6%,
-    14.6% 85.4%,
-    20.4% 62.2%,
-    0% 50%,
-    20.4% 37.8%,
-    14.6% 14.6%,
-    37.8% 20.4%
-  );
-  filter: drop-shadow(0 0 3px rgba(255, 196, 80, 0.95));
-}
-.cst-glint::after {
-  inset: 22%;
-  background: #fff8dc;
-  transform: rotate(22.5deg);
-}
-@keyframes cst-glint {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.25) rotate(0deg);
-  }
-  35% {
-    opacity: 1;
-    transform: scale(1) rotate(18deg);
-  }
-  70% {
-    opacity: 0.35;
-    transform: scale(0.6) rotate(36deg);
-  }
-}
-
 @keyframes cst-breathe {
   0%,
   100% {
@@ -779,59 +533,7 @@
 }
 
 .cst-mortar__front { z-index: 5; }
-/* پوسته‌ی بیرونیِ جلو، همراه با گونه‌های چپ و راست، بریده می‌شود.
-   جای آن نمای داخل هاون است (بافت دیواره‌ی عقبیِ دهانه). */
-.cst-mortar.is-open .cst-mortar__back {
-  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path fill='white' fill-rule='evenodd' d='M0 0H100V100H0ZM16 29L84 29L88 42L86 56L82 68L74 76L50 80L26 76L18 68L14 56L12 42Z'/></svg>");
-  mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path fill='white' fill-rule='evenodd' d='M0 0H100V100H0ZM16 29L84 29L88 42L86 56L82 68L74 76L50 80L26 76L18 68L14 56L12 42Z'/></svg>");
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-mode: alpha;
-  mask-mode: alpha;
-}
-.cst-mortar__cavity {
-  position: absolute;
-  left: 10%;
-  top: 27%;
-  width: 80%;
-  height: 55%;
-  z-index: 1;
-  pointer-events: none;
-  clip-path: polygon(7.5% 4%, 92.5% 4%, 97.5% 27%, 95% 53%, 90% 75%, 80% 89%, 50% 96%, 20% 89%, 10% 75%, 5% 53%, 2.5% 27%);
-  background-color: #5c3c16;
-  background-image: url('/art/mortar/mortar_back.png');
-  background-repeat: no-repeat;
-  /* فقط دیواره‌ی عقبیِ داخل دهانه، نه پوسته‌ی بیرونی و نه گلِ جلو */
-  background-size: 250% 556%;
-  background-position: 50% 10%;
-}
-.cst-mortar__cavity::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 36% 32% at 50% 30%, rgba(255, 224, 160, 0.55), transparent 70%),
-    radial-gradient(ellipse 92% 88% at 50% 42%, transparent 28%, rgba(42, 24, 8, 0.55) 68%, rgba(22, 12, 4, 0.88) 100%);
-  pointer-events: none;
-}
-.cst-mortar__floor {
-  position: absolute;
-  left: 28%;
-  width: 44%;
-  top: 63%;
-  height: 12%;
-  border-radius: 50%;
-  z-index: 2;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse at 50% 42%, rgba(196, 142, 58, 0.72), rgba(92, 58, 18, 0.94) 58%, rgba(48, 28, 8, 0.98) 100%);
-  box-shadow:
-    inset 0 3px 6px rgba(255, 220, 150, 0.35),
-    inset 0 -5px 8px rgba(20, 8, 0, 0.45);
-}
-.cst-mortar__sparks, .cst-mortar__glow, .cst-mortar__noroom { z-index: 8; }
+.cst-mortar__noroom { z-index: 8; }
 .cst-bowl {
   position: absolute;
   left: 18%;
@@ -848,7 +550,6 @@
   position: absolute;
   display: block;
   overflow: hidden;
-  transform: translate(-50%, -50%) rotate(var(--rot));
   transition:
     left 0.07s linear,
     top 0.07s linear,
@@ -861,11 +562,6 @@
   position: absolute;
   inset: 0;
   background-color: var(--ing-color, #8a7a52);
-  background-image: var(--pile);
-  background-size: 260% 260%;
-  background-position: var(--mx) var(--my);
-  background-repeat: no-repeat;
-  background-blend-mode: multiply;
 }
 .cst-chip::after {
   content: '';
@@ -878,50 +574,171 @@
   background: linear-gradient(180deg, rgba(255, 247, 230, 0.38), transparent);
   pointer-events: none;
 }
-@keyframes cst-pound { 0%, 100% { transform: translate(0, -10px) rotate(-8deg); } 38% { transform: translate(-10px, 52px) rotate(8deg); } 52% { transform: translate(-3px, 44px) rotate(3deg); } }
-@keyframes cst-rim { 0%, 100% { opacity: 1; } 38%, 54% { opacity: 0.58; } }
 .cst-spoon-transfer__blob { overflow: hidden; }
 .cst-ghost-ground { position: relative; }
 .cst-ghost-ground .cst-bowl { position: absolute; inset: 0; }
 
-.cst-mortar__front.is-impact { opacity: 0.78; transition: opacity 0.12s ease; }
-.cst-chip.is-flower {
-  clip-path: polygon(
-    50% 0%,
-    63% 21%,
-    88% 12%,
-    76% 35%,
-    100% 50%,
-    76% 65%,
-    88% 88%,
-    63% 79%,
-    50% 100%,
-    37% 79%,
-    12% 88%,
-    24% 65%,
-    0% 50%,
-    24% 35%,
-    12% 12%,
-    37% 21%
-  );
-}
-.cst-chip.is-thread { border-radius: 40%; clip-path: polygon(38% 0, 66% 4%, 62% 70%, 74% 100%, 26% 100%, 36% 68%); }
-.cst-chip.is-leaf { clip-path: polygon(50% 0, 78% 14%, 96% 38%, 82% 72%, 54% 100%, 22% 78%, 4% 42%, 20% 14%); }
-.cst-chip.is-petal { clip-path: polygon(50% 0, 78% 10%, 100% 42%, 80% 86%, 50% 100%, 20% 86%, 0 42%, 22% 10%); }
-.cst-chip.is-star { clip-path: polygon(50% 0, 61% 32%, 100% 36%, 70% 58%, 80% 100%, 50% 76%, 20% 100%, 30% 58%, 0 36%, 39% 32%); }
-.cst-chip.is-seed { clip-path: ellipse(46% 50% at 50% 50%); }
-.cst-chip.is-root { clip-path: polygon(6% 48%, 22% 10%, 48% 4%, 72% 18%, 96% 38%, 78% 52%, 90% 88%, 58% 100%, 28% 86%, 10% 72%); }
 .cst-chip.is-dust { clip-path: circle(50% at 50% 50%); filter: none; }
 .cst-chip.is-dust::after { opacity: 0.2; }
-.cst-chip.is-flower .cst-chip__color {
-  background-image: none;
-  background: radial-gradient(circle at 50% 52%, #fff6d0 0 16%, var(--ing-color, #e8c96a) 18% 100%);
-}
-.cst-chip.is-thread .cst-chip__color, .cst-chip.is-leaf .cst-chip__color, .cst-chip.is-dust .cst-chip__color {
-  background-image: none;
-  background-color: var(--ing-color, #8a7a52);
-  background: linear-gradient(100deg, color-mix(in srgb, var(--ing-color, #8a7a52) 55%, #2a1408) 0%, var(--ing-color, #8a7a52) 38%, #fff0d2 58%, var(--ing-color, #8a7a52) 100%);
-}
 .cst-chip.is-dust .cst-chip__color { background: var(--ing-color, #8a7a52); }
 
-.cst-mortar__front.is-glass { opacity: 0.4; }
+/* ============================ هاون v3 (Fable) ============================ */
+
+/* لرزش ریز برخورد کوبه — کوتاه، هم‌زمان با StrikeEvent */
+.cst-mortar.is-strike {
+  animation: cst-strike 0.11s ease-out 1;
+}
+@keyframes cst-strike {
+  0% { transform: translate(0, 0) scale(1); }
+  30% { transform: translate(0.6px, 1.6px) scale(1.008); }
+  65% { transform: translate(-0.5px, 0.6px) scale(1.004); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* سوسوی برنج با نور کوره + نفس آرام در انتظار؛ mask خودِ بدنه تا بیرون نزند */
+.cst-mortar__sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 34% 26% at 30% 62%, rgba(255, 196, 120, 0.42), transparent 70%),
+    radial-gradient(ellipse 70% 40% at 50% 96%, rgba(255, 150, 70, 0.36), transparent 72%);
+  -webkit-mask-image: url('/art/mortar/v3/mortar_back.png');
+  mask-image: url('/art/mortar/v3/mortar_back.png');
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mix-blend-mode: soft-light;
+  opacity: calc(0.35 + var(--heat, 0.3) * 0.65);
+  animation: cst-sheen 3.2s ease-in-out infinite;
+}
+.cst-mortar.is-empty .cst-mortar__sheen {
+  animation-duration: 3s;
+}
+@keyframes cst-sheen {
+  0%, 100% { filter: brightness(0.9); }
+  50% { filter: brightness(1.25); }
+}
+
+/* فریم‌های کوبه: کراس‌فید کوتاه بین زاویه‌های پخته */
+.cst-pestle__frame {
+  opacity: 0;
+  transition: opacity 0.06s linear;
+  filter: drop-shadow(0 6px 6px rgba(20, 8, 0, 0.35));
+}
+.cst-pestle__frame.is-on {
+  opacity: 1;
+}
+.cst-pestle.is-grinding .cst-pestle__frame {
+  will-change: opacity;
+}
+
+/* تکه‌های اسپرایتی */
+.cst-chip {
+  transform: translate(-50%, -50%) translateY(calc(var(--hop, 0) * -9px)) rotate(var(--rot)) scale(calc(1 + var(--hop, 0) * 0.08));
+  isolation: isolate;
+}
+.cst-chip__art {
+  position: absolute;
+  inset: 0;
+  background-image: var(--sprite);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+/* tint نرم به رنگ ماده، فقط روی پیکسل‌های اسپرایت */
+.cst-chip__tint {
+  position: absolute;
+  inset: 0;
+  background: var(--ing-color, #8a7a52);
+  -webkit-mask-image: var(--sprite);
+  mask-image: var(--sprite);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  mix-blend-mode: soft-light;
+  opacity: 0.55;
+}
+.cst-chip.is-cracked .cst-chip__art {
+  filter: brightness(0.9) saturate(0.88);
+}
+.cst-chip.is-cracked .cst-chip__tint {
+  opacity: 0.7;
+  background: color-mix(in srgb, var(--ing-color, #8a7a52) 70%, #3a2210);
+}
+.cst-chip.is-crushed .cst-chip__art {
+  filter: brightness(0.82) saturate(0.7) contrast(0.92);
+}
+/* دانه‌های پودر: نرم، کم‌اشباع و نیمه‌شفاف تا روی تودهٔ پودر Canvas «دانه» به نظر برسند نه مهره */
+.cst-chip.is-dust {
+  filter: saturate(0.72) blur(0.35px);
+  opacity: 0.78;
+}
+.cst-chip.is-dust::after {
+  opacity: 0.16;
+}
+.cst-chip.is-dust .cst-chip__color {
+  background: radial-gradient(circle at 42% 38%, color-mix(in srgb, var(--ing-color, #8a7a52) 70%, #fff4dc), var(--ing-color, #8a7a52) 62%, color-mix(in srgb, var(--ing-color, #8a7a52) 70%, #2a1408) 100%);
+}
+
+/* حلقهٔ لبه: نشانه‌های حکاکی و نبض انتظار */
+.cst-ring__gem {
+  fill: rgba(255, 236, 200, 0.35);
+  stroke: rgba(90, 58, 20, 0.6);
+  stroke-width: 0.6;
+  transition: fill 0.3s ease, r 0.3s ease;
+}
+.cst-ring__mark.is-passed .cst-ring__gem {
+  fill: #fff1c4;
+  filter: drop-shadow(0 0 3px rgba(255, 220, 120, 0.9));
+}
+.cst-ring__track {
+  stroke: rgba(70, 48, 22, 0.42);
+  stroke-width: 3.2;
+}
+.cst-ring__fill {
+  stroke: url(#cst-ring-brass);
+  stroke-width: 3.6;
+}
+.cst-ring.is-tappable .cst-ring__track {
+  stroke: rgba(255, 214, 140, 0.55);
+  animation: cst-rim-pulse 2.2s ease-in-out infinite;
+}
+@keyframes cst-rim-pulse {
+  0%, 100% { opacity: 0.55; filter: drop-shadow(0 0 2px rgba(255, 200, 110, 0.3)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 7px rgba(255, 210, 120, 0.85)); }
+}
+
+/* تیرگی ملایم دور هاون هنگام کوبش */
+.cst-focus {
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.65s ease;
+  background: radial-gradient(ellipse 420px 360px at var(--fx, 50%) var(--fy, 50%), transparent 40%, rgba(12, 6, 2, 0.28) 100%);
+}
+.cst-focus.is-on {
+  opacity: 1;
+}
+
+/* جاروی قلم‌مو */
+.brush.is-sweeping {
+  animation: cst-brush-sweep 0.5s ease-in-out 1;
+}
+@keyframes cst-brush-sweep {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(-46px, 18px) rotate(-38deg); }
+  55% { transform: translate(-22px, 26px) rotate(-30deg); }
+  80% { transform: translate(-48px, 20px) rotate(-40deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cst-mortar.is-strike,
+  .cst-mortar__sheen,
+  .cst-ring.is-tappable .cst-ring__track,
+  .brush.is-sweeping {
+    animation: none;
+  }
+}

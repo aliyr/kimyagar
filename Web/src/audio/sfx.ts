@@ -293,6 +293,139 @@ export const sfx = {
     noiseBurst(c, { dur: 0.09, type: 'lowpass', freq: 900, freqEnd: 220, gain: 0.5 });
     tone(c, { freq: 180 + Math.random() * 40, dur: 0.07, type: 'triangle', gain: 0.18, freqEnd: 90 });
   },
+  /**
+   * برخورد واقعی کوبه با توده: fineness ۰..۱ (درشت→پودر) پارامترها را درون‌یابی می‌کند؛
+   * mid = زنگولهٔ bandpass در ۰٫۵؛ hits ⇒ تعداد کلیک‌های شکستن در انتهای درشت.
+   */
+  grindStrike(fineness: number, hits: number): void {
+    const c = live();
+    if (!c) return;
+    const f = Math.min(1, Math.max(0, fineness));
+    const h = Math.max(0, hits);
+    const mid = 1 - Math.abs(f - 0.5) * 2;
+    const pitch = () => 0.94 + Math.random() * 0.12;
+
+    // لایهٔ تق lowpass: درشت ۹۰۰→۲۲۰ / ۰٫۰۹ / ۰٫۵  ←→  نرم ۱۱۰۰→۴۵۰ / ۰٫۲۲ / ۰٫۲۲
+    const lpP = pitch();
+    noiseBurst(c, {
+      dur: 0.09 + (0.22 - 0.09) * f,
+      type: 'lowpass',
+      freq: (900 + (1100 - 900) * f) * lpP,
+      freqEnd: (220 + (450 - 220) * f) * lpP,
+      gain: 0.5 + (0.22 - 0.5) * f,
+    });
+
+    // خش‌خش شنی bandpass — فقط نزدیک نرمی میانی (mid)
+    if (mid > 0.02) {
+      const bpP = pitch();
+      noiseBurst(c, {
+        dur: 0.16,
+        type: 'bandpass',
+        freq: 1400 * bpP,
+        freqEnd: 700 * bpP,
+        q: 1.1,
+        gain: 0.32 * mid,
+      });
+    }
+
+    // تُن مثلثی تق (همان خانوادهٔ grindTick؛ در پودر quieter)
+    const toneP = pitch();
+    tone(c, {
+      freq: (170 + Math.random() * 40) * toneP,
+      dur: 0.07,
+      type: 'triangle',
+      gain: 0.18 + (0.06 - 0.18) * f,
+      freqEnd: 90 * toneP,
+    });
+
+    // کلیک‌های شکستن: در درشت تا ۴؛ در میانی حداکثر ۱؛ در پودر هیچ
+    const coarseClicks = Math.min(4, 1 + Math.round(h * 0.6));
+    const clickCount =
+      f <= 0.5
+        ? Math.round(coarseClicks + (1 - coarseClicks) * (f * 2))
+        : Math.round(1 - (f - 0.5) * 2);
+    let delay = 0;
+    for (let i = 0; i < clickCount; i++) {
+      delay += 12 + Math.random() * 33;
+      window.setTimeout(() => {
+        const c2 = live();
+        if (!c2) return;
+        const ckP = pitch();
+        noiseBurst(c2, {
+          dur: 0.008 + Math.random() * 0.012,
+          type: 'highpass',
+          freq: (1800 + Math.random() * 1800) * ckP,
+          q: 0.5,
+          gain: 0.1 + Math.random() * 0.12,
+        });
+      }, delay);
+    }
+  },
+  /** لحظهٔ «نرم شد» — تیک نویز نازک + دو هارمونیک میرا و یک پایهٔ نرم (آرام‌تر از shopBell) */
+  grindFine(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.02, type: 'highpass', freq: 3000, gain: 0.05 });
+    tone(c, { freq: 1318, dur: 0.9, type: 'sine', gain: 0.12 });
+    tone(c, { freq: 1976, dur: 0.6, type: 'sine', gain: 0.05, at: 0.01 });
+    tone(c, { freq: 659, dur: 0.5, type: 'sine', gain: 0.06 });
+  },
+  /** لبریز شدن هاون — چند تکهٔ خشک ریز روی چوب میز */
+  spill(): void {
+    const c = live();
+    if (!c) return;
+    const n = 3 + Math.floor(Math.random() * 3);
+    let delay = 0;
+    for (let i = 0; i < n; i++) {
+      const at = delay;
+      delay += 40 + Math.random() * 70;
+      window.setTimeout(() => {
+        const c2 = live();
+        if (!c2) return;
+        const p = 0.94 + Math.random() * 0.12;
+        noiseBurst(c2, {
+          dur: 0.03 + Math.random() * 0.02,
+          type: 'lowpass',
+          freq: 600 * p,
+          freqEnd: 250 * p,
+          gain: 0.12 + Math.random() * 0.08,
+        });
+        if (i < 2) {
+          tone(c2, {
+            freq: (110 + Math.random() * 40) * p,
+            dur: 0.05,
+            type: 'triangle',
+            gain: 0.08,
+          });
+        }
+      }, at);
+    }
+  },
+  /** جاروی قلم‌مو روی کف هاون — دو خش‌خش highpass با sweep رو‌به‌بالا */
+  brushSweep(): void {
+    const c = live();
+    if (!c) return;
+    const p1 = 0.94 + Math.random() * 0.12;
+    noiseBurst(c, {
+      dur: 0.42,
+      type: 'highpass',
+      freq: 1200 * p1,
+      freqEnd: 2600 * p1,
+      gain: 0.14,
+    });
+    window.setTimeout(() => {
+      const c2 = live();
+      if (!c2) return;
+      const p2 = 0.94 + Math.random() * 0.12;
+      noiseBurst(c2, {
+        dur: 0.26,
+        type: 'highpass',
+        freq: 1600 * p2,
+        freqEnd: 3000 * p2,
+        gain: 0.08,
+      });
+    }, 180);
+  },
   /** فرود ماده در هاون */
   jarDrop(): void {
     const c = live();

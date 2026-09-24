@@ -8,12 +8,11 @@
  */
 
 import { useGameStore } from '../store/gameStore';
-import { CLASSIC_ART, artUrl } from './artManifest';
 import { useArt, vars } from './Zone';
 import { useUiState } from './uiState';
 import './classic-stations.css';
 import { MortarPileView } from './MortarPileView';
-import { useMortarChips, useMortarUnits } from './mortarPile';
+import { useMortarChips } from './mortarPile';
 
 const SIZES = {
   jar: { width: 150, height: 150 },
@@ -24,7 +23,6 @@ const SIZES = {
 
 export function DragGhost() {
   const ghostChips = useMortarChips();
-  const ghostUnits = useMortarUnits();
   const drag = useUiState((s) => s.drag);
   const ingredient = useGameStore((s) =>
     drag?.ingredientId ? s.ingredientById(drag.ingredientId) : undefined,
@@ -68,13 +66,7 @@ export function DragGhost() {
       ) : null}
       {drag.kind === 'ground' ? (
         <span className={`cst-ghost-ground${drag.over === 'cauldron' ? ' is-pouring' : ''}`}>
-          <MortarPileView
-            chips={ghostChips}
-            settled
-            compact
-            rawSrc={artUrl(CLASSIC_ART.mortar.contents(ghostUnits, 'raw'))}
-            groundSrc={artUrl(CLASSIC_ART.mortar.contents(ghostUnits, 'ground'))}
-          />
+          <MortarPileView chips={ghostChips} settled compact />
         </span>
       ) : null}
       {drag.kind === 'bottle' ? (

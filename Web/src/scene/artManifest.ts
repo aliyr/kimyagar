@@ -92,12 +92,13 @@ export const SCENE_ZONES = {
     },
   },
   /**
-   * هاون روی سطح میز (سطح رویه‌ی میز در صحنه ≈ y 600..797)؛ پایه‌ی کاسه روی
-   * y=775. اجزای وابسته (کوبه، محتوا، قلم‌مو، برچسب) در layout.PROPS نسبی‌اند.
+   * هاون روی سطح میز؛ نسبت Zone برابر بوم `mortarGeometry.ts` (919×1003) است تا
+   * object-fit: contain کل Zone را پر کند و پایه‌ی کاسه (base.y≈0.985) روی y≈775
+   * بنشیند. بقیه‌ی هندسه از `mortarLayout.ts` مشتق می‌شود.
    */
   mortar: {
     id: 'mortar',
-    x: 290, y: 520, width: 250, height: 255, z: 35,
+    x: 290, y: 506, width: 250, height: 273, z: 35,
     img: 'mortar/mortar_body.png',
   },
   /**
@@ -165,28 +166,28 @@ export function artUrl(relPath: string): string {
 }
 
 /**
- * قرارداد asset های ارتقای کلاسیک (state های لایه‌باز) — تولید در
- * tools/build_classic_upgrade.mjs. همه‌ی مسیرها نسبت به ART_BASE هستند.
+ * قرارداد asset های ارتقای کلاسیک (state های لایه‌باز). همه‌ی مسیرها نسبت به
+ * ART_BASE هستند.
  *
- * هم‌ترازی: mortar_back / mortar_front / contents_* روی «بوم مشترک» رندر
- * شده‌اند؛ اگر هر سه با object-fit یکسان در یک Rect رندر شوند، پیکسل‌به‌پیکسل
- * هم‌تراز می‌مانند. فریم‌های pestle و آتش هم هر ست بوم مشترک خودشان را دارند
- * (آتش: لنگر پایین-وسط تا هیزم‌ها بین فریم‌ها ثابت بمانند).
+ * هاون v3: back/front روی بوم مشترک؛ شش فریم pestle با لنگر سر مشترک
+ * (0.42, 0.74)؛ اسپرایت تکه‌ها در `mortar/v3/pieces/{kind}_{i}.png` (۷ تا
+ * برای هر نوع)؛ هندسه در `mortarGeometry.ts`. فریم‌های آتش بوم مشترک خودشان
+ * را دارند (لنگر پایین-وسط تا هیزم‌ها بین فریم‌ها ثابت بمانند).
  */
 export const CLASSIC_ART = {
   mortar: {
-    /** کل بدنه (پشت محتوا) */
-    back: 'mortar/mortar_back.png',
-    /** دیواره‌ی جلو — وقتی هاون محتوا دارد با opacity ~0.5 رندر شود */
-    front: 'mortar/mortar_front.png',
-    /** محتوای کف هاون؛ رنگ ماده با blend (مثل luminosity) اعمال می‌شود */
-    contents: (units: 1 | 2 | 3, state: 'raw' | 'ground') =>
-      `mortar/contents_${units}_${state}.png` as const,
-    /** ۳ فریم انیمیشن کوبش (زاویه‌ی پخته‌شده) */
+    /** کل بدنه (پشت محتوا) — بوم مشترک با front */
+    back: 'mortar/v3/mortar_back.png',
+    /** دیواره‌ی جلو روی همان بوم */
+    front: 'mortar/v3/mortar_front.png',
+    /** ۶ فریم کوبه؛ لنگر سر در (0.42, 0.74) روی بوم مشترک */
     pestleFrames: [
-      'mortar/pestle_1.png',
-      'mortar/pestle_2.png',
-      'mortar/pestle_3.png',
+      'mortar/v3/pestle_1.png',
+      'mortar/v3/pestle_2.png',
+      'mortar/v3/pestle_3.png',
+      'mortar/v3/pestle_4.png',
+      'mortar/v3/pestle_5.png',
+      'mortar/v3/pestle_6.png',
     ],
   },
   cauldron: {

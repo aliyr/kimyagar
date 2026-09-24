@@ -1,7 +1,35 @@
-import { useSyncExternalStore } from 'react';
-import { SCENE_ZONES } from './artManifest';
+/**
+ * تپهٔ مواد داخل هاون + حرکت کوبه (کلاسیک، v3).
+ *
+ * - تکه‌ها (`MortarChip`) در فضای `.cst-bowl` (درصد جعبه) زندگی می‌کنند؛ هر تکه یک
+ *   اسپرایت واقعی از `pieces/{kind}_{i}.png` است که با ضربه می‌شکند و در نهایت
+ *   «گرد» می‌شود. حجم کل تپه در طول کوبش ثابت می‌ماند (holdVolume).
+ * - کوبه یک چرخهٔ ضربهٔ فازدار دارد: خیز آرام ← سقوط سریع ← برخورد و مکث فشار با
+ *   پیچش سایشی ← رهاسازی. در لحظهٔ برخورد `emitStrike` صدا زده می‌شود؛ صدا،
+ *   هپتیک، ذرات، لرزش هاون و شکستن تکه‌ها همه از همین رویداد می‌آیند.
+ * - زاویهٔ دستهٔ کوبه با انتخاب فریم (۶ PNG با زاویهٔ پخته) + چرخش باقی‌ماندهٔ
+ *   کوچک ساخته می‌شود؛ لنگر سر در همهٔ فریم‌ها یک نقطه است.
+ * - کارِ store (`grindWork`) وقتی کوبه در حال کوبش است تا برخورد بعدی صبر می‌کند
+ *   تا شکستن تکه‌ها دقیقاً همان لحظهٔ فرود باشد.
+ */
 
-export type PieceKind = 'flower' | 'thread' | 'leaf' | 'petal' | 'star' | 'seed' | 'root' | 'dust';
+import { useSyncExternalStore } from 'react';
+import { MORTAR_V3, type PieceKindV3 } from './mortarGeometry';
+import { SCENE_ZONES } from './artManifest';
+import {
+  BOWL_MORTAR,
+  BOWL_PX,
+  FLOOR,
+  HEAD_R,
+  PESTLE_BOX,
+  PESTLE_FRAMES,
+  PESTLE_HEAD_ANCHOR,
+  sceneToZone,
+} from './mortarLayout';
+
+export { BOWL_MORTAR } from './mortarLayout';
+
+export type PieceKind = PieceKindV3 | 'dust';
 
 export type MortarChip = {
   id: number;
@@ -15,9 +43,13 @@ export type MortarChip = {
   nick: number;
   seed: number;
   kind: PieceKind;
+  /** اندیس اسپرایت داخل برگهٔ همان kind (۰..count-1) */
+  sprite: number;
   generation: number;
   vx: number;
   vy: number;
+  /** پرش کوتاه بعد از ضربه (۰..۱؛ به‌سرعت میرا) */
+  hop: number;
   /** رنگ ماده‌ی خودش؛ خالی یعنی رنگ هاون. */
   color?: string;
   ingredientId?: string;
@@ -29,38 +61,65 @@ export type PestleAim = {
   mode: PestleMode;
   orbit: number;
   down: boolean;
+  /** لنگر سر کوبه — درصد Zone */
   headX: number;
   headY: number;
+  /** چرخش باقی‌مانده بعد از انتخاب فریم (درجه) */
   rotate: number;
+  /** فریم ۱..۶ */
+  frame: number;
+  /** ۰..۱ — چقدر روی مواد فشار می‌دهد (۱ = لحظهٔ برخورد) */
+  impact: number;
+  /** ۰..۱ — ارتفاع خیز */
+  lift: number;
 };
 
-/**
- * کفِ بریده‌شدهٔ داخل هاون — هم‌تراز `.cst-bowl`.
- * خیلی پایین‌تر از دهانه؛ مواد روی همین بیضی می‌نشینند.
- */
-export const BOWL_MORTAR = { left: 18, top: 50, width: 64, height: 26 };
-/** پودر نرم حداکثر همین اندازه روی صفحه است. */
-export const DUST_PIXEL = 1;
+export type StrikeEvent = {
+  /** نقطهٔ تماس سر با مواد — درصد Zone */
+  x: number;
+  y: number;
+  /** تعداد تکه‌هایی که زیر سر بودند */
+  hits: number;
+  /** ۰..۱ — درجهٔ نرمی تپه در لحظهٔ ضربه */
+  fineness: number;
+  /** رنگ تکه‌های خورده (برای ذرات) */
+  colors: string[];
+};
 
-/** جعبهٔ کوبه نسبت به Zone هاون — همان `PROPS.pestle`. */
-const PESTLE_BOX = { left: 26.875, top: -37.33, width: 63.75, height: 76.67 };
-/** سر و سردسته روی pestle_1 (object-fit contain). */
-const HEAD_ORIGIN = { x: 0.28, y: 0.726 };
-const KNOB_ORIGIN = { x: 0.808, y: 0.188 };
+export type Residue = { color: string; amount: number } | null;
 
 /** آستانه‌های کوبش — همان اعداد store، بدون وابستگی چرخشی. */
 const WORK_COARSE = 1;
 const WORK_CRUSHED = 2.2;
 const WORK_FINE = 3.6;
 
+/* ------------------------------ چرخهٔ ضربه ------------------------------ */
+
+/** ضربه در ثانیه */
+const BEAT_HZ = 1.9;
+/** مرز فازها در یک ضربه (کسر) */
+const PH_LIFT_END = 0.42;
+const PH_FALL_END = 0.56;
+const PH_PRESS_END = 0.78;
+/** ارتفاع خیز — درصد بلندی Zone */
+const LIFT_H = 15;
+/** میانگین سرعت مدار سر روی تپه (رادیان/ثانیه) */
+const ORBIT_SPEED = 3.8;
+/** شعاع مدار سر نسبت به بیضی کف */
+const ORBIT_K = 0.55;
+/** زاویهٔ محور پختهٔ هر فریم کوبه (سر ⇒ سردسته) */
+const FRAME_AXES: readonly number[] = PESTLE_FRAMES.map((frame) => frame.axisDeg);
+
 const chipListeners = new Set<() => void>();
 const aimListeners = new Set<() => void>();
+const strikeListeners = new Set<(e: StrikeEvent) => void>();
+const residueListeners = new Set<() => void>();
 
 let chips: MortarChip[] = [];
 let pileUnits: 1 | 2 | 3 = 1;
 let snapshotKey = '';
 let mixKey = '';
-let mixGroups: { id: string; applied: number; chips: MortarChip[]; area: number }[] = [];
+let mixGroups: { id: string; applied: number; target: number; color: string; chips: MortarChip[]; area: number }[] = [];
 let appliedWork = 0;
 let seq = 1;
 let pileCrush = 0;
@@ -71,15 +130,12 @@ let pileArea = 0;
 let fresh = 1;
 let mode: PestleMode = 'lean';
 let orbit = -Math.PI / 2;
+/** فاز ضربه ۰..۱ */
+let beat = 0;
+let lastFrame = 2;
 let aim: PestleAim = leanAim();
 let settleRaf = 0;
-
-const ORBIT_SPEED = 3.8;
-const POUNDS_PER_TURN = 3;
-const HOME_HEAD = {
-  x: PESTLE_BOX.left + HEAD_ORIGIN.x * PESTLE_BOX.width,
-  y: PESTLE_BOX.top + HEAD_ORIGIN.y * PESTLE_BOX.height,
-};
+let residue: Residue = null;
 
 function emitChips(): void {
   for (const listener of chipListeners) listener();
@@ -89,15 +145,22 @@ function emitAim(): void {
   for (const listener of aimListeners) listener();
 }
 
-/** هاون خالی: سر داخل دهانه، دسته عمودی‌تر و بالاتر از وقتی مواد هست. */
-function leanAim(): PestleAim {
-  return { mode: 'lean', orbit: -Math.PI / 2, down: false, headX: 50, headY: 21.2, rotate: -46 };
+function emitResidue(): void {
+  for (const listener of residueListeners) listener();
 }
 
 export function subscribeMortarPile(listener: () => void): () => void {
   chipListeners.add(listener);
   return () => {
     chipListeners.delete(listener);
+  };
+}
+
+/** رویداد برخورد کوبه — بدون رندر React؛ برای صدا/هپتیک/ذرات/لرزش */
+export function subscribeStrike(listener: (e: StrikeEvent) => void): () => void {
+  strikeListeners.add(listener);
+  return () => {
+    strikeListeners.delete(listener);
   };
 }
 
@@ -111,6 +174,10 @@ export function getPileUnits(): 1 | 2 | 3 {
 
 export function getPestleAim(): PestleAim {
   return aim;
+}
+
+export function getResidue(): Residue {
+  return residue;
 }
 
 export function useMortarChips(): MortarChip[] {
@@ -132,6 +199,17 @@ export function usePestleAim(): PestleAim {
     getPestleAim,
     getPestleAim,
   );
+}
+
+export function subscribeResidue(listener: () => void): () => void {
+  residueListeners.add(listener);
+  return () => {
+    residueListeners.delete(listener);
+  };
+}
+
+export function useResidue(): Residue {
+  return useSyncExternalStore(subscribeResidue, getResidue, getResidue);
 }
 
 function rand(seed: number): number {
@@ -214,15 +292,15 @@ function finishDust(list: MortarChip[], work: number): MortarChip[] {
   });
 }
 
-/** بزرگ‌ترین ضلع مجاز. ریز شدن تا گردِ قابل‌دیدن است، نه تا محو شدن. */
+/** بزرگ‌ترین ضلع مجاز (درصد bowl). ریز شدن تا گردِ قابل‌دیدن است، نه تا محو شدن. */
 function sizeLimit(work: number): number {
   const t = Math.min(1, Math.max(0, work / WORK_FINE));
-  const start = 96;
-  const end = 18;
+  const start = 80;
+  const end = 16;
   return start * Math.pow(end / start, t);
 }
 
-export function kindForIngredient(id: string): PieceKind {
+export function kindForIngredient(id: string): PieceKindV3 {
   if (id.includes('chamomile')) return 'flower';
   if (id.includes('saffron')) return 'thread';
   if (id.includes('mint')) return 'leaf';
@@ -234,11 +312,8 @@ export function kindForIngredient(id: string): PieceKind {
 
 /** مواد زیر کاسه‌ی قاشق را از هاون برمی‌دارد تا بروند داخل قاشق. */
 export function scoopUnderSpoon(sceneX: number, sceneY: number): MortarChip[] {
-  const zone = SCENE_ZONES.mortar;
-  const at = mortarToChip(
-    ((sceneX - zone.x) / zone.width) * 100,
-    ((sceneY - zone.y) / zone.height) * 100,
-  );
+  const z = sceneToZone(sceneX, sceneY);
+  const at = zoneToChip(z.x, z.y);
   const taken: MortarChip[] = [];
   const stay: MortarChip[] = [];
   for (const chip of chips) {
@@ -249,23 +324,74 @@ export function scoopUnderSpoon(sceneX: number, sceneY: number): MortarChip[] {
   }
   if (taken.length === 0) return taken;
   chips = stay;
+  addResidueFrom(taken);
   emitChips();
   return taken;
 }
 
-/** هرچه بعد از چرخش قاشق مانده را هم برمی‌دارد. */
+/** هرچه بعد از چرخش قاشق مانده را هم برمی‌دارد؛ رد پودر می‌ماند. */
 export function scoopRest(): MortarChip[] {
   if (chips.length === 0) return [];
   const taken = chips;
   chips = [];
+  addResidueFrom(taken);
   emitChips();
   return taken;
 }
 
-function mortarToChip(mx: number, my: number): { x: number; y: number } {
+/** هر برداشتِ قاشق کمی رد پودر (به رنگ همان تکه‌ها) روی کف می‌گذارد */
+function addResidueFrom(list: MortarChip[]): void {
+  const colored = list.filter((chip) => chip.color);
+  if (colored.length === 0) return;
+  const fine = list.filter((chip) => chip.kind === 'dust').length / list.length;
+  const color = mixColors(colored.map((chip) => chip.color as string));
+  const amount = Math.min(1, 0.3 + fine * 0.7);
+  residue = residue
+    ? { color: mixColors([residue.color, color]), amount: Math.min(1, Math.max(residue.amount, amount)) }
+    : { color, amount };
+  emitResidue();
+}
+
+/** میانگین سادهٔ رنگ‌های hex (#rrggbb) */
+export function mixColors(colors: string[]): string {
+  if (colors.length === 0) return '#8a7a52';
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let n = 0;
+  for (const c of colors) {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c.trim());
+    if (!m) continue;
+    r += parseInt(m[1], 16);
+    g += parseInt(m[2], 16);
+    b += parseInt(m[3], 16);
+    n++;
+  }
+  if (n === 0) return colors[0];
+  const hex = (v: number) => Math.round(v / n).toString(16).padStart(2, '0');
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+/** قلم‌مو یا مادهٔ تازه رد پودر را پاک می‌کند */
+export function clearResidue(): void {
+  if (!residue) return;
+  residue = null;
+  emitResidue();
+}
+
+/** درصد Zone ⇒ درصد bowl */
+function zoneToChip(zx: number, zy: number): { x: number; y: number } {
   return {
-    x: ((mx - BOWL_MORTAR.left) / BOWL_MORTAR.width) * 100,
-    y: ((my - BOWL_MORTAR.top) / BOWL_MORTAR.height) * 100,
+    x: ((zx - BOWL_MORTAR.left) / BOWL_MORTAR.width) * 100,
+    y: ((zy - BOWL_MORTAR.top) / BOWL_MORTAR.height) * 100,
+  };
+}
+
+/** درصد bowl ⇒ درصد Zone */
+export function chipToZone(cx: number, cy: number): { x: number; y: number } {
+  return {
+    x: BOWL_MORTAR.left + (cx / 100) * BOWL_MORTAR.width,
+    y: BOWL_MORTAR.top + (cy / 100) * BOWL_MORTAR.height,
   };
 }
 
@@ -292,18 +418,40 @@ export function chipInsideBowl(chip: Pick<MortarChip, 'x' | 'y' | 'w' | 'h'>): b
   return Math.abs(pos.x - chip.x) < 0.08 && Math.abs(pos.y - chip.y) < 0.08;
 }
 
-function coarseSize(kind: PieceKind, seed: number, scaleMul = 1): { w: number; h: number } {
-  const n = rand(seed);
-  const m = rand(seed + 2);
-  // دهانه در صفحه پهن و کوتاه است؛ درصد ارتفاع باید بزرگ‌تر باشد تا شکل دیده شود.
-  const scale = 1.35 * scaleMul;
-  if (kind === 'thread') return { w: (14 + n * 4) * scale, h: (58 + m * 10) * scale };
-  if (kind === 'leaf') return { w: (30 + n * 8) * scale, h: (50 + m * 12) * scale };
-  if (kind === 'root') return { w: (36 + n * 8) * scale, h: (40 + m * 10) * scale };
-  if (kind === 'seed') return { w: (24 + n * 6) * scale, h: (36 + m * 8) * scale };
-  if (kind === 'star') return { w: (32 + n * 8) * scale, h: (48 + m * 10) * scale };
-  if (kind === 'flower') return { w: (34 + n * 8) * scale, h: (52 + m * 10) * scale };
-  return { w: (30 + n * 8) * scale, h: (46 + m * 10) * scale };
+/* ------------------------------ اندازه‌ی تکه‌ها ------------------------------ */
+
+/** بلندترین ضلع یک تکه‌ی خام روی صفحه (پیکسل صحنه) */
+const NATURAL_PX: Record<PieceKind, number> = {
+  flower: 44,
+  thread: 54,
+  leaf: 48,
+  root: 44,
+  seed: 40,
+  star: 48,
+  petal: 42,
+  dust: 10,
+};
+
+export function spriteCount(kind: PieceKind): number {
+  if (kind === 'dust') return 0;
+  return MORTAR_V3.pieces[kind].count;
+}
+
+function spriteAspect(kind: PieceKind, sprite: number): number {
+  if (kind === 'dust') return 1;
+  const aspects = MORTAR_V3.pieces[kind].aspects as readonly number[];
+  return aspects[sprite] ?? 1;
+}
+
+/** اندازهٔ تکهٔ خام در درصد bowl، با نسبت واقعی اسپرایت */
+function coarseSize(kind: PieceKind, seed: number, scaleMul = 1): { w: number; h: number; sprite: number } {
+  const count = Math.max(1, spriteCount(kind));
+  const sprite = Math.floor(rand(seed + 9) * count) % count;
+  const aspect = spriteAspect(kind, sprite);
+  const longest = NATURAL_PX[kind] * (0.88 + rand(seed) * 0.24) * scaleMul;
+  const wpx = aspect >= 1 ? longest : longest * aspect;
+  const hpx = aspect >= 1 ? longest / aspect : longest;
+  return { w: (wpx / BOWL_PX.w) * 100, h: (hpx / BOWL_PX.h) * 100, sprite };
 }
 
 function spawnCount(units: number, seed: number): number {
@@ -335,9 +483,11 @@ function spawn(units: number, kind: PieceKind, scaleMul = 1): MortarChip[] {
       nick: -1,
       seed: i + 1,
       kind,
+      sprite: size.sprite,
       generation: 0,
       vx: 0,
       vy: 0,
+      hop: 0,
     });
   }
   pileArea = chipArea(next);
@@ -387,9 +537,11 @@ function splitPiece(
       nick: Math.floor(rand(seq + 6) * 4),
       seed: reuseId ?? seq,
       kind,
+      sprite: src.sprite,
       generation,
       vx: live ? nx * speed * sign : 0,
       vy: live ? ny * speed * sign * 0.65 : 0,
+      hop: live ? 0.6 : 0,
       color: src.color,
       ingredientId: src.ingredientId,
     };
@@ -397,32 +549,46 @@ function splitPiece(
   return [make(-1, src.id), make(1)];
 }
 
-function impactFromHead(headX: number, headY: number): { x: number; y: number } {
-  return mortarToChip(headX, headY);
+/* ------------------------------ موقعیت سر ------------------------------ */
+
+/** سطح تپه زیر سر (درصد بلندی Zone) — واحد بیشتر کمی بالاتر */
+function pileSurfaceY(): number {
+  return FLOOR.cy - 1.2 - (pileUnits - 1) * 0.9 + pileCrush * 0.6;
 }
 
-function headOnPile(angle: number, upright = 0): { x: number; y: number } {
-  const pileY = pileSurfaceY();
-  const rx = 16 - upright * 6;
-  const ry = 2.6 - upright * 1.4;
+/** نقطهٔ تماس سر با تپه روی مدار (درصد Zone) */
+function contactOnPile(angle: number): { x: number; y: number } {
   return {
-    x: 50 + Math.cos(angle) * rx,
-    y: pileY + Math.sin(angle) * ry,
+    x: FLOOR.cx + Math.cos(angle) * FLOOR.rx * ORBIT_K,
+    y: pileSurfaceY() + Math.sin(angle) * FLOOR.ry * ORBIT_K,
   };
 }
 
+/** نقطهٔ برخورد در فضای bowl برای یک زاویهٔ مدار */
+function impactAt(angle: number): { x: number; y: number } {
+  const c = contactOnPile(angle);
+  return zoneToChip(c.x, c.y);
+}
+
+/** شعاع سر کوبه روی صفحه (پیکسل صحنه) */
+const HEAD_R_PX = (HEAD_R.x / 100) * SCENE_ZONES.mortar.width;
+
+/** آیا مرکز تکه زیر سر کوبه است؟ (فاصله در پیکسل، چون درصدهای bowl هم‌مقیاس نیستند) */
+function underHead(chip: Pick<MortarChip, 'x' | 'y'>, impact: { x: number; y: number }, k: number): boolean {
+  const dx = ((chip.x - impact.x) / 100) * BOWL_PX.w;
+  const dy = ((chip.y - impact.y) / 100) * BOWL_PX.h;
+  const r = HEAD_R_PX * k;
+  return dx * dx + dy * dy <= r * r;
+}
+
 /** هر تکه‌ای که زیر سر کوبه است خرد می‌شود، نه فقط نزدیک‌ترین یکی. */
-function strikeAt(list: MortarChip[], angle: number, live: boolean, work: number): MortarChip[] {
+function strikeAt(list: MortarChip[], impact: { x: number; y: number }, live: boolean, work: number): MortarChip[] {
   if (list.length === 0) return list;
-  const upright = levelSwitch(work);
-  const head = headOnPile(angle, upright);
-  const impact = impactFromHead(head.x, head.y);
   const limit = sizeLimit(work);
   const hits: number[] = [];
   list.forEach((chip, index) => {
     if (chip.kind === 'dust' || Math.max(chip.w, chip.h) <= limit * 1.04) return;
-    const dist = (chip.x - impact.x) ** 2 + ((chip.y - impact.y) * 1.1) ** 2;
-    if (dist <= 2200) hits.push(index);
+    if (underHead(chip, impact, 1.45)) hits.push(index);
   });
   if (hits.length === 0) {
     if (!live) return list;
@@ -439,7 +605,7 @@ function strikeAt(list: MortarChip[], angle: number, live: boolean, work: number
     }
     if (crowded) {
       const [shrunk] = splitPiece(chip, impact.x, impact.y, false, work);
-      next.push({ ...shrunk, id: chip.id, vx: 0, vy: 0 });
+      next.push({ ...shrunk, id: chip.id, vx: 0, vy: 0, hop: live ? 0.5 : 0 });
       return;
     }
     const [left, right] = splitPiece(chip, impact.x, impact.y, live, work);
@@ -469,68 +635,152 @@ function nudgeNear(list: MortarChip[], impact: { x: number; y: number }): Mortar
       w: chip.w,
       h: chip.h,
     });
-    return { ...chip, x: nudged.x, y: nudged.y, vx: (awayX / dist) * 0.35, vy: (awayY / dist) * 0.25 };
+    return { ...chip, x: nudged.x, y: nudged.y, vx: (awayX / dist) * 0.35, vy: (awayY / dist) * 0.25, hop: 0.4 };
   });
+}
+
+/** تکه‌های زیر سر (بدون شکستن) می‌پرند و کمی کنار می‌روند */
+function jolt(list: MortarChip[], impact: { x: number; y: number }): { list: MortarChip[]; hits: MortarChip[] } {
+  const hits: MortarChip[] = [];
+  const next = list.map((chip) => {
+    if (!underHead(chip, impact, 1.6)) return chip;
+    hits.push(chip);
+    const dx = chip.x - impact.x;
+    const dy = chip.y - impact.y;
+    const d = Math.max(0.001, Math.hypot(dx, dy));
+    const push = chip.kind === 'dust' ? 0.5 : 0.9;
+    return {
+      ...chip,
+      vx: chip.vx + (dx / d) * push,
+      vy: chip.vy + (dy / d) * push * 0.6,
+      hop: Math.max(chip.hop, chip.kind === 'dust' ? 0.35 : 0.8),
+    };
+  });
+  return { list: next, hits };
 }
 
 function refreshCrush(list: MortarChip[]): void {
   pileCrush = list.length === 0 ? 0 : list.reduce((sum, chip) => sum + chip.crush, 0) / list.length;
 }
 
-/** سطح تپه روی کفِ پایینِ هاون. واحد بیشتر کمی بالا می‌آید. */
-function pileSurfaceY(): number {
-  return 69 - (pileUnits - 1) * 0.35 + pileCrush * 0.3;
-}
+/* ------------------------------ چرخهٔ ضربه ------------------------------ */
+
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+const easeIn = (t: number) => t * t * t;
+const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 /**
- * در هر مرحلهٔ خرد شدن یک‌بار بین حالت گرد و عمودی جابه‌جا می‌شود.
- * پنجرهٔ جابه‌جایی کوتاه است تا تغییر تند باشد. خروجی ۰ = گرد، ۱ = عمودی.
+ * خیز/فشار برای فاز ۰..۱ ضربه.
+ * lift: ۰..۱ ارتفاع سر بالای تپه. impact: ۰..۱ فشار روی مواد.
  */
-function levelSwitch(work: number): number {
-  let t: number;
-  let uprightFirst = false;
-  if (work < WORK_COARSE) t = work / WORK_COARSE;
-  else if (work < WORK_CRUSHED) {
-    t = (work - WORK_COARSE) / (WORK_CRUSHED - WORK_COARSE);
-    uprightFirst = true;
-  } else {
-    t = Math.min(1, (work - WORK_CRUSHED) / (WORK_FINE - WORK_CRUSHED));
+export function strikeProfile(phase: number): { lift: number; impact: number; twist: number } {
+  const t = ((phase % 1) + 1) % 1;
+  if (t < PH_LIFT_END) {
+    const u = t / PH_LIFT_END;
+    // خیز آرام: زود بالا می‌رود و بالا کمی مکث می‌کند (anticipation)
+    return { lift: easeOut(u), impact: 0, twist: 0 };
   }
-  const edge = 0.045;
-  const u = Math.max(0, Math.min(1, (t - (0.5 - edge)) / (edge * 2)));
-  const smooth = u * u * (3 - 2 * u);
-  return uprightFirst ? 1 - smooth : smooth;
+  if (t < PH_FALL_END) {
+    const u = (t - PH_LIFT_END) / (PH_FALL_END - PH_LIFT_END);
+    // سقوط سریع
+    return { lift: 1 - easeIn(u), impact: u > 0.85 ? (u - 0.85) / 0.15 : 0, twist: 0 };
+  }
+  if (t < PH_PRESS_END) {
+    const u = (t - PH_FALL_END) / (PH_PRESS_END - PH_FALL_END);
+    // فشار و پیچش سایشی
+    return { lift: 0, impact: 1 - 0.25 * u, twist: Math.sin(u * Math.PI * 2) * 6 };
+  }
+  const u = (t - PH_PRESS_END) / (1 - PH_PRESS_END);
+  // رهاسازی
+  return { lift: 0, impact: (1 - easeInOut(u)) * 0.75, twist: 0 };
 }
 
-/** هر دور کامل سه ضربه: بالا رفتن، فرود سریع روی مواد، مکث کوتاه. */
-function poundOffset(angle: number): number {
-  const turn = Math.PI * 2;
-  const phase = ((angle * POUNDS_PER_TURN) % turn + turn) % turn;
-  const t = phase / turn;
-  if (t < 0.32) return -Math.sin((t / 0.32) * Math.PI) * 9.5;
-  if (t < 0.48) {
-    const u = (t - 0.32) / 0.16;
-    return (1 - u) * -0.4 + u * 2.2;
+/** وزن سرعت مدار در هر فاز: در خیز جلو می‌رود، در فشار کمی می‌ساید */
+function orbitWeight(phase: number): number {
+  const t = ((phase % 1) + 1) % 1;
+  if (t < PH_FALL_END) return 1.5;
+  if (t < PH_PRESS_END) return 0.25;
+  return 0.6;
+}
+
+/** فریم با نزدیک‌ترین زاویهٔ محور، با هیسترزیس تا در مرز پرپر نزند */
+function pickFrame(theta: number, current: number, candidates: readonly number[]): number {
+  let best = candidates[0];
+  let bestDist = Infinity;
+  for (const f of candidates) {
+    const d = Math.abs(theta - FRAME_AXES[f - 1]);
+    if (d < bestDist) {
+      bestDist = d;
+      best = f;
+    }
   }
-  return 0.35;
+  if (candidates.includes(current)) {
+    const curDist = Math.abs(theta - FRAME_AXES[current - 1]);
+    if (curDist - bestDist < 3) return current;
+  }
+  return best;
+}
+
+const GRIND_FRAMES = [1, 2, 3, 4, 5] as const;
+
+/** هاون خالی: کوبه با دستهٔ بلند به دیوارهٔ دور تکیه داده، سر روی کف. */
+function leanAim(): PestleAim {
+  const frame = 2;
+  const theta = -66;
+  return {
+    mode: 'lean',
+    orbit: -Math.PI / 2,
+    down: false,
+    headX: FLOOR.cx + 2,
+    headY: FLOOR.cy + FLOOR.ry * 0.25 - HEAD_R.y * 0.55,
+    rotate: clampRot(theta - FRAME_AXES[frame - 1]),
+    frame,
+    impact: 0,
+    lift: 0,
+  };
+}
+
+function clampRot(v: number): number {
+  return Math.max(-22, Math.min(22, v));
 }
 
 function computeAim(): PestleAim {
   if (mode === 'lean') return leanAim();
-  const upright = mode === 'grind' ? levelSwitch(pileWork) : 1;
-  const head = headOnPile(orbit, upright);
   if (mode === 'rest') {
-    return { mode, orbit, down: false, headX: 50, headY: pileSurfaceY(), rotate: -42 };
+    // خوابیده روی تپه، تکیه به لبهٔ راست
+    const frame = 6;
+    const theta = -24;
+    return {
+      mode,
+      orbit,
+      down: false,
+      headX: FLOOR.cx - FLOOR.rx * 0.18,
+      headY: pileSurfaceY() - HEAD_R.y * 0.7,
+      rotate: clampRot(theta - FRAME_AXES[frame - 1]),
+      frame,
+      impact: 0,
+      lift: 0,
+    };
   }
-  const lift = poundOffset(orbit) * (0.28 + upright * 0.72);
-  const rotate = -16 - upright * 28 + Math.cos(orbit) * (7 * (1 - upright) + 2 * upright);
+  const prof = strikeProfile(beat);
+  const contact = contactOnPile(orbit);
+  // دستهٔ کوبه مقابل جای سر می‌خوابد (دست بالای هاون ثابت است)؛ در برخورد عمودی‌تر
+  const thetaOrbit = -84 + 30 * Math.cos(orbit);
+  const upright = prof.impact * 0.6;
+  const theta = thetaOrbit * (1 - upright) + -84 * upright + prof.lift * 4 * Math.sign(Math.cos(orbit) || 1) + prof.twist;
+  const frame = pickFrame(theta, lastFrame, GRIND_FRAMES);
+  lastFrame = frame;
+  const sink = HEAD_R.y * (0.55 + prof.impact * 0.25);
   return {
     mode,
     orbit,
-    down: lift > 1.2,
-    headX: head.x,
-    headY: head.y + lift,
-    rotate,
+    down: prof.impact > 0.5,
+    headX: contact.x,
+    headY: contact.y - sink - prof.lift * LIFT_H,
+    rotate: clampRot(theta - FRAME_AXES[frame - 1]),
+    frame,
+    impact: prof.impact,
+    lift: prof.lift,
   };
 }
 
@@ -538,22 +788,80 @@ function applyAim(): void {
   const next = computeAim();
   const changed =
     next.mode !== aim.mode ||
+    next.frame !== aim.frame ||
     Math.abs(next.headX - aim.headX) > 0.04 ||
     Math.abs(next.headY - aim.headY) > 0.04 ||
     Math.abs(next.rotate - aim.rotate) > 0.2 ||
+    Math.abs(next.impact - aim.impact) > 0.05 ||
     next.down !== aim.down;
   aim = next;
   if (changed) emitAim();
 }
 
+/** لحظهٔ برخورد: شکستن معوق، پرش تکه‌ها، رویداد برای صدا/ذرات */
+function strikeNow(): void {
+  const contact = contactOnPile(orbit);
+  const impact = zoneToChip(contact.x, contact.y);
+  let hitColors: string[] = [];
+  let hits = 0;
+  if (chips.length > 0) {
+    applyPendingBlows(impact);
+    const jolted = jolt(chips, impact);
+    chips = jolted.list;
+    hits = jolted.hits.length;
+    hitColors = jolted.hits.map((chip) => chip.color).filter((c): c is string => Boolean(c));
+    refreshCrush(chips);
+    emitChips();
+    requestSettle();
+  }
+  const event: StrikeEvent = {
+    x: contact.x,
+    y: contact.y,
+    hits,
+    fineness: Math.min(1, pileWork / WORK_FINE),
+    colors: hitColors,
+  };
+  for (const listener of strikeListeners) listener(event);
+}
+
+/** شکستن‌های منتظر (کار store) را در نقطهٔ برخورد اعمال می‌کند */
+function applyPendingBlows(impact: { x: number; y: number }): boolean {
+  let changed = false;
+  for (const group of mixGroups) {
+    const gain = group.target - group.applied;
+    if (gain < 0.05) continue;
+    changed = true;
+    pileArea = group.area;
+    const blows = Math.min(2, Math.max(1, Math.round(gain / 0.08)));
+    let next = group.chips;
+    for (let i = 0; i < blows; i++) {
+      const at = i === 0 ? impact : impactAt(orbit + 0.55 * i);
+      next = strikeAt(next, at, true, group.target);
+    }
+    group.chips = holdVolume(finishDust(next, group.target), group.target).map((chip) => ({
+      ...chip,
+      color: group.color,
+      ingredientId: group.id,
+    }));
+    group.applied = group.target;
+  }
+  if (changed) {
+    chips = mixGroups.flatMap((group) => group.chips);
+  }
+  return changed;
+}
+
 function tickPile(dt: number): boolean {
   if (chips.length === 0) return false;
   let moving = false;
+  const decay = Math.max(0, 1 - dt * 9);
   const next = chips.map((chip) => {
+    const hop = chip.hop > 0.01 ? chip.hop * decay : 0;
+    if (hop !== chip.hop) moving = true;
     if (Math.abs(chip.vx) < 0.2 && Math.abs(chip.vy) < 0.2) {
-      if (chip.vx === 0 && chip.vy === 0) return chip;
+      if (chip.vx === 0 && chip.vy === 0) return hop === chip.hop ? chip : { ...chip, hop };
       moving = true;
-      return { ...chip, vx: 0, vy: 0 };
+      return { ...chip, vx: 0, vy: 0, hop };
     }
     moving = true;
     const x = chip.x + chip.vx * dt * 28;
@@ -565,7 +873,7 @@ function tickPile(dt: number): boolean {
       vx *= -0.25;
       vy *= -0.25;
     }
-    return { ...chip, x: pos.x, y: pos.y, vx, vy, rot: chip.rot + vx * 4 };
+    return { ...chip, x: pos.x, y: pos.y, vx, vy, hop, rot: chip.kind === 'dust' ? 0 : chip.rot + vx * 4 };
   });
   if (!moving) return false;
   chips = next;
@@ -594,15 +902,32 @@ export function setPestleMode(next: PestleMode): void {
     applyAim();
     return;
   }
-  if (next === 'grind' && mode !== 'grind') orbit = -Math.PI / 2;
+  if (next === 'grind' && mode !== 'grind') {
+    orbit = -Math.PI / 2;
+    // شروع از خیز تا اولین ضربه با فاصلهٔ کوتاه بیاید
+    beat = 0.18;
+  }
+  if (mode === 'grind' && next !== 'grind') {
+    // کوبش تمام شد: شکستن‌های مانده همین حالا
+    if (applyPendingBlows(impactAt(orbit))) {
+      refreshCrush(chips);
+      emitChips();
+    }
+  }
   mode = next;
   applyAim();
 }
 
 export function tickMortarVisuals(dt: number): void {
   if (mode === 'grind') {
-    orbit += dt * ORBIT_SPEED;
+    const before = beat;
+    beat += dt * BEAT_HZ;
+    orbit += dt * ORBIT_SPEED * orbitWeight(before);
     if (orbit > Math.PI * 12) orbit -= Math.PI * 12;
+    // عبور از مرز سقوط ⇒ برخورد (حتی اگر در یک فریم چند مرز رد شود، یکی کافی است)
+    const crossed = Math.floor(beat - PH_FALL_END) > Math.floor(before - PH_FALL_END);
+    if (beat >= 1) beat -= Math.floor(beat);
+    if (crossed) strikeNow();
   }
   applyAim();
   tickPile(dt);
@@ -638,7 +963,7 @@ export function syncMortarPile(key: string | null, units: 1 | 2 | 3, grindWork: 
     for (let i = 0; i < rehearsal; i++) {
       const work = ((i + 1) / rehearsal) * grindWork;
       orbit += 0.85;
-      next = holdVolume(strikeAt(next, orbit, false, work), work);
+      next = holdVolume(strikeAt(next, impactAt(orbit), false, work), work);
     }
     chips = holdVolume(finishDust(next, grindWork), grindWork);
     pileWork = grindWork;
@@ -660,7 +985,7 @@ export function syncMortarPile(key: string | null, units: 1 | 2 | 3, grindWork: 
   let next = chips;
   for (let i = 0; i < blows; i++) {
     if (i > 0) orbit += 0.55;
-    next = strikeAt(next, orbit, true, grindWork);
+    next = strikeAt(next, impactAt(orbit), true, grindWork);
   }
   chips = holdVolume(finishDust(next, grindWork), grindWork);
   refreshCrush(chips);
@@ -687,14 +1012,14 @@ function bakePortion(portion: MixPortion, scaleMul: number) {
   for (let i = 0; i < rehearsal; i++) {
     const work = ((i + 1) / rehearsal) * norm;
     orbit += 0.85;
-    next = holdVolume(strikeAt(next, orbit, false, work), work);
+    next = holdVolume(strikeAt(next, impactAt(orbit), false, work), work);
   }
   const baked = holdVolume(finishDust(next, norm), norm).map((chip) => ({
     ...chip,
     color: portion.color,
     ingredientId: portion.ingredientId,
   }));
-  return { id: portion.ingredientId, applied: norm, chips: baked, area };
+  return { id: portion.ingredientId, applied: norm, target: norm, color: portion.color, chips: baked, area };
 }
 
 function focusNorm(portions: MixPortion[]): number {
@@ -726,44 +1051,43 @@ export function syncMortarMix(key: string | null, portions: MixPortion[]): void 
     chips = mixGroups.flatMap((group) => group.chips);
     pileWork = focusNorm(portions);
     refreshCrush(chips);
+    // مادهٔ تازه روی رد پودر قبلی می‌نشیند
+    clearResidue();
     emitChips();
     applyAim();
     return;
   }
-  let changed = false;
+  let pending = false;
   for (const portion of portions) {
     const group = mixGroups.find((item) => item.id === portion.ingredientId);
     if (!group) continue;
+    group.color = portion.color;
     const norm = portion.grindWork / portion.quantity;
-    const gain = norm - group.applied;
-    if (gain < 0.05) continue;
-    changed = true;
-    pileArea = group.area;
-    const blows = Math.min(2, Math.max(1, Math.round(gain / 0.08)));
-    let next = group.chips;
-    for (let i = 0; i < blows; i++) {
-      if (i > 0) orbit += 0.55;
-      next = strikeAt(next, orbit, true, norm);
+    if (norm - group.applied >= 0.05) {
+      group.target = norm;
+      pending = true;
     }
-    group.chips = holdVolume(finishDust(next, norm), norm).map((chip) => ({
-      ...chip,
-      color: portion.color,
-      ingredientId: portion.ingredientId,
-    }));
-    group.applied = norm;
   }
   pileWork = focusNorm(portions);
-  if (!changed) {
+  if (!pending) {
     refreshCrush(chips);
     applyAim();
     return;
   }
-  chips = mixGroups.flatMap((group) => group.chips);
-  pileUnits = Math.min(3, Math.max(1, Math.round(total))) as 1 | 2 | 3;
-  refreshCrush(chips);
-  emitChips();
-  applyAim();
-  requestSettle();
+  // در حال کوبش: شکستن تا برخورد بعدی صبر می‌کند (مگر خیلی عقب بمانیم)
+  // (کار store ≈ ۱٫۰۳/ث برای یک واحد و ضربه‌ها ≈ ۱٫۹/ث ⇒ هر ضربه ≈ ۰٫۵۵ کار)
+  const behind = Math.max(...mixGroups.map((group) => group.target - group.applied));
+  if (mode === 'grind' && behind < 0.75) {
+    applyAim();
+    return;
+  }
+  if (applyPendingBlows(impactAt(orbit))) {
+    pileUnits = Math.min(3, Math.max(1, Math.round(total))) as 1 | 2 | 3;
+    refreshCrush(chips);
+    emitChips();
+    applyAim();
+    requestSettle();
+  }
 }
 
 export function chipClip(nick: number): string {
@@ -783,8 +1107,9 @@ export function chipClip(nick: number): string {
 
 /** ارتفاع سردسته در مختصات Zone (کوچک‌تر = بالاتر روی صفحه). */
 export function handleTipY(pose: PestleAim = aim): number {
-  const dx = (KNOB_ORIGIN.x - HEAD_ORIGIN.x) * PESTLE_BOX.width;
-  const dy = (KNOB_ORIGIN.y - HEAD_ORIGIN.y) * PESTLE_BOX.height;
+  const frame = PESTLE_FRAMES[pose.frame - 1] ?? PESTLE_FRAMES[0];
+  const dx = (frame.knob.x - PESTLE_HEAD_ANCHOR.x) * PESTLE_BOX.width;
+  const dy = (frame.knob.y - PESTLE_HEAD_ANCHOR.y) * PESTLE_BOX.height;
   const rad = (pose.rotate * Math.PI) / 180;
   const y = dx * Math.sin(rad) + dy * Math.cos(rad);
   return pose.headY + y;
@@ -800,9 +1125,10 @@ export function pestleInFront(pose: PestleAim): boolean {
   return Math.sin(pose.orbit) >= 0;
 }
 
+/** transform جعبهٔ کوبه: لنگر سر از «خانه» (مرکز کف) به headX/headY، بعد چرخش باقی‌مانده */
 export function pestleTransform(pose: PestleAim): string {
-  const dx = pose.headX - HOME_HEAD.x;
-  const dy = pose.headY - HOME_HEAD.y;
+  const dx = pose.headX - FLOOR.cx;
+  const dy = pose.headY - FLOOR.cy;
   const x = (dx / PESTLE_BOX.width) * 100;
   const y = (dy / PESTLE_BOX.height) * 100;
   return `translate(${x.toFixed(2)}%, ${y.toFixed(2)}%) rotate(${pose.rotate.toFixed(1)}deg)`;

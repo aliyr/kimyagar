@@ -1,0 +1,191 @@
+{
+  "generated": "2026-09-23T23:28:02.820Z",
+  "canvas": {
+    "width": 919,
+    "height": 1003
+  },
+  "outer": {
+    "cx": 0.4984,
+    "cy": 0.2363,
+    "rx": 0.4831,
+    "ry": 0.2223
+  },
+  "mouth": {
+    "cx": 0.5038,
+    "cy": 0.2313,
+    "rx": 0.4157,
+    "ry": 0.1854
+  },
+  "floor": {
+    "cx": 0.5016,
+    "cy": 0.3609,
+    "rx": 0.272,
+    "ry": 0.0518
+  },
+  "frontFade": {
+    "start": 0.4128,
+    "end": 0.4347
+  },
+  "base": {
+    "y": 0.985
+  },
+  "pestle": {
+    "canvas": {
+      "width": 1360,
+      "height": 1088
+    },
+    "head": {
+      "x": 0.42,
+      "y": 0.74
+    },
+    "headWidthPx": 230,
+    "frames": [
+      {
+        "file": "mortar/v3/pestle_1.png",
+        "source": "upright",
+        "mirrored": false,
+        "axisDeg": -78,
+        "knob": {
+          "x": 0.5163,
+          "y": 0.1713
+        }
+      },
+      {
+        "file": "mortar/v3/pestle_2.png",
+        "source": "tilt",
+        "mirrored": false,
+        "axisDeg": -62,
+        "knob": {
+          "x": 0.6346,
+          "y": 0.2326
+        }
+      },
+      {
+        "file": "mortar/v3/pestle_3.png",
+        "source": "upright",
+        "mirrored": false,
+        "axisDeg": -84,
+        "knob": {
+          "x": 0.4683,
+          "y": 0.1618
+        }
+      },
+      {
+        "file": "mortar/v3/pestle_4.png",
+        "source": "tilt",
+        "mirrored": false,
+        "axisDeg": -48,
+        "knob": {
+          "x": 0.7266,
+          "y": 0.3134
+        }
+      },
+      {
+        "file": "mortar/v3/pestle_5.png",
+        "source": "tilt",
+        "mirrored": true,
+        "axisDeg": -132,
+        "knob": {
+          "x": 0.113,
+          "y": 0.3129
+        }
+      },
+      {
+        "file": "mortar/v3/pestle_6.png",
+        "source": "lying",
+        "mirrored": false,
+        "axisDeg": -22,
+        "knob": {
+          "x": 0.8488,
+          "y": 0.5226
+        }
+      }
+    ]
+  },
+  "pieces": {
+    "flower": {
+      "count": 7,
+      "aspects": [
+        1.038,
+        1.181,
+        1.274,
+        1.414,
+        1.61,
+        1.43,
+        1.149
+      ]
+    },
+    "thread": {
+      "count": 7,
+      "aspects": [
+        0.691,
+        1.046,
+        0.793,
+        0.996,
+        0.355,
+        0.844,
+        4.339
+      ]
+    },
+    "leaf": {
+      "count": 7,
+      "aspects": [
+        0.813,
+        1.249,
+        1.255,
+        1.347,
+        1.22,
+        1.098,
+        1.077
+      ]
+    },
+    "root": {
+      "count": 7,
+      "aspects": [
+        1.438,
+        1.202,
+        0.91,
+        1.707,
+        1.128,
+        1.094,
+        1.158
+      ]
+    },
+    "seed": {
+      "count": 7,
+      "aspects": [
+        0.777,
+        0.691,
+        0.836,
+        0.955,
+        0.645,
+        0.766,
+        0.898
+      ]
+    },
+    "star": {
+      "count": 7,
+      "aspects": [
+        1.08,
+        1.103,
+        1.103,
+        1.071,
+        1.062,
+        1.012,
+        1.076
+      ]
+    },
+    "petal": {
+      "count": 7,
+      "aspects": [
+        0.707,
+        1.91,
+        0.703,
+        1.12,
+        1.422,
+        0.97,
+        2.081
+      ]
+    }
+  }
+}
