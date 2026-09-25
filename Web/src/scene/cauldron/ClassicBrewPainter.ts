@@ -384,7 +384,7 @@ export class ClassicBrewPainter {
     mx: number,
     my: number,
     rx: number,
-    ry: number,
+    _ry: number,
     liquid: RGB,
     sim: ClassicBrewSim,
   ): void {
