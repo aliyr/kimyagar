@@ -10,6 +10,8 @@ import { SCENE_ZONES } from './artManifest';
 export const TABLE_IMAGE = { width: 1250, height: 462 } as const;
 /** دهانه‌ی طاق کوره در پیکسل تصویر (از رأس قوس تا شبکه‌ی آهنی) */
 export const FURNACE_IN_IMAGE = { x: 543, y: 284, width: 159, height: 132 } as const;
+/** لبه‌ی جلوی رویه‌ی چوبی میز در پیکسل تصویر — پایین‌تر از آن دامنِ میز است */
+export const TABLE_TOP_FRONT_IN_IMAGE = 205;
 
 const ZONE = SCENE_ZONES.workTable;
 export const TABLE_IMAGE_SCALE = Math.min(ZONE.width / TABLE_IMAGE.width, ZONE.height / TABLE_IMAGE.height);
@@ -25,6 +27,9 @@ export const FURNACE_RECT = {
   width: FURNACE_IN_IMAGE.width * TABLE_IMAGE_SCALE,
   height: FURNACE_IN_IMAGE.height * TABLE_IMAGE_SCALE,
 };
+
+/** لبه‌ی جلوی رویه‌ی میز در فضای صحنه — قطرات پاشش پایین‌تر از این نمی‌نشینند */
+export const TABLE_TOP_FRONT_Y = OFFSET.y + TABLE_TOP_FRONT_IN_IMAGE * TABLE_IMAGE_SCALE;
 
 /** شدت آتش کوره برای هر درجه‌ی بازی (سطح اتوماتای Fire) */
 export const FURNACE_LEVEL = { low: 0.35, medium: 0.7, high: 1 } as const;

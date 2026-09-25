@@ -18,6 +18,7 @@ import {
 } from '../../art/flat/kit/color.ts';
 import { flatIngredientById } from '../../art/flat/kit/ingredients.ts';
 import { burntLiquid } from '../v2/flatCauldronGeometry';
+import { CLASSIC_SPLASH_TABLE } from '../classicCauldronGeometry';
 import { BOWL_PX } from '../mortarLayout';
 import type { MortarChip, PieceKind } from '../mortarPile';
 
@@ -33,6 +34,11 @@ const MAX_CHIPS = 60;
 const MAX_BLOOMS = 24;
 const MAX_STEAM = 40;
 const MAX_BUBBLES = 28;
+const MAX_DROPS = 36;
+/** شتاب گرانش قطرات، واحد rx بر مجذور ثانیه */
+const DROP_GRAVITY = 14;
+/** حباب تا این کسر از عمرش بزرگ می‌شود، بعد می‌ترکد */
+export const BUBBLE_GROW = 0.72;
 const SPARKLE_LIFE = 0.7;
 const SQUASH_STIFFNESS = 120;
 const SQUASH_DAMPING = 10;
@@ -82,20 +88,61 @@ export interface SurfaceBubble {
   age: number;
   dur: number;
   rim: boolean;
+  /** ضریب اندازه (۱ ≈ حباب معمولی) */
+  size: number;
+  /** فاز لرزش گنبد */
+  wob: number;
 }
 
+/**
+ * قطره‌ی پاشش در فضای شبه‌سه‌بعدی (واحد شعاع افقی دهانه):
+ * x افقی، y ارتفاع از سطح میز، z عمق به‌سوی بیننده. نقشه‌ی صفحه در `dropScreen`.
+ */
 export interface SplashDrop {
-  u: number;
-  v: number;
+  x: number;
+  y: number;
+  z: number;
   vx: number;
   vy: number;
+  vz: number;
   /** ثانیه‌ی پرواز */
   life: number;
   /** طول خشک شدن بعد از نشستن */
   max: number;
   phase: 'fly' | 'dry';
   dry: number;
+  /** شعاع قطره، پیکسل صحنه */
   r: number;
+  /** قطره‌ی ثانویه‌ی برخورد — خودش دیگر نمی‌پاشد */
+  child: boolean;
+  /** پهنای لکه بعد از نشستن نسبت به r */
+  splat: number;
+  /** جهت کشیدگی لکه */
+  rot: number;
+  /** ثانیه از لحظه‌ی برخورد (حلقه‌ی پاشش) */
+  hit: number;
+  /** جای فرود برنامه‌ریزی‌شده روی میز — در لحظه‌ی برخورد دقیقاً همین‌جا می‌نشیند */
+  tx: number;
+  tz: number;
+}
+
+/** نقطه‌ی صفحه‌ی قطره نسبت به مرکز دهانه، واحد rx */
+export function dropScreen(d: Pick<SplashDrop, 'x' | 'y' | 'z'>): { x: number; y: number } {
+  return { x: d.x, y: CLASSIC_SPLASH_TABLE.drop - d.y + d.z * CLASSIC_SPLASH_TABLE.depth };
+}
+
+/** جای سایه‌ی قطره روی میز (زیرِ آن)، واحد rx */
+export function dropGroundY(d: Pick<SplashDrop, 'z'>): number {
+  return CLASSIC_SPLASH_TABLE.drop + d.z * CLASSIC_SPLASH_TABLE.depth;
+}
+
+/** آیا نقطه‌ی (x, z) روی میز از پشت دیگ/اشیای مجاور بیرون است و دیده می‌شود؟ */
+export function tableVisible(x: number, z: number): boolean {
+  const T = CLASSIC_SPLASH_TABLE;
+  const reach = x < 0 ? T.reachLeft : T.reachRight;
+  if (Math.abs(x) >= T.foot && Math.abs(x) <= reach) return z >= T.sideBack && z <= T.sideFront;
+  const sy = T.drop + z * T.depth;
+  return sy >= T.frontTop && sy <= T.frontBottom;
 }
 
 export interface SteamWisp {
@@ -574,65 +621,155 @@ export class ClassicBrewSim {
         const rim = tier === 'simmer' || this.rng.chance(0.45);
         const rad = rim ? this.rng.range(0.62, 0.88) : this.rng.range(0.05, 0.4);
         const a = this.rng.range(0, Math.PI * 2);
+        const big = tier === 'rolling' ? 1.25 : 1;
         this.bubbles.push({
           u: Math.cos(a) * rad,
           v: Math.sin(a) * rad,
           age: 0,
-          dur: this.rng.range(0.45, 0.95),
+          dur: rim ? this.rng.range(0.5, 0.9) : this.rng.range(0.7, 1.3),
           rim,
+          size: (rim ? this.rng.range(0.55, 1) : this.rng.range(0.9, 1.6)) * big,
+          wob: this.rng.range(0, Math.PI * 2),
         });
       }
       if (tier === 'rolling' && this.rng.chance(dt * 2.5)) this.splash(1, 0.65);
     } else {
       this.bubbleTimer = 0;
     }
-    for (const b of this.bubbles) b.age += dt;
+    for (const b of this.bubbles) {
+      b.age += dt;
+      if (this.omega !== 0) {
+        const r = Math.hypot(b.u, b.v);
+        const ang = Math.atan2(b.v, b.u) + this.omega * (1 - 0.4 * r * r) * 0.5 * dt;
+        b.u = Math.cos(ang) * r;
+        b.v = Math.sin(ang) * r;
+      }
+    }
     this.bubbles = this.bubbles.filter((b) => b.age < b.dur);
     this.stepDrops(dt);
   }
 
-  /** پاشش تا روی میز؛ بعد از نشستن یکی–دو ثانیه خشک می‌شود. */
+  /**
+   * جای فرود روی میزِ دیده‌شدنی: اغلب کناره‌ها (بیرون ردپای دیگ، نزدیک‌تر از
+   * هاون/شیشه)، گاهی باند باریک جلوی دیگ. `spread` دوری فرود را کم‌وزیاد می‌کند.
+   */
+  private pickLanding(spread: number): { x: number; z: number } {
+    const T = CLASSIC_SPLASH_TABLE;
+    if (this.rng.chance(0.22)) {
+      const sy = this.rng.range(T.frontTop, T.frontBottom);
+      return { x: this.rng.range(-T.foot * 0.85, T.foot * 0.85), z: (sy - T.drop) / T.depth };
+    }
+    const side = this.rng.chance(0.5) ? -1 : 1;
+    const reach = side < 0 ? T.reachLeft : T.reachRight;
+    const far = Math.min(1, this.rng.range(0.04, 1) * (0.55 + 0.6 * spread));
+    return {
+      x: side * (T.foot + Math.max(0.04, reach - T.foot) * far),
+      z: this.rng.range(T.sideBack, T.sideFront),
+    };
+  }
+
+  private pushDrop(d: SplashDrop): void {
+    if (this.drops.length >= MAX_DROPS) {
+      const idx = this.drops.findIndex((o) => o.phase === 'dry');
+      this.drops.splice(idx >= 0 ? idx : 0, 1);
+    }
+    this.drops.push(d);
+  }
+
+  /**
+   * پاشش: اول جای فرود روی میز انتخاب می‌شود، بعد قطره از نزدیک لبه‌ی همان سمت
+   * با قوس پرتابه‌ای دقیقاً به آن نقطه می‌رسد — پس هیچ قطره‌ای روی بدنه‌ی دیگ یا
+   * بیرون میز نمی‌نشیند. بعد از نشستن یکی–دو ثانیه خشک می‌شود.
+   */
   private splash(count: number, spread: number): void {
+    const T = CLASSIC_SPLASH_TABLE;
     for (let i = 0; i < count; i++) {
-      if (this.drops.length >= 28) this.drops.shift();
-      const a = this.rng.range(-Math.PI, Math.PI);
-      const start = this.rng.range(0.2, 0.55);
-      this.drops.push({
-        u: Math.cos(a) * start,
-        v: Math.sin(a) * start * 0.35,
-        vx: Math.cos(a) * this.rng.range(2.4, 4.2) * spread,
-        vy: this.rng.range(0.4, 1.6) * spread,
+      const land = this.pickLanding(spread);
+      const toward = Math.atan2(land.z, land.x);
+      const startR = this.rng.range(0.3, 0.8);
+      const startA = toward + this.rng.range(-0.6, 0.6);
+      const x0 = Math.cos(startA) * startR;
+      const z0 = Math.sin(startA) * startR;
+      const flight = this.rng.range(0.55, 0.85);
+      this.pushDrop({
+        x: x0,
+        y: T.drop,
+        z: z0,
+        vx: (land.x - x0) / flight,
+        vz: (land.z - z0) / flight,
+        vy: (DROP_GRAVITY * flight) / 2 - T.drop / flight,
         life: 0,
-        max: this.rng.range(1.1, 2.1),
+        max: this.rng.range(1.3, 2.4),
         phase: 'fly',
         dry: 0,
-        r: this.rng.range(2.4, 5),
+        r: this.rng.range(2.6, 5.2) * (0.8 + 0.3 * spread),
+        child: false,
+        splat: this.rng.range(1.8, 2.6),
+        rot: this.rng.range(-0.5, 0.5),
+        hit: 0,
+        tx: land.x,
+        tz: land.z,
+      });
+    }
+  }
+
+  /** ریزقطره‌های برخورد — از نقطه‌ی فرود، رو به بیرون از دیگ، کوتاه و سبک */
+  private spatter(parent: SplashDrop): void {
+    const n = this.rng.int(1, 3);
+    const away = Math.atan2(parent.z, parent.x);
+    for (let i = 0; i < n; i++) {
+      const a = away + this.rng.range(-0.9, 0.9);
+      const dist = this.rng.range(0.05, 0.16);
+      const flight = this.rng.range(0.16, 0.28);
+      const tx = parent.x + Math.cos(a) * dist;
+      const tz = parent.z + Math.sin(a) * dist * 0.6;
+      this.pushDrop({
+        x: parent.x,
+        y: 0,
+        z: parent.z,
+        vx: (tx - parent.x) / flight,
+        vz: (tz - parent.z) / flight,
+        vy: (DROP_GRAVITY * flight) / 2,
+        life: 0,
+        max: this.rng.range(0.7, 1.2),
+        phase: 'fly',
+        dry: 0,
+        r: parent.r * this.rng.range(0.3, 0.45),
+        child: true,
+        splat: this.rng.range(1.2, 1.6),
+        rot: this.rng.range(-0.5, 0.5),
+        hit: 0,
+        tx,
+        tz,
       });
     }
   }
 
   private stepDrops(dt: number): void {
+    const landed: SplashDrop[] = [];
     for (const d of this.drops) {
       if (d.phase === 'fly') {
         d.life += dt;
-        d.vy += 7.5 * dt;
-        d.u += d.vx * dt;
-        d.v += d.vy * dt;
-        const onTable = Math.abs(d.u) > 1.85 || d.v > 2.05;
-        if ((onTable && d.vy > 0 && d.life > 0.16) || d.life > 1.2) {
+        d.vy -= DROP_GRAVITY * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.z += d.vz * dt;
+        if (d.y <= 0 && d.vy < 0) {
+          d.y = 0;
+          d.x = d.tx;
+          d.z = d.tz;
           d.phase = 'dry';
-          const side = Math.sign(d.u || (d.vx >= 0 ? 1 : -1));
-          if (Math.abs(d.u) < 1.9) d.u = side * (1.9 + Math.abs(d.u) * 0.15);
-          if (d.v < 2.15) d.v = 2.15 + Math.abs(d.u) * 0.08;
-          d.u = Math.max(-2.4, Math.min(2.4, d.u));
-          d.v = Math.max(2.05, Math.min(2.6, d.v));
           d.vx = 0;
           d.vy = 0;
+          d.vz = 0;
+          if (!d.child) landed.push(d);
         }
       } else {
+        d.hit += dt;
         d.dry += dt / d.max;
       }
     }
+    for (const d of landed) this.spatter(d);
     this.drops = this.drops.filter((d) => d.phase === 'fly' || d.dry < 1);
   }
 

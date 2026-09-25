@@ -14,6 +14,7 @@ import { FLAT_POT_OFFSET, FLAT_SCENE_SIZE } from '../art/flat/kit/scene.ts';
 import type { DropOverride, FlatCookingScene, MouthGeometry } from '../art/flat/kit/scene.ts';
 import { POT_GEOMETRY } from '../art/flat/kit/props.ts';
 import { SCENE_ZONES } from './artManifest';
+import { TABLE_TOP_FRONT_Y } from './furnaceGeometry';
 
 /** ابعاد فایل cauldron_body.png */
 export const CAULDRON_IMAGE = { width: 1071, height: 750 } as const;
@@ -60,6 +61,38 @@ export const STOVE_HOLE = {
   cy: CLASSIC_POT_BASE.y - 25,
   rx: Math.round((743 / 2) * CAULDRON_IMAGE_SCALE) + 14,
   ry: 42,
+};
+
+/** حاشیه‌ی امن تا اشیای مجاور (هاون، شیشه) و لبه‌های میز — پیکسل صحنه */
+const SPLASH_MARGIN = 12;
+
+/**
+ * سطح میز از دید قطرات پاشش — همه در واحد «شعاع افقی دهانه» (rx = ۱).
+ *
+ * مدل شبه‌سه‌بعدی: x افقی، y ارتفاع از سطح میز، z عمق به‌سوی بیننده.
+ * نقطه‌ی جهان (x, y, z) روی صفحه به (x, drop − y + z·depth) نسبت به مرکز
+ * دهانه می‌رود؛ سطح میز y = 0 است و مرکز سوراخ اجاق روی همان صفحه.
+ * قطره فقط جایی می‌نشیند که میز واقعاً دیده می‌شود: کناره‌های دیگ (بیرون ردپا
+ * و دورتر از هاون/شیشه) یا باند باریک جلوی دیگ بین لبه‌ی سوراخ و لبه‌ی میز.
+ */
+export const CLASSIC_SPLASH_TABLE = {
+  /** فاصله‌ی سطح میز (مرکز سوراخ اجاق) از مرکز دهانه، روی صفحه */
+  drop: (STOVE_HOLE.cy - CLASSIC_MOUTH.y) / CLASSIC_MOUTH.rx,
+  /** فشردگی عمق: هر واحد عمق روی میز چند واحد روی صفحه پایین می‌رود */
+  depth: CLASSIC_MOUTH.ry / CLASSIC_MOUTH.rx,
+  /** شعاع ردپای دیگ + سوراخ اجاق؛ نزدیک‌تر از این روی بدنه می‌افتد */
+  foot: STOVE_HOLE.rx / CLASSIC_MOUTH.rx + 0.2,
+  /** دورترین جای مجاز سمت چپ (تا لبه‌ی هاون) */
+  reachLeft:
+    (CLASSIC_MOUTH.x - (SCENE_ZONES.mortar.x + SCENE_ZONES.mortar.width + SPLASH_MARGIN)) / CLASSIC_MOUTH.rx,
+  /** دورترین جای مجاز سمت راست (تا لبه‌ی جای شیشه) */
+  reachRight: (SCENE_ZONES.bottlingPoint.x - SPLASH_MARGIN - CLASSIC_MOUTH.x) / CLASSIC_MOUTH.rx,
+  /** عمق مجاز فرود در کناره‌ها (واحد جهان): کمی پشت تا کمی جلوی مرکز دیگ */
+  sideBack: -0.6,
+  sideFront: 0.9,
+  /** باند جلوی دیگ روی صفحه: از زیر لبه‌ی سوراخ اجاق تا لبه‌ی جلوی میز */
+  frontTop: (STOVE_HOLE.cy + STOVE_HOLE.ry + 6 - CLASSIC_MOUTH.y) / CLASSIC_MOUTH.rx,
+  frontBottom: (TABLE_TOP_FRONT_Y - SPLASH_MARGIN / 2 - CLASSIC_MOUTH.y) / CLASSIC_MOUTH.rx,
 };
 
 /**
