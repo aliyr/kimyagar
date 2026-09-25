@@ -82,17 +82,29 @@
   --tilt-y: 2.2;
   --tilt-rig: 1.06;
 }
+/*
+ * لایه‌های تیلت روی GPU می‌مانند (will-change + translateZ) تا با هر فریمِ سنسور
+ * دوباره raster نشوند؛ روی گوشی وگرنه پرش و لحظه‌های سیاه می‌آید. سردر خودش
+ * روی ریشه will-change ندارد (باگ گوشهٔ آسمان) ولی لایه‌های داخلی مجازند.
+ */
 .scene-tilt__rig {
   position: absolute;
   inset: 0;
   transform-origin: 50% 50%;
   pointer-events: none;
+  will-change: transform;
+  backface-visibility: hidden;
   transform: scale(var(--tilt-rig)) rotateX(calc(var(--py) * var(--tilt-x) * -1deg)) rotateY(calc(var(--px) * var(--tilt-y) * 1deg));
 }
 .scene-depth {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.scene-depth--pin {
+  will-change: auto;
 }
 .scene-depth--back {
   z-index: 0;
@@ -113,19 +125,19 @@
   z-index: 5;
 }
 .scene-depth--back {
-  transform: translate(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px));
+  transform: translate3d(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px), 0);
 }
 .scene-depth--mid {
-  transform: translate(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px));
+  transform: translate3d(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px), 0);
 }
 .scene-depth--front {
-  transform: translate(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px));
+  transform: translate3d(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px), 0);
 }
 .scene-depth--work {
-  transform: translate(calc(var(--px) * var(--depth-work) * 1px), calc(var(--py) * var(--depth-work) * 1px));
+  transform: translate3d(calc(var(--px) * var(--depth-work) * 1px), calc(var(--py) * var(--depth-work) * 1px), 0);
 }
 .scene-depth--near {
-  transform: translate(calc(var(--px) * var(--depth-near) * 1px), calc(var(--py) * var(--depth-near) * 1px));
+  transform: translate3d(calc(var(--px) * var(--depth-near) * 1px), calc(var(--py) * var(--depth-near) * 1px), 0);
 }
 .workshop-behind-gate .scene-tilt__rig,
 .workshop-behind-gate .scene-depth--back,

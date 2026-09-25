@@ -57,6 +57,15 @@ export function applyDeadzone(deltaDeg: number, dead = TILT.deadzoneDeg): number
  * angle از screen.orientation می‌آید (۰، ۹۰، ۱۸۰، ۲۷۰)، نه از مقایسهٔ عرض و ارتفاع.
  * portrait: gamma چپ/راست، beta جلو/عقب.
  */
+/** اختلاف دو زاویه با پیچ‌خوردن ۳۶۰ (beta −۱۸۰..۱۸۰ و gamma −۹۰..۹۰ لبه دارند) */
+export function angleDelta(value: number, base: number, wrap: number): number {
+  let d = value - base;
+  const half = wrap / 2;
+  while (d > half) d -= wrap;
+  while (d < -half) d += wrap;
+  return d;
+}
+
 export function screenTilt(
   beta: number,
   gamma: number,
@@ -64,8 +73,8 @@ export function screenTilt(
   baseGamma: number,
   orientationAngle: number,
 ): TiltPose {
-  const dBeta = beta - baseBeta;
-  const dGamma = gamma - baseGamma;
+  const dBeta = angleDelta(beta, baseBeta, 360);
+  const dGamma = angleDelta(gamma, baseGamma, 180);
   const angle = ((orientationAngle % 360) + 360) % 360;
   let dx: number;
   let dy: number;

@@ -36,11 +36,14 @@
   perspective-origin: 50% 50%;
   pointer-events: none;
 }
+/* لایه‌های تیلت روی GPU (will-change فقط روی لایه‌های داخلی، نه ریشه) تا فریم‌های سنسور نپرند */
 .intro__tilt-rig {
   position: absolute;
   inset: 0;
   transform-origin: 50% 50%;
   pointer-events: none;
+  will-change: transform;
+  backface-visibility: hidden;
   transform: scale(var(--tilt-rig)) rotateX(calc(var(--py) * var(--tilt-x) * -1deg)) rotateY(calc(var(--px) * var(--tilt-y) * 1deg));
 }
 .intro.is-loading {
@@ -73,7 +76,9 @@
 .intro__layer--sky {
   inset: -24px -24px auto;
   height: 470px;
-  transform: translate(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px));
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translate3d(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px), 0);
 }
 .intro__sky-gradient {
   position: absolute;
@@ -112,11 +117,15 @@
 
 .intro__layer--facade {
   transform-origin: 50% 50%;
-  transform: translate(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px));
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translate3d(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px), 0);
 }
 .intro__layer--front {
   pointer-events: none;
-  transform: translate(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px));
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translate3d(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px), 0);
 }
 .intro__pin {
   position: absolute;

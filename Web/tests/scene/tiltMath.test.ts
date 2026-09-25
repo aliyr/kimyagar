@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  angleDelta,
   applyDeadzone,
   clampUnit,
   pointerTilt,
@@ -10,6 +11,13 @@ import {
 } from '../../src/scene/tilt/tiltMath';
 
 describe('screenTilt', () => {
+  it('unwraps angle deltas across the ±180 / ±90 seams', () => {
+    expect(angleDelta(178, -178, 360)).toBe(-4);
+    expect(angleDelta(-178, 178, 360)).toBe(4);
+    expect(angleDelta(88, -88, 180)).toBe(-4);
+    expect(angleDelta(10, 4, 360)).toBe(6);
+  });
+
   it('ignores tremor inside the deadzone and eases past it', () => {
     expect(applyDeadzone(1.2)).toBe(0);
     expect(applyDeadzone(-1.5)).toBe(0);
