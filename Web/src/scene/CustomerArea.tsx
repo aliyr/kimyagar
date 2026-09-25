@@ -15,7 +15,9 @@
  * تصاویر دو حالت به‌محض ورود مشتری Preload می‌شوند تا تعویض بی‌درنگ باشد.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { TiltPinContext } from './tilt/tiltPin';
 import { useGameStore } from '../store/gameStore';
 import type { QualityBand } from '../engine/types';
 import { CLASSIC_ART, SCENE_ZONES } from './artManifest';
@@ -145,6 +147,25 @@ export function CustomerArea() {
   );
 
   const reacting = phase === 'react';
+  const pin = useContext(TiltPinContext);
+  const bubble =
+    reacting && evaluation ? (
+      <div
+        data-testid="customer-bubble"
+        className={`cust-bubble cust-bubble--${emotion ?? 'happy'}`}
+        dir="rtl"
+        style={{
+          position: 'absolute',
+          left: BUBBLE.left,
+          top: BUBBLE.top,
+          width: BUBBLE.width,
+          zIndex: 88,
+        }}
+      >
+        <p className="cust-bubble__name">{customer.nameFa}</p>
+        <p className="cust-bubble__text">{evaluation.reactionFa}</p>
+      </div>
+    ) : null;
 
   return (
     <>
@@ -191,23 +212,7 @@ export function CustomerArea() {
         </div>
       </div>
 
-      {reacting && evaluation ? (
-        <div
-          data-testid="customer-bubble"
-          className={`cust-bubble cust-bubble--${emotion ?? 'happy'}`}
-          dir="rtl"
-          style={{
-            position: 'absolute',
-            left: BUBBLE.left,
-            top: BUBBLE.top,
-            width: BUBBLE.width,
-            zIndex: 88,
-          }}
-        >
-          <p className="cust-bubble__name">{customer.nameFa}</p>
-          <p className="cust-bubble__text">{evaluation.reactionFa}</p>
-        </div>
-      ) : null}
+      {bubble && pin ? createPortal(bubble, pin) : bubble}
 
       <div className="counter" style={zoneStyle(SCENE_ZONES.customerCounter)}>
         {counterArt.node}

@@ -1,55 +1,44 @@
 /**
- * افکت‌های داخل دهانه‌ی پاتیل کلاسیک — `FlatCookingScene` کیت Works روی Canvas،
- * بدون دیگ و اجاق برداری (drawPot/drawHearth=false)، منطبق بر دهانه‌ی PNG
- * (classicCauldronGeometry).
- *
- * پل store ⇒ صحنه (همان قرارداد v2/FlatCauldron به‌علاوه‌ی «حقیقت بازی»):
- * - ورودی تازه در brew.entries ⇒ اگر قاشق ریخته، بدون افتادن دوباره داخل دیگ می‌نشیند؛
- *   وگرنه scene.drop. بعد هم‌زدن خودکار.
- * - currentHeat ⇒ setHeatLevel؛ bottled ⇒ آتش خاموش.
- * - حالت پیشرفت بیرونی: هر ماده به نسبت exposure/آستانه‌ی «رسیده» فرو می‌رود
- *   (setIngredientProgress)؛ همه رسیده ⇒ شمسه (setDone)؛ سوخته ⇒ دود خاکستری
- *   و مایع تیره (setBurnt + liquidAdjust).
- * - مشتری/دور تازه ⇒ reset(seedForCustomer)؛ Pause ⇒ شبیه‌سازی می‌ایستد.
- *
- * هر فریم، squash & stretch کیت و کج‌شدن هنگام ریختن به‌صورت transform روی
- * بدنه‌ی PNG (bodyRef) و خودِ Canvas نوشته می‌شود تا هر دو با هم حرکت کنند
- * (لنگر: پایین بدنه، CLASSIC_POT_BASE).
+ * پل store ⇒ ClassicBrewSim و Canvas نقاشی‌گونه‌ی دهانه.
+ * قراردادها: data-testid=cauldron-fx-canvas، data-sparkles،
+ * transform هم‌زمان روی بدنه‌ی PNG و Canvas.
  */
 
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { FLAT_SCENE_SIZE } from '../art/flat/kit/scene.ts';
-import type { FlatCookingScene } from '../art/flat/kit/scene.ts';
-import { flatIngredientById } from '../art/flat/kit/ingredients.ts';
-import { useFlatCanvas } from '../art/flat/react/useFlatCanvas';
 import { seedForCustomer } from '../art/flat/react/flatSeed';
 import { flatHeatLevel } from '../art/flat/react/heatLevel';
-import { burntLiquid } from './v2/flatCauldronGeometry';
-import { CLASSIC_FX_RECT, CLASSIC_POT_BASE, settlePouredIngredient, sinkProgress } from './classicCauldronGeometry';
+import {
+  CLASSIC_FX_RECT_TALL,
+  CLASSIC_POT_BASE,
+  sinkProgress,
+} from './classicCauldronGeometry';
 import { SCENE_ZONES } from './artManifest';
 import { rectStyle } from './Zone';
 import { useUiState } from './uiState';
 import { sfx } from '../audio/sfx';
+import { bakeChipsFor } from './mortarPile';
+import { takeCauldronDrop } from './cauldron/cauldronDropChannel';
+import { strengthFor, type ClassicBrewSim } from './cauldron/ClassicBrewSim';
+import { ClassicBrewPainter } from './cauldron/ClassicBrewPainter';
+import { getFireGlow } from './cauldron/fireGlow';
+import type { MortarChip } from './mortarPile';
 import '../art/flat/react/flat.css';
 
-/** فاصله‌ی ریختن تا هم‌زدن خودکار (ms) — تا ماده فرود بیاید و پاشش تمام شود */
 const AUTO_STIR_DELAY_MS = 900;
-/** زاویه‌ی کج‌شدن به‌سمت شیشه هنگام ریختن (درجه؛ مثبت = لبه‌ی راست پایین) */
 const POUR_TILT_DEG = 11;
-/** نرخ نرم‌شدن کج‌شدن (۱/ثانیه) */
-const TILT_EASE = 6;
+const FIXED_DT = 1 / 60;
+const GRIND_WORK = { coarse: 1, crushed: 2.2, fine: 3.6 } as const;
 
 const BODY_ORIGIN = `${CLASSIC_POT_BASE.x - SCENE_ZONES.cauldron.x}px ${CLASSIC_POT_BASE.y - SCENE_ZONES.cauldron.y}px`;
-const FX_ORIGIN = `${CLASSIC_POT_BASE.x - CLASSIC_FX_RECT.x}px ${CLASSIC_POT_BASE.y - CLASSIC_FX_RECT.y}px`;
+const FX_ORIGIN = `${CLASSIC_POT_BASE.x - CLASSIC_FX_RECT_TALL.x}px ${CLASSIC_POT_BASE.y - CLASSIC_FX_RECT_TALL.y}px`;
 
 export function ClassicCauldronFx({
-  scene,
+  sim,
   bodyRef,
 }: {
-  scene: FlatCookingScene;
-  /** بدنه‌ی PNG که باید با squash/کج‌شدن Canvas هم‌حرکت شود */
+  sim: ClassicBrewSim;
   bodyRef: RefObject<HTMLElement | null>;
 }) {
   const entries = useGameStore((s) => s.brew.entries);
@@ -68,37 +57,28 @@ export function ClassicCauldronFx({
   const seed = seedForCustomer(customerId, customerIndex);
   const knownEntryIds = useRef<Set<string>>(new Set());
   const autoStirTimer = useRef<number | null>(null);
-  const tiltRef = useRef(0);
-  const tiltTargetRef = useRef(0);
-  tiltTargetRef.current = pour === 'tilt' || pour === 'stream' ? POUR_TILT_DEG : 0;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const painterRef = useRef<ClassicBrewPainter | null>(null);
 
   useEffect(() => {
-    scene.setExternalProgress(true);
-  }, [scene]);
-
-  // مشتری/دور تازه ⇒ صحنه از نو با بذر همان مشتری
-  useEffect(() => {
-    scene.reset(seed);
-    scene.setHeatLevel(flatHeatLevel(useGameStore.getState().brew.currentHeat));
+    sim.reset(seed);
+    sim.setHeatLevel(bottled ? 0 : flatHeatLevel(useGameStore.getState().brew.currentHeat));
     knownEntryIds.current = new Set();
-  }, [scene, seed]);
+  }, [sim, seed]);
 
-  // حرارت بازی ⇒ سطح آتش (پس از بطری‌کردن آتش خاموش می‌شود)
   useEffect(() => {
-    scene.setHeatLevel(bottled ? 0 : flatHeatLevel(heat));
-  }, [scene, heat, bottled]);
+    sim.setHeatLevel(bottled ? 0 : flatHeatLevel(heat));
+  }, [sim, heat, bottled]);
 
-  // سوخته ⇒ رنگ مایع + دود خاکستری و خاموشی شمسه؛ رسیده ⇒ شمسه
   useEffect(() => {
-    scene.setLiquidAdjust(overprocessed ? burntLiquid : null);
-    scene.setBurnt(overprocessed);
-  }, [scene, overprocessed]);
+    sim.setBurnt(overprocessed);
+  }, [sim, overprocessed]);
+
   useEffect(() => {
-    scene.setDone(allReady);
+    sim.setDone(allReady);
     if (allReady) sfx.sparkle();
-  }, [scene, allReady]);
+  }, [sim, allReady]);
 
-  // «حقیقت بازی»: هر ماده به نسبت استخراجش فرو می‌رود
   useEffect(() => {
     const perId = new Map<string, number>();
     for (const e of entries) {
@@ -106,50 +86,61 @@ export function ClassicCauldronFx({
       const prev = perId.get(e.ingredientId);
       perId.set(e.ingredientId, prev === undefined ? p : Math.min(prev, p));
     }
-    for (const [id, p] of perId) scene.setIngredientProgress(id, p);
-  }, [scene, entries, readyThreshold]);
+    for (const [id, p] of perId) sim.setIngredientProgress(id, p);
+  }, [sim, entries, readyThreshold]);
 
-  // ورودی‌های تازه ⇒ ریختن + هم‌زدن خودکار؛ خالی‌شدن ⇒ ریست
+  useEffect(() => {
+    sim.setPourTilt(pour === 'tilt' || pour === 'stream' ? POUR_TILT_DEG : 0);
+  }, [sim, pour]);
+
   useEffect(() => {
     const known = knownEntryIds.current;
     if (entries.length === 0) {
       if (known.size > 0) {
-        scene.reset(seed);
-        scene.setHeatLevel(flatHeatLevel(useGameStore.getState().brew.currentHeat));
+        sim.reset(seed);
+        sim.setHeatLevel(flatHeatLevel(useGameStore.getState().brew.currentHeat));
         known.clear();
       }
       return;
     }
-    let dropped = 0;
-    for (const entry of entries) {
-      if (known.has(entry.id)) continue;
-      known.add(entry.id);
+    const fresh = entries.filter((entry) => !known.has(entry.id));
+    if (fresh.length === 0) return;
+    for (const entry of fresh) known.add(entry.id);
+    const poured = takeCauldronDrop();
+    const claimed = new Set<number>();
+    for (const entry of fresh) {
       const def = ingredientById(entry.ingredientId);
-      const kitIngredient = flatIngredientById(entry.ingredientId);
-      if (!kitIngredient) continue;
-      const baseBits = kitIngredient.bits;
-      const spec = {
-        tint: def?.color ?? kitIngredient.tint,
-        strength: kitIngredient.strength * (0.8 + 0.2 * entry.quantity),
-        bits: {
-          count: Math.round(baseBits.count * (0.75 + 0.25 * entry.quantity)),
-          colors: def ? [...baseBits.colors, def.color] : baseBits.colors,
+      const tint = def?.color ?? '#8a7a52';
+      let chips: MortarChip[] = [];
+      if (poured) {
+        chips = poured.filter((chip) => chip.ingredientId === entry.ingredientId && !claimed.has(chip.id));
+        if (chips.length === 0) {
+          chips = poured.filter((chip) => !chip.ingredientId && !claimed.has(chip.id));
+        }
+        chips.forEach((chip) => claimed.add(chip.id));
+      }
+      if (chips.length === 0) {
+        const work = GRIND_WORK[entry.grindState] * entry.quantity;
+        chips = bakeChipsFor(entry.ingredientId, entry.quantity, work, tint);
+      }
+      sim.dropChips({
+        ingredient: {
+          id: entry.ingredientId,
+          tint,
+          strength: strengthFor(entry.ingredientId),
+          quantity: entry.quantity,
         },
-      };
-      if (useUiState.getState().transfer === 'drop') settlePouredIngredient(scene, entry.ingredientId, spec);
-      else scene.drop(entry.ingredientId, spec);
-      dropped++;
+        chips,
+      });
     }
-    if (dropped > 0) {
-      if (autoStirTimer.current !== null) window.clearTimeout(autoStirTimer.current);
-      autoStirTimer.current = window.setTimeout(() => {
-        autoStirTimer.current = null;
-        scene.stir();
-        useGameStore.getState().stir();
-        pulse('swirlPulse');
-      }, AUTO_STIR_DELAY_MS + (dropped - 1) * 350);
-    }
-  }, [scene, entries, seed, ingredientById, pulse]);
+    if (autoStirTimer.current !== null) window.clearTimeout(autoStirTimer.current);
+    autoStirTimer.current = window.setTimeout(() => {
+      autoStirTimer.current = null;
+      sim.stir();
+      useGameStore.getState().stir();
+      pulse('swirlPulse');
+    }, AUTO_STIR_DELAY_MS + (fresh.length - 1) * 350);
+  }, [sim, entries, seed, ingredientById, pulse]);
 
   useEffect(
     () => () => {
@@ -158,45 +149,72 @@ export function ClassicCauldronFx({
     [],
   );
 
-  const lastFrameRef = useRef(0);
-
-  const canvasRef = useFlatCanvas({
-    designSize: FLAT_SCENE_SIZE,
-    step: (dt) => scene.update(dt),
-    render: () => {
-      // کج‌شدن با زمان واقعی نرم می‌شود (هنگام ریختن بازی Pause است و step اجرا نمی‌شود)
-      const now = performance.now();
-      const dt = lastFrameRef.current ? Math.min(0.1, (now - lastFrameRef.current) / 1000) : 0;
-      lastFrameRef.current = now;
-      tiltRef.current += (tiltTargetRef.current - tiltRef.current) * Math.min(1, dt * TILT_EASE);
-      // squash کیت + کج‌شدن ریختن، هم‌زمان روی بدنه‌ی PNG و Canvas
-      const { x, y } = scene.squash;
-      const tilt = tiltRef.current;
-      const transform = `rotate(${tilt.toFixed(2)}deg) scale(${x.toFixed(4)}, ${y.toFixed(4)})`;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    if (!painterRef.current) painterRef.current = new ClassicBrewPainter();
+    const painter = painterRef.current;
+    const measure = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.max(1, Math.round(rect.width * dpr));
+      const h = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    let raf = 0;
+    let previous = performance.now();
+    let accumulator = 0;
+    let frame = 0;
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      const elapsed = Math.min(0.25, (now - previous) / 1000);
+      previous = now;
+      accumulator += elapsed;
+      let steps = 0;
+      try {
+        while (accumulator >= FIXED_DT && steps < 5) {
+          sim.setFireGlow(getFireGlow());
+          sim.update(FIXED_DT);
+          accumulator -= FIXED_DT;
+          steps++;
+        }
+        if (++frame % 20 === 0) measure();
+        painter.render(ctx, canvas.width, canvas.height, sim);
+      } catch (err) {
+        canvas.dataset.fxError = err instanceof Error ? err.message : String(err);
+      }
+      const { x, y } = sim.squash;
+      const transform = `rotate(${sim.tilt.toFixed(2)}deg) scale(${x.toFixed(4)}, ${y.toFixed(4)})`;
       const body = bodyRef.current;
       if (body) {
         body.style.transformOrigin = BODY_ORIGIN;
         body.style.transform = transform;
+        body.style.setProperty('--soot', sim.soot.toFixed(3));
       }
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.style.transformOrigin = FX_ORIGIN;
-        canvas.style.transform = transform;
-        canvas.dataset.sparkles = String(scene.sparkleCount);
-      }
-      return scene.render();
-    },
-    // همیشه زنده: شمسه‌ها، بخار و قُل‌قُل فقط تصویری‌اند (پیشرفت واقعی از store می‌آید)؛
-    // اگر با Pause بازی (Overlay/نتیجه) بایستند، جرقه‌ها «ثابت» روی صحنه می‌مانند.
-    running: true,
-  });
+      canvas.style.transformOrigin = FX_ORIGIN;
+      canvas.style.transform = transform;
+      canvas.dataset.sparkles = String(sim.sparkleCount);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', measure);
+    };
+  }, [sim, bodyRef]);
 
   return (
     <canvas
       ref={canvasRef}
       className="flat-canvas cst-cauldron-fx"
       data-testid="cauldron-fx-canvas"
-      style={rectStyle(CLASSIC_FX_RECT, SCENE_ZONES.cauldron.z + 1)}
+      style={rectStyle(CLASSIC_FX_RECT_TALL, SCENE_ZONES.cauldron.z + 1)}
       aria-hidden="true"
     />
   );

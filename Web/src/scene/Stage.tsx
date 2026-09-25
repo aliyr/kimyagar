@@ -9,6 +9,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { SCENE_HEIGHT, SCENE_WIDTH } from './artManifest';
+import { unprojectWork } from './tilt/tiltMath';
+import { tiltPose } from './tilt/tiltPose';
 import { useUiState } from './uiState';
 
 export interface CapturedSpace {
@@ -104,17 +106,20 @@ export function Stage({
 
   const space = useMemo<StageSpace>(
     () => {
-      const from = (m: { rect: DOMRect; s: number } | null) => ({
+      const from = (m: { rect: DOMRect; s: number } | null, pose: { px: number; py: number; active: boolean }) => ({
         toScene: (clientX: number, clientY: number) => {
           if (!m) return { x: clientX, y: clientY };
-          return { x: (clientX - m.rect.left) / m.s, y: (clientY - m.rect.top) / m.s };
+          const sx = (clientX - m.rect.left) / m.s;
+          const sy = (clientY - m.rect.top) / m.s;
+          if (!pose.active) return { x: sx, y: sy };
+          return unprojectWork(pose, sx, sy);
         },
         scale: () => m?.s ?? 1,
       });
       return {
-        toScene: (clientX, clientY) => from(measure()).toScene(clientX, clientY),
+        toScene: (clientX, clientY) => from(measure(), { ...tiltPose }).toScene(clientX, clientY),
         scale: () => measure()?.s ?? 1,
-        capture: () => from(measure()),
+        capture: () => from(measure(), { px: tiltPose.px, py: tiltPose.py, active: tiltPose.active }),
       };
     },
     [measure],

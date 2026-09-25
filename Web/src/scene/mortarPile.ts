@@ -1022,6 +1022,21 @@ function bakePortion(portion: MixPortion, scaleMul: number) {
   return { id: portion.ingredientId, applied: norm, target: norm, color: portion.color, chips: baked, area };
 }
 
+/** تکه‌های هم‌درجه برای وقتی ورود پاتیل بدون قاشق ساخته می‌شود (آزمون/seed). */
+export function bakeChipsFor(ingredientId: string, quantity: number, grindWork: number, color: string): MortarChip[] {
+  const savedOrbit = orbit;
+  const savedArea = pileArea;
+  const savedFresh = fresh;
+  const baked = bakePortion(
+    { ingredientId, quantity, grindWork, color },
+    Math.pow(Math.max(1, quantity), -0.35),
+  );
+  orbit = savedOrbit;
+  pileArea = savedArea;
+  fresh = savedFresh;
+  return baked.chips;
+}
+
 function focusNorm(portions: MixPortion[]): number {
   const pending = portions.filter((portion) => portion.grindWork < WORK_FINE * portion.quantity - 0.02);
   const list = pending.length > 0 ? pending : portions;

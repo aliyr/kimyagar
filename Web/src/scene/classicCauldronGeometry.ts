@@ -91,6 +91,16 @@ export const CLASSIC_FX_RECT = {
   height: FLAT_SCENE_SIZE * CLASSIC_KIT_SCALE,
 };
 
+/** جای بخار بالای دهانه و پاشش قطرات روی بدنه‌ی دیگ (پیکسل صحنه) */
+const STEAM_HEADROOM = 360;
+const DROP_ROOM = 340;
+export const CLASSIC_FX_RECT_TALL = {
+  x: CLASSIC_MOUTH.x - CLASSIC_MOUTH.rx * 2.6,
+  y: CLASSIC_MOUTH.y - CLASSIC_MOUTH.ry - STEAM_HEADROOM,
+  width: CLASSIC_MOUTH.rx * 5.2,
+  height: CLASSIC_MOUTH.ry * 2 + STEAM_HEADROOM + DROP_ROOM,
+};
+
 /** تبدیل نقطه‌ی صحنه به فضای طراحی کیت (برای تست هم‌ترازی) */
 export function sceneToKit(point: { x: number; y: number }): { x: number; y: number } {
   return {

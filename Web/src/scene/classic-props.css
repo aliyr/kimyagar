@@ -192,11 +192,13 @@
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0) 55%, rgba(60, 25, 8, 0.35));
 }
 .stove-hole--lip {
-  /* clip‌path برای border-box؛ box-shadow بیرونی به‌هرحال بریده می‌شود */
+  /* فقط حلقه‌ی آهنی جلو؛ پرِ سیاه روی شعله ننشیند */
   clip-path: inset(50% 0 0 0);
+  background: transparent;
+  box-shadow: none;
 }
 .stove-hole--lip .stove-hole__depth {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.25));
+  background: transparent;
 }
 
 /* درخشش آتش از ته سوراخ (داخل FireLight تا با --fire-glow بلرزد) */
@@ -239,13 +241,29 @@
 .fire-light__layer--pot {
   background: radial-gradient(ellipse at 50% 100%, rgba(255, 150, 60, 0.55) 0%, rgba(255, 110, 40, 0.22) 45%, transparent 75%);
   filter: blur(10px);
-  opacity: calc(var(--fire-glow) * 0.9);
+  opacity: calc(var(--fire-glow) * 0.35);
 }
 
 .fire-light__layer--table {
   background: radial-gradient(ellipse at 50% 55%, rgba(255, 140, 50, 0.5) 0%, rgba(255, 100, 30, 0.2) 40%, transparent 72%);
   filter: blur(14px);
   opacity: calc(var(--fire-glow) * 0.8);
+}
+
+.fire-light__layer--rim {
+  background: radial-gradient(ellipse at 50% 72%, rgba(255, 170, 70, 0) 40%, rgba(255, 140, 40, 0.65) 70%, transparent 82%);
+  opacity: calc(var(--fire-glow) * 0.75);
+  filter: blur(3px);
+}
+
+.stove-flames {
+  pointer-events: none;
+  display: block;
+}
+
+.stove-flames--front {
+  /* فقط هلال جلوی سوراخ، تا شعله روی شکم دیگ ننشیند */
+  clip-path: inset(48% 0 0 0);
 }
 
 .fire-light__layer--mortar {
@@ -425,9 +443,10 @@
 
 .burnt-smoke__puff {
   position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 55%, rgba(96, 88, 86, 0.85) 0%, rgba(80, 74, 72, 0.55) 40%, rgba(70, 64, 62, 0) 72%);
-  filter: blur(14px);
+  border-radius: 40% 55% 46% 60% / 18% 22% 70% 68%;
+  background: linear-gradient(180deg, rgba(90, 84, 82, 0) 0%, rgba(96, 88, 86, 0.75) 28%, rgba(70, 64, 62, 0.35) 100%);
+  clip-path: polygon(46% 0%, 62% 18%, 78% 8%, 70% 36%, 92% 48%, 68% 58%, 80% 88%, 50% 72%, 22% 96%, 34% 60%, 8% 42%, 32% 28%, 18% 12%);
+  filter: blur(6px);
   opacity: 0;
   transform-origin: 50% 60%;
   animation: burnt-puff 6.5s cubic-bezier(0.2, 0.5, 0.4, 1) infinite both;

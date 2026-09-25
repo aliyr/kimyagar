@@ -18,6 +18,7 @@ import { classicSpoonShape } from './classicSpoon';
 import { SCENE_ZONES } from './artManifest';
 import { CLASSIC_MOUTH } from './classicCauldronGeometry';
 import { BOWL_MORTAR, scoopRest, scoopUnderSpoon, type MortarChip } from './mortarPile';
+import { publishCauldronDrop } from './cauldron/cauldronDropChannel';
 import type { TransferPhase } from './uiState';
 import './classic-stations.css';
 
@@ -147,12 +148,20 @@ export function SpoonTransfer({
     let released = false;
     let dropped = false;
     let finished = false;
+    let announced = false;
+    const land = () => {
+      if (!announced) {
+        announced = true;
+        publishCauldronDrop(scoopedRef.current);
+      }
+      callbacks.current.onDrop();
+    };
     const releasePour = () => {
       const list = pourSample(scoopedRef.current, 12);
       fall.replaceChildren();
       if (list.length === 0) {
         dropped = true;
-        callbacks.current.onDrop();
+        land();
         return;
       }
       const n = list.length;
@@ -276,7 +285,7 @@ export function SpoonTransfer({
             for (let i = 0; i < 3; i++) {
               mortarFx.ripple(LAND.x + (i - 1) * 16, LAND.y + (i % 2) * 4, trailColor());
             }
-            callbacks.current.onDrop();
+            land();
           }
         }
         blobScale = released ? 0 : 1;
@@ -284,7 +293,7 @@ export function SpoonTransfer({
         if (released && !dropped) {
           dropped = true;
           fall.style.opacity = '0';
-          callbacks.current.onDrop();
+          land();
         }
         const k = easeIn((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT);
         x = END.x + 10;

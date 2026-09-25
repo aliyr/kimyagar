@@ -6,7 +6,9 @@
  *
  * متغیرهای وقتِ روز (timeOfDay.ts) روی ریشه: --sky-a/b/c، --moon-opacity،
  * --facade-brightness، --facade-saturate، --ambient-tint، --lantern-strength.
- * --k ضریب سرعت ورود (۱ بار اول، ۰٫۶ بعدها)؛ --px/--py پارالاکس (−۱..۱).
+ * --k ضریب سرعت ورود (۱ بار اول، ۰٫۶ بعدها)؛ --px/--py تیلت (−۱..۱).
+ * عمق و زاویه با tiltMath.ts یکی است: عقب ۱۸، وسط ۳۶، جلو ۶۰ پیکسل؛
+ * چرخش حدود ۲ درجه و scale ریگ ۱٫۰۶.
  */
 
 .intro {
@@ -20,6 +22,26 @@
   --k: 1;
   --px: 0;
   --py: 0;
+  --depth-back: 18;
+  --depth-mid: 36;
+  --depth-front: 60;
+  --tilt-x: 2;
+  --tilt-y: 2.2;
+  --tilt-rig: 1.06;
+}
+.intro__tilt {
+  position: absolute;
+  inset: 0;
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+  pointer-events: none;
+}
+.intro__tilt-rig {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  transform: scale(var(--tilt-rig)) rotateX(calc(var(--py) * var(--tilt-x) * -1deg)) rotateY(calc(var(--px) * var(--tilt-y) * 1deg));
 }
 .intro.is-loading {
   opacity: 0;
@@ -51,7 +73,7 @@
 .intro__layer--sky {
   inset: -24px -24px auto;
   height: 470px;
-  transform: translate(calc(var(--px) * -5px), calc(var(--py) * -4px));
+  transform: translate(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px));
 }
 .intro__sky-gradient {
   position: absolute;
@@ -89,8 +111,28 @@
 /* ------------------------------ نما و در ------------------------------ */
 
 .intro__layer--facade {
-  transform: translate(calc(var(--px) * -9px), calc(var(--py) * -6px)) scale(1.012);
   transform-origin: 50% 50%;
+  transform: translate(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px));
+}
+.intro__layer--front {
+  pointer-events: none;
+  transform: translate(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px));
+}
+.intro__pin {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.intro.is-opening .intro__tilt-rig,
+.intro.is-entering .intro__tilt-rig,
+.intro.is-opening .intro__layer--sky,
+.intro.is-opening .intro__layer--facade,
+.intro.is-opening .intro__layer--front,
+.intro.is-entering .intro__layer--sky,
+.intro.is-entering .intro__layer--facade,
+.intro.is-entering .intro__layer--front {
+  transform: none;
 }
 
 /* لنگه‌ها پشت نما — فقط از دهانه دیده می‌شوند؛ نسبتِ طبیعی، لولا پشت دیوار */
@@ -364,8 +406,8 @@
 
 .intro__quote {
   position: absolute;
-  left: 438px;
-  top: 716px;
+  left: 1406px;
+  top: 868px;
   width: 306px;
   height: 173px;
   margin: 0;
@@ -417,11 +459,11 @@
   font-size: 13px;
   color: rgba(74, 47, 22, 0.7);
 }
-/* حالت باز: ورق تا مرکز صحنه (۹۶۰×۵۴۰) می‌آید و ۲٫۴× می‌شود؛ مرکز ورق در حالت عادی ≈ (۵۹۱، ۸۰۲) */
+/* حالت باز: ورق تا مرکز صحنه (۹۶۰×۵۴۰) می‌آید و ۲٫۴× می‌شود؛ مرکز ورق ≈ (۱۵۵۹، ۹۵۵) */
 .intro__quote.is-open,
 .intro__quote.is-open:hover {
   z-index: 31;
-  transform: translate(369px, -262px) rotate(0deg) scale(2.4);
+  transform: translate(-599px, -415px) rotate(0deg) scale(2.4);
   filter: drop-shadow(0 18px 28px rgba(0, 0, 0, 0.6));
 }
 .intro__quote-backdrop {
@@ -440,9 +482,9 @@
 .intro__start {
   position: absolute;
   left: 850px;
-  top: 640px;
+  top: 805px;
   width: 210px;
-  height: 290px;
+  height: 97px;
   padding: 0;
   border: 0;
   background: none;
@@ -455,12 +497,16 @@
 }
 .intro__knocker {
   position: absolute;
-  left: 58px;
-  top: 0;
+  left: 908px;
+  top: 640px;
   width: 94px;
   height: 131px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
   transform-origin: 50% 14%;
-  transition: transform 180ms ease;
+  transition: transform 180ms ease, opacity 300ms ease;
 }
 .intro__knocker img {
   width: 100%;
@@ -468,17 +514,17 @@
   object-fit: contain;
   filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.55));
 }
-.intro__start:hover .intro__knocker,
-.intro__start:focus-visible .intro__knocker {
+.intro__knocker:hover,
+.intro__knocker:focus-visible {
   transform: rotate(-6deg);
+  outline: none;
 }
 .intro.is-opening .intro__knocker {
   animation: intro-knock calc(420ms * var(--k)) ease-in-out 1;
 }
 .intro__plaque {
   position: absolute;
-  left: 0;
-  top: 165px;
+  inset: 0;
   width: 210px;
   height: 97px;
   transition: filter 200ms ease, transform 200ms ease;
@@ -515,7 +561,8 @@
   outline-offset: 4px;
   border-radius: 12px;
 }
-.intro.is-opening .intro__start {
+.intro.is-opening .intro__start,
+.intro.is-opening .intro__knocker {
   opacity: 0;
   transition-delay: calc(450ms * var(--k));
 }
@@ -603,25 +650,27 @@
 }
 
 .intro__map {
-  left: 1190px;
-  top: 592px;
+  left: 1748px;
+  top: 746px;
   width: 112px;
   height: 307px;
 }
-/* تاب روی خودِ تصویر؛ هدف لمسی (دکمه) ثابت می‌ماند */
+/* قلاب فلزی بالای طومار (حلقهٔ ؟) بریده می‌شود؛ خودِ طومار می‌ماند */
 .intro__map img {
-  transform-origin: 50% 6%;
+  object-view-box: inset(17.6% 0 0 0);
+  transform-origin: 50% 4%;
   animation: intro-sway 7.3s ease-in-out -2s infinite alternate;
 }
 .intro__ledger {
-  left: 226px;
-  top: 655px;
+  left: 24px;
+  top: 848px;
   width: 200px;
   height: 185px;
+  transform: translate(calc(var(--px) * 2px), calc(var(--py) * 2px));
 }
 .intro__settings {
-  left: 1790px;
-  top: 300px;
+  left: 1764px;
+  top: 328px;
   width: 80px;
   height: 230px;
   opacity: 0.92;
@@ -1305,6 +1354,12 @@
   }
   .intro__passer {
     display: none;
+  }
+  .intro__tilt-rig,
+  .intro__layer--sky,
+  .intro__layer--facade,
+  .intro__layer--front {
+    transform: none;
   }
   .intro__leaf,
   .intro__doorway-glow,

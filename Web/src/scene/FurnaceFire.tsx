@@ -24,7 +24,8 @@ import { sfx } from '../audio/sfx';
 import { SCENE_ZONES } from './artManifest';
 import { HEAT_NOTCHES } from './layout';
 import { FURNACE_LEVEL, FURNACE_RECT } from './furnaceGeometry';
-import { STOVE_HOLE } from './classicCauldronGeometry';
+import { setFireGlow } from './cauldron/fireGlow';
+import { CLASSIC_MOUTH } from './classicCauldronGeometry';
 import { rectStyle, zoneStyle } from './Zone';
 import './classic-props.css';
 
@@ -235,20 +236,24 @@ function FireLight({ hostRef }: { hostRef: React.RefObject<HTMLDivElement | null
           cauldron.z + 1,
         )}
       />
-      {/* ته سوراخ اجاق: نور از زیر دیگ بیرون می‌زند */}
-      <div
-        className="fire-light__layer fire-light__layer--hole"
-        style={rectStyle(
-          { x: STOVE_HOLE.cx - STOVE_HOLE.rx * 0.9, y: STOVE_HOLE.cy - STOVE_HOLE.ry * 0.8, width: STOVE_HOLE.rx * 1.8, height: STOVE_HOLE.ry * 1.6 },
-          SCENE_ZONES.workTable.z + 2,
-        )}
-      />
       {/* سطح میز دور دهانه‌ی کوره */}
       <div
         className="fire-light__layer fire-light__layer--table"
         style={rectStyle(
           { x: FURNACE_RECT.x - FURNACE_RECT.width * 0.9, y: FURNACE_RECT.y - FURNACE_RECT.height * 0.55, width: FURNACE_RECT.width * 2.8, height: FURNACE_RECT.height * 1.9 },
           SCENE_ZONES.workTable.z + 1,
+        )}
+      />
+      <div
+        className="fire-light__layer fire-light__layer--rim"
+        style={rectStyle(
+          {
+            x: CLASSIC_MOUTH.x - CLASSIC_MOUTH.rx,
+            y: CLASSIC_MOUTH.y - CLASSIC_MOUTH.ry,
+            width: CLASSIC_MOUTH.rx * 2,
+            height: CLASSIC_MOUTH.ry * 2,
+          },
+          cauldron.z + 2,
         )}
       />
       {/* هاون: نور از راست */}
@@ -330,6 +335,7 @@ export function FurnaceFire() {
       renderer.render(ctx, canvas.width, canvas.height);
       if (frame % 2 === 0 && lightRef.current) {
         lightRef.current.style.setProperty('--fire-glow', renderer.glow.toFixed(3));
+        setFireGlow(renderer.glow);
       }
     };
     raf = requestAnimationFrame(loop);
@@ -363,6 +369,16 @@ export function FurnaceFire() {
         />
       </div>
 
+    </>
+  );
+}
+
+/** اهرم‌های شدت آتش — بیرون از تیلت، تا با کج شدن صحنه نلغزند */
+export function HeatNotches() {
+  const heat = useGameStore((s) => s.brew.currentHeat);
+  const setHeat = useGameStore((s) => s.setHeat);
+  return (
+    <>
       {ORDER.map((level, i) => (
         <div
           key={level}

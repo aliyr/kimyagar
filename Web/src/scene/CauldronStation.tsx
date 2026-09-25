@@ -2,10 +2,8 @@
  * پاتیل — مرکز ادراکی تجربه (بخش ۴.۱)، نسخه‌ی هیبرید کلاسیک.
  *
  * بدنه‌ی مسیِ PNG (SCENE_ZONES.cauldron) می‌ماند؛ هرچه داخل دهانه زنده است —
- * مایع با رنگ ترکیب مواد، ذرات شناور که به نسبت استخراج فرو می‌روند، قاشق
- * سر بزی، حباب، بخار، شمسه‌ی «رسیده» و دود «سوخته» — از FlatCookingScene کیت
- * Works روی Canvas (ClassicCauldronFx) رندر می‌شود که دقیقاً روی دهانه‌ی PNG
- * نشسته است (classicCauldronGeometry).
+ * مایع، تکه‌های آمده از هاون، قاشق، حباب، بخار و دود — از ClassicBrewSim
+ * روی Canvas (ClassicCauldronFx) رندر می‌شود و روی دهانه‌ی PNG نشسته است.
  *
  * تعامل:
  * - ژست دایره‌ای ⇒ هم‌زدن دستی؛ قاشق Canvas دنبال اشاره‌گر می‌رود.
@@ -23,10 +21,9 @@ import { SCENE_ZONES } from './artManifest';
 import { PROPS } from './layout';
 import { ArtLayer, rectStyle, zoneStyle } from './Zone';
 import { useUiState } from './uiState';
-import { FlatCookingScene } from '../art/flat/kit/scene.ts';
 import { ClassicCauldronFx } from './ClassicCauldronFx';
-import { CLASSIC_KIT_MOUTH, CLASSIC_MOUTH, classicSpoonAngleFor } from './classicCauldronGeometry';
-import { classicSpoonShape } from './classicSpoon';
+import { CLASSIC_MOUTH, classicSpoonAngleFor } from './classicCauldronGeometry';
+import { ClassicBrewSim } from './cauldron/ClassicBrewSim';
 import { sfx } from '../audio/sfx';
 import './classic-stations.css';
 
@@ -52,11 +49,7 @@ export function CauldronStation() {
   const allReady = filled && !overprocessed && entries.every((e) => e.stage === 'ready');
   const canBottle = filled && !bottled && pour === null && transfer === null;
 
-  // یک صحنه‌ی کیت برای عمر کامپوننت — بدون دیگ/اجاق برداری، با دهانه‌ی PNG و قاشق کلاسیک
-  const scene = useMemo(
-    () => new FlatCookingScene({ drawPot: false, drawHearth: false, mouth: CLASSIC_KIT_MOUTH, spoon: classicSpoonShape() }),
-    [],
-  );
+  const scene = useMemo(() => new ClassicBrewSim(1), []);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const stirGesture = useCircleGesture({
@@ -95,6 +88,7 @@ export function CauldronStation() {
         {...stirGesture}
       >
         <div ref={bodyRef} className="cst-cauldron__body">
+          <div className="cst-cauldron__soot" aria-hidden />
           <ArtLayer src={SCENE_ZONES.cauldron.img}>
             <div className="cauldron__ph">
               <div className="cauldron__belly" />
@@ -116,7 +110,7 @@ export function CauldronStation() {
         />
       </div>
 
-      <ClassicCauldronFx scene={scene} bodyRef={bodyRef} />
+      <ClassicCauldronFx sim={scene} bodyRef={bodyRef} />
 
       {filled && !bottled && stirCount === 0 ? (
         <div className="hint hint--stir" style={rectStyle(PROPS.stirHint, 60)}>

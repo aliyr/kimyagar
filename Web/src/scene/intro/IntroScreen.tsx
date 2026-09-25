@@ -24,7 +24,7 @@ import { preloadArt } from '../preloadArt';
 import { IntroPanels } from './IntroPanels';
 import { markIntroSeen, readIntroSeen, useIntroState } from './introState';
 import { SKY_THEMES, currentTimeOfDay, skyVars } from './timeOfDay';
-import { useParallax } from './useParallax';
+import { useSceneTilt } from '../tilt/useSceneTilt';
 import './intro.css';
 
 /** زمان‌بندی ورود (میلی‌ثانیه، پیش از ضریب سرعت) */
@@ -66,7 +66,7 @@ export function IntroScreen() {
   const canContinue = hasProgress(progress);
   const busy = phase === 'opening' || phase === 'entering';
 
-  useParallax(rootRef, ready && !busy);
+  useSceneTilt(rootRef, ready && !busy);
 
   // پیش‌بار هنر؛ بعدش صحنه ظاهر می‌شود (سقف زمانی تا روی شبکه‌ی کند گیر نکند)
   useEffect(() => {
@@ -202,6 +202,8 @@ export function IntroScreen() {
 
   return (
     <div ref={rootRef} className={classes} style={rootStyle} data-testid="gate-screen" data-phase={phase} data-time={timeOfDay}>
+      <div className="intro__tilt">
+      <div className="intro__tilt-rig">
       {/* ---------------- آسمان ---------------- */}
       <div className="intro__layer intro__layer--sky">
         <div className="intro__sky-gradient" />
@@ -241,6 +243,42 @@ export function IntroScreen() {
           </div>
         </div>
 
+        <button
+          type="button"
+          className="intro__settings interactive"
+          data-testid="gate-settings"
+          aria-label={uiLabels.settings}
+          disabled={busy}
+          onClick={() => {
+            unlockAudio();
+            openOverlayAction('settings');
+          }}
+        >
+          <img src={artUrl(INTRO_ART.lantern)} alt="" draggable={false} />
+          <span className="intro__tag">{uiLabels.settings}</span>
+        </button>
+        <button
+          type="button"
+          className={`intro__cat interactive${catAwake ? ' is-awake' : ''}`}
+          data-testid="gate-cat"
+          aria-label={uiLabels.gateCat}
+          onClick={pokeCat}
+        >
+          <img className="intro__cat-sleep" src={artUrl(INTRO_ART.catSleep)} alt="" draggable={false} />
+          <img className="intro__cat-awake" src={artUrl(INTRO_ART.catAwake)} alt="" draggable={false} />
+        </button>
+        <button
+          type="button"
+          className="intro__knocker interactive"
+          aria-label={canContinue ? uiLabels.gateContinue : uiLabels.gateStart}
+          disabled={busy}
+          onClick={enter}
+        >
+          <img src={artUrl(INTRO_ART.knocker)} alt="" draggable={false} />
+        </button>
+      </div>
+
+      <div className="intro__layer intro__layer--front">
         {/* تابلو با زنجیر، لوگوتایپ برنجی */}
         <div className="intro__sign">
           <div className="intro__sign-swing">
@@ -262,8 +300,39 @@ export function IntroScreen() {
           <span className="intro__dust" />
         </div>
 
-        {/* ورق عطار */}
-        {/* لمس ⇒ ورق بزرگ می‌شود تا بیت خوانده شود؛ لمس دوباره یا بیرونِ ورق ⇒ برمی‌گردد */}
+        {canContinue ? (
+          <button
+            type="button"
+            className="intro__fresh interactive"
+            data-testid="gate-fresh"
+            disabled={busy}
+            onClick={() => setPanel('confirmFresh')}
+          >
+            {uiLabels.gateFresh}
+          </button>
+        ) : null}
+
+        {/* رهگذر در کوچه، جلوی دکان — سایه‌ای که هر چند ثانیه رد می‌شود */}
+        <div className="intro__passer" aria-hidden>
+          <img src={artUrl(GATE_ART.customerShadow)} alt="" draggable={false} />
+        </div>
+      </div>
+      </div>
+      </div>
+
+      <div className="intro__pin">
+        <button
+          type="button"
+          className="intro__ledger interactive"
+          data-testid="gate-scores"
+          aria-haspopup="dialog"
+          aria-expanded={panel === 'scores'}
+          disabled={busy}
+          onClick={() => setPanel(panel === 'scores' ? null : 'scores')}
+        >
+          <img src={artUrl(INTRO_ART.ledgerClosed)} alt="" draggable={false} />
+          <span className="intro__tag">{uiLabels.gateScores}</span>
+        </button>
         {quoteOpen ? (
           <button type="button" className="intro__quote-backdrop interactive" aria-label={uiLabels.closeOverlay} onClick={toggleQuote} />
         ) : null}
@@ -283,8 +352,6 @@ export function IntroScreen() {
           </span>
           <span className="intro__quote-by">{quote.attribution}</span>
         </button>
-
-        {/* درکوب = شروع / ادامه */}
         <button
           type="button"
           className="intro__start interactive"
@@ -293,27 +360,11 @@ export function IntroScreen() {
           disabled={busy}
           onClick={enter}
         >
-          <span className="intro__knocker" aria-hidden>
-            <img src={artUrl(INTRO_ART.knocker)} alt="" draggable={false} />
-          </span>
           <span className="intro__plaque">
             <img src={artUrl(INTRO_ART.plaque)} alt="" draggable={false} />
             <span className="intro__plaque-text">{canContinue ? uiLabels.gateContinue : uiLabels.gateStart}</span>
           </span>
         </button>
-        {canContinue ? (
-          <button
-            type="button"
-            className="intro__fresh interactive"
-            data-testid="gate-fresh"
-            disabled={busy}
-            onClick={() => setPanel('confirmFresh')}
-          >
-            {uiLabels.gateFresh}
-          </button>
-        ) : null}
-
-        {/* نقشه‌ی لوله‌شده = مراحل */}
         <button
           type="button"
           className="intro__map interactive"
@@ -326,53 +377,6 @@ export function IntroScreen() {
           <img src={artUrl(INTRO_ART.mapRolled)} alt="" draggable={false} />
           <span className="intro__tag">{uiLabels.gateStages}</span>
         </button>
-
-        {/* دفتر حساب = امتیازها */}
-        <button
-          type="button"
-          className="intro__ledger interactive"
-          data-testid="gate-scores"
-          aria-haspopup="dialog"
-          aria-expanded={panel === 'scores'}
-          disabled={busy}
-          onClick={() => setPanel(panel === 'scores' ? null : 'scores')}
-        >
-          <img src={artUrl(INTRO_ART.ledgerClosed)} alt="" draggable={false} />
-          <span className="intro__tag">{uiLabels.gateScores}</span>
-        </button>
-
-        {/* گربه‌ی دکان روی پله */}
-        <button
-          type="button"
-          className={`intro__cat interactive${catAwake ? ' is-awake' : ''}`}
-          data-testid="gate-cat"
-          aria-label={uiLabels.gateCat}
-          onClick={pokeCat}
-        >
-          <img className="intro__cat-sleep" src={artUrl(INTRO_ART.catSleep)} alt="" draggable={false} />
-          <img className="intro__cat-awake" src={artUrl(INTRO_ART.catAwake)} alt="" draggable={false} />
-        </button>
-
-        {/* فانوس کوچک = تنظیمات */}
-        <button
-          type="button"
-          className="intro__settings interactive"
-          data-testid="gate-settings"
-          aria-label={uiLabels.settings}
-          disabled={busy}
-          onClick={() => {
-            unlockAudio();
-            openOverlayAction('settings');
-          }}
-        >
-          <img src={artUrl(INTRO_ART.lantern)} alt="" draggable={false} />
-          <span className="intro__tag">{uiLabels.settings}</span>
-        </button>
-      </div>
-
-      {/* رهگذر در کوچه، جلوی دکان — سایه‌ای که هر چند ثانیه رد می‌شود */}
-      <div className="intro__passer" aria-hidden>
-        <img src={artUrl(GATE_ART.customerShadow)} alt="" draggable={false} />
       </div>
 
       {/* boot: سیاهی که کنار می‌رود */}

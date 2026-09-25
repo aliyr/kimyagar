@@ -280,6 +280,15 @@
   inset: 0;
   will-change: transform;
 }
+.cst-cauldron__soot {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 46%, rgba(16, 9, 6, 0.7) 100%);
+  opacity: var(--soot, 0);
+  mix-blend-mode: multiply;
+}
 .cst-cauldron.can-bottle {
   cursor: pointer;
 }

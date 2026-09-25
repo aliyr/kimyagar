@@ -40,9 +40,9 @@ export function BurntSmoke() {
               key={i}
               className="burnt-smoke__puff"
               style={{
-                left: CLASSIC_MOUTH.x + p.dx - p.size / 2,
-                top: CLASSIC_MOUTH.y - p.size / 2,
-                width: p.size,
+                left: CLASSIC_MOUTH.x + p.dx - p.size * 0.22,
+                top: CLASSIC_MOUTH.y - p.size * 0.85,
+                width: p.size * 0.45,
                 height: p.size,
                 animationDelay: `${p.delay}s`,
                 animationDuration: `${p.dur}s`,

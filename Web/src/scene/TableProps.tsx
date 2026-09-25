@@ -13,7 +13,8 @@ import { PROPS } from './layout';
 import { ArtLayer, rectStyle } from './Zone';
 import './classic-props.css';
 
-export function TableProps() {
+export function TableProps({ part = 'all' }: { part?: 'all' | 'notebook' | 'history' | 'bucket' }) {
+  const show = (name: 'notebook' | 'history' | 'bucket') => part === 'all' || part === name;
   const openOverlay = useGameStore((s) => s.openOverlayAction);
   const resetBrew = useGameStore((s) => s.resetBrew);
   const hasBrew = useGameStore((s) => s.brew.entries.length > 0 || s.mortar !== null);
@@ -31,6 +32,7 @@ export function TableProps() {
 
   return (
     <>
+      {show('notebook') ? (
       <div
         data-testid="notebook-button"
         className="notebook interactive"
@@ -44,7 +46,9 @@ export function TableProps() {
         </span>
         <span className="notebook__pages" />
       </div>
+      ) : null}
 
+      {show('history') ? (
       <div
         data-testid="history-button"
         className="ledger interactive"
@@ -58,7 +62,9 @@ export function TableProps() {
           <span className="ledger__lines" />
         </span>
       </div>
+      ) : null}
 
+      {show('bucket') ? (
       <div
         data-testid="reset-button"
         data-retry={needsRetry ? 'true' : undefined}
@@ -77,6 +83,7 @@ export function TableProps() {
         </ArtLayer>
         {needsRetry ? <span className="prop-bucket__retry">{uiLabels.retry}</span> : null}
       </div>
+      ) : null}
     </>
   );
 }

@@ -64,6 +64,78 @@
   backface-visibility: hidden;
 }
 
+/* تیلت کارگاه — اعداد با tiltMath.ts یکی است. زوم سینمایی روی scene-camera می‌ماند. */
+.scene-tilt {
+  position: absolute;
+  inset: 0;
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+  pointer-events: none;
+  --px: 0;
+  --py: 0;
+  --depth-back: 18;
+  --depth-mid: 36;
+  --depth-front: 60;
+  --depth-work: 2;
+  --depth-near: 12;
+  --tilt-x: 2;
+  --tilt-y: 2.2;
+  --tilt-rig: 1.06;
+}
+.scene-tilt__rig {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  transform: scale(var(--tilt-rig)) rotateX(calc(var(--py) * var(--tilt-x) * -1deg)) rotateY(calc(var(--px) * var(--tilt-y) * 1deg));
+}
+.scene-depth {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.scene-depth--back {
+  z-index: 0;
+}
+.scene-depth--mid {
+  z-index: 1;
+}
+.scene-depth--front {
+  z-index: 2;
+}
+.scene-depth--work {
+  z-index: 3;
+}
+.scene-depth--near {
+  z-index: 4;
+}
+.scene-depth--pin {
+  z-index: 5;
+}
+.scene-depth--back {
+  transform: translate(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px));
+}
+.scene-depth--mid {
+  transform: translate(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px));
+}
+.scene-depth--front {
+  transform: translate(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px));
+}
+.scene-depth--work {
+  transform: translate(calc(var(--px) * var(--depth-work) * 1px), calc(var(--py) * var(--depth-work) * 1px));
+}
+.scene-depth--near {
+  transform: translate(calc(var(--px) * var(--depth-near) * 1px), calc(var(--py) * var(--depth-near) * 1px));
+}
+.workshop-behind-gate .scene-tilt__rig,
+.workshop-behind-gate .scene-depth--back,
+.workshop-behind-gate .scene-depth--mid,
+.workshop-behind-gate .scene-depth--front,
+.workshop-behind-gate .scene-depth--work,
+.workshop-behind-gate .scene-depth--near {
+  transform: none;
+}
+
 /* نوارهای سینمایی — بیرون از زوم، روی لبه‌ی قاب ۱۶:۹ */
 .cine-bars {
   position: absolute;
@@ -93,6 +165,14 @@
 @media (prefers-reduced-motion: reduce) {
   .scene-camera {
     transition: none;
+  }
+  .scene-tilt__rig,
+  .scene-depth--back,
+  .scene-depth--mid,
+  .scene-depth--front,
+  .scene-depth--work,
+  .scene-depth--near {
+    transform: none;
   }
   .cine-bars__top,
   .cine-bars__bottom {
