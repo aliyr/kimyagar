@@ -29,6 +29,12 @@ export function TableProps({ part = 'all' }: { part?: 'all' | 'notebook' | 'hist
       s.evaluation !== null &&
       (s.evaluation.band === 'failure' || s.evaluation.band === 'partial'),
   );
+  /** معجون سوخته تحویل‌شدنی نیست؛ سطل تنها راه است و همان‌طور می‌تپد */
+  const burnt = useGameStore(
+    (s) => !s.brew.bottled && s.brew.entries.some((e) => e.stage === 'overprocessed'),
+  );
+  const urgent = needsRetry || burnt;
+  const urgentLabel = burnt ? uiLabels.discardBurnt : uiLabels.retry;
 
   return (
     <>
@@ -67,9 +73,9 @@ export function TableProps({ part = 'all' }: { part?: 'all' | 'notebook' | 'hist
       {show('bucket') ? (
       <div
         data-testid="reset-button"
-        data-retry={needsRetry ? 'true' : undefined}
-        className={`bucket prop-bucket interactive${hasBrew ? ' is-live' : ''}${needsRetry ? ' is-retry' : ''}`}
-        title={needsRetry ? uiLabels.retry : uiLabels.resetBrew}
+        data-retry={urgent ? 'true' : undefined}
+        className={`bucket prop-bucket interactive${hasBrew ? ' is-live' : ''}${urgent ? ' is-retry' : ''}`}
+        title={urgent ? urgentLabel : uiLabels.resetBrew}
         style={rectStyle(PROPS.bucket, needsRetry ? 86 : 45)}
         {...tapProps(resetBrew)}
       >
@@ -81,7 +87,7 @@ export function TableProps({ part = 'all' }: { part?: 'all' | 'notebook' | 'hist
             <span className="prop-bucket-ph__band prop-bucket-ph__band--bottom" />
           </div>
         </ArtLayer>
-        {needsRetry ? <span className="prop-bucket__retry">{uiLabels.retry}</span> : null}
+        {urgent ? <span className="prop-bucket__retry">{urgentLabel}</span> : null}
       </div>
       ) : null}
     </>

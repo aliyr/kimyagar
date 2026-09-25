@@ -102,6 +102,8 @@ export const uiLabels = {
   grindingHint: 'دارد کوبیده می‌شود… هر وقت خواستی هاون را لمس کن',
   tapMortarHint: 'برای ریختن در پاتیل، هاون را لمس کن',
   tapToBottleHint: 'برای ریختن در شیشه، پاتیل را لمس کن',
+  burntHint: 'سوخت! تحویل‌شدنی نیست؛ در سطل خالی‌اش کن',
+  discardBurnt: 'دور ریختن',
   jarTapHint: 'یک شیشه را لمس کن تا در هاون بریزد',
   soundOn: 'صدا روشن',
   soundOff: 'صدا خاموش',

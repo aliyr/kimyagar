@@ -344,5 +344,18 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     await pause(page, 400);
     await expect(fx).toHaveAttribute('data-sparkles', '0');
     await page.screenshot({ path: 'screenshots/classic-flow/verify_burnt_no_sparkles.png', fullPage: true });
+
+    // سوخته تحویل‌شدنی نیست: Tap روی پاتیل بطری نمی‌کند؛ فقط سطل
+    await expect(cauldron).toHaveAttribute('data-burnt', 'true');
+    await expect(page.getByTestId('burnt-hint')).toBeVisible();
+    await expect(page.getByTestId('reset-button')).toHaveAttribute('data-retry', 'true');
+    await cauldron.click();
+    await pause(page, 400);
+    expect(await page.evaluate(() => {
+      const s = (window as unknown as { __kimyagarStore: { getState: () => { brew: { bottled: boolean }; result: unknown } } }).__kimyagarStore.getState();
+      return { bottled: s.brew.bottled, result: s.result };
+    })).toEqual({ bottled: false, result: null });
+    await page.getByTestId('reset-button').click();
+    expect((await storeState(page)).entries).toBe(0);
   });
 });

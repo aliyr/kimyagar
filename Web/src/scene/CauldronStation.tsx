@@ -10,6 +10,7 @@
  * - Tap بدون حرکت روی پاتیلِ پر ⇒ شروع توالی ریختن در شیشه (BottlingSequence):
  *   bottleBrew + فاز 'tilt' در uiState. هر وقت محتوا هست مجاز است؛ آماده‌بودن
  *   با شمسه و هاله‌ی طلایی نشان داده می‌شود، نه با قفل.
+ *   استثنا: معجون سوخته هرگز بطری/تحویل نمی‌شود و فقط با سطل دور ریخته می‌شود.
  * - دما بدون عقربه: شدت آتش کوره، حباب، بخار و نور کف دیگ (FurnaceFire/FireLight).
  */
 
@@ -47,7 +48,7 @@ export function CauldronStation() {
   const filled = entries.length > 0;
   const overprocessed = entries.some((e) => e.stage === 'overprocessed');
   const allReady = filled && !overprocessed && entries.every((e) => e.stage === 'ready');
-  const canBottle = filled && !bottled && pour === null && transfer === null;
+  const canBottle = filled && !overprocessed && !bottled && pour === null && transfer === null;
 
   const scene = useMemo(() => new ClassicBrewSim(1), []);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -81,6 +82,7 @@ export function CauldronStation() {
       <div
         data-testid="cauldron"
         data-ready={allReady ? 'true' : undefined}
+        data-burnt={overprocessed && !bottled ? 'true' : undefined}
         className={`cauldron cst-cauldron interactive${stirring ? ' is-stirring' : ''}${
           allReady && canBottle ? ' is-ready' : ''
         }${canBottle ? ' can-bottle' : ''}`}
@@ -112,7 +114,11 @@ export function CauldronStation() {
 
       <ClassicCauldronFx sim={scene} bodyRef={bodyRef} />
 
-      {filled && !bottled && stirCount === 0 ? (
+      {overprocessed && !bottled ? (
+        <div className="hint hint--stir hint--burnt" data-testid="burnt-hint" style={rectStyle(BOTTLE_HINT, 60)}>
+          {uiLabels.burntHint}
+        </div>
+      ) : filled && !bottled && stirCount === 0 ? (
         <div className="hint hint--stir" style={rectStyle(PROPS.stirHint, 60)}>
           {uiLabels.stirHint}
         </div>
