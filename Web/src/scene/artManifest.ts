@@ -149,6 +149,23 @@ export const SCENE_ZONES = {
       woman_traveler: 'customer/customer_woman_traveler.png',
       woman_baker: 'customer/customer_woman_baker.png',
       man_apprentice: 'customer/customer_man_apprentice.png',
+      // سری چهارم — دخترهای ۱۹ تا ۳۵، چهره‌های جدا، روسریِ شُل
+      woman_potter: 'customer/customer_woman_potter.png',
+      woman_painter: 'customer/customer_woman_painter.png',
+      woman_singer: 'customer/customer_woman_singer.png',
+      woman_rider: 'customer/customer_woman_rider.png',
+      woman_bride: 'customer/customer_woman_bride.png',
+      woman_perfumer: 'customer/customer_woman_perfumer.png',
+      woman_jeweler: 'customer/customer_woman_jeweler.png',
+      woman_dancer: 'customer/customer_woman_dancer.png',
+      woman_astronomer: 'customer/customer_woman_astronomer.png',
+      // سری پنجم — روسریِ شُل، چهره‌های جدا
+      woman_falconer: 'customer/customer_woman_falconer.png',
+      woman_poet: 'customer/customer_woman_poet.png',
+      woman_dyer: 'customer/customer_woman_dyer.png',
+      woman_glass: 'customer/customer_woman_glass.png',
+      woman_spice: 'customer/customer_woman_spice.png',
+      woman_chess: 'customer/customer_woman_chess.png',
     },
   },
   /** کاغذ خلاصه‌ی سفارش — دائمی، بالا-راست، فشرده */

@@ -31,6 +31,222 @@ export function borderMedian(data, w, h, ch) {
 }
 
 /**
+ * پس‌زمینه‌ی تخت را از لبه سیل می‌کند. برای پرتره‌هایی که لباس روشن‌شان به رنگ
+ * پس‌زمینه نزدیک است: آستانه‌ی سیل محافظه‌کار است و هاله‌ی کم‌رنگ فقط اگر به
+ * پس‌زمینه‌ی حذف‌شده چسبیده باشد جویده می‌شود.
+ */
+export async function removeFlatBackdrop(inputPath) {
+  const { data, info } = await sharp(inputPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width: w, height: h, channels: ch } = info;
+  const [br, bg, bb] = borderMedian(data, w, h, ch);
+  const distAt = (p) => {
+    const i = p * ch;
+    return Math.hypot(data[i] - br, data[i + 1] - bg, data[i + 2] - bb);
+  };
+  const satAt = (p) => {
+    const i = p * ch;
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    return Math.max(r, g, b) - Math.min(r, g, b);
+  };
+  const lumAt = (p) => {
+    const i = p * ch;
+    return (data[i] + data[i + 1] + data[i + 2]) / 3;
+  };
+
+  const bgMask = new Uint8Array(w * h);
+  const q = new Int32Array(w * h);
+  let qs = 0;
+  let qe = 0;
+  const FLOOD = 24;
+  const push = (p) => {
+    if (bgMask[p] || distAt(p) > FLOOD) return;
+    bgMask[p] = 1;
+    q[qe++] = p;
+  };
+  for (let x = 0; x < w; x++) {
+    push(x);
+    push((h - 1) * w + x);
+  }
+  for (let y = 0; y < h; y++) {
+    push(y * w);
+    push(y * w + w - 1);
+  }
+  const flood = () => {
+    while (qs < qe) {
+      const p = q[qs++];
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x > 0) push(p - 1);
+      if (x + 1 < w) push(p + 1);
+      if (y > 0) push(p - w);
+      if (y + 1 < h) push(p + w);
+    }
+  };
+  flood();
+
+  // سایه‌روشنِ تدریجیِ پس‌زمینه (لبه تیره‌تر از وسط) را دنبال کن،
+  // ولی از پوست و پارچه‌ی رنگی که اشباع بالاتری دارند رد نشو.
+  const looseOk = (p) => distAt(p) <= 52 && satAt(p) < 34 && lumAt(p) > 150;
+  qs = 0;
+  qe = 0;
+  for (let p = 0; p < w * h; p++) if (bgMask[p]) q[qe++] = p;
+  while (qs < qe) {
+    const p = q[qs++];
+    const x = p % w;
+    const y = (p - x) / w;
+    const grow = (n) => {
+      if (bgMask[n] || !looseOk(n)) return;
+      bgMask[n] = 1;
+      q[qe++] = n;
+    };
+    if (x > 0) grow(p - 1);
+    if (x + 1 < w) grow(p + 1);
+    if (y > 0) grow(p - w);
+    if (y + 1 < h) grow(p + w);
+  }
+
+  const chew = (passes, satMax, lumMin, distMax, nearMin) => {
+    for (let pass = 0; pass < passes; pass++) {
+      const extra = [];
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const p = y * w + x;
+          if (bgMask[p]) continue;
+          if (satAt(p) > satMax || lumAt(p) < lumMin || distAt(p) > distMax) continue;
+          let near = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              if (bgMask[(y + dy) * w + (x + dx)]) near++;
+            }
+          }
+          if (near >= nearMin) extra.push(p);
+        }
+      }
+      if (extra.length === 0) break;
+      for (const p of extra) bgMask[p] = 1;
+    }
+  };
+  chew(8, 30, 198, 78, 3);
+  // حفره‌ی روشنِ محصور (پشت مو) فقط اگر تقریباً از هر سو به پس‌زمینه چسبیده باشد
+  chew(16, 36, 176, 96, 5);
+
+  // جزیره‌های خیلی نزدیک به رنگ پس‌زمینه که دورشان بیشتر مو است تا پارچه
+  const near = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) {
+    if (bgMask[p]) continue;
+    if (distAt(p) < 22 && satAt(p) < 30 && lumAt(p) > 190) near[p] = 1;
+  }
+  const seenNear = new Uint8Array(w * h);
+  for (let start = 0; start < w * h; start++) {
+    if (!near[start] || seenNear[start]) continue;
+    const stack = [start];
+    const comp = [];
+    seenNear[start] = 1;
+    let touchesBorder = false;
+    while (stack.length) {
+      const p = stack.pop();
+      comp.push(p);
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) touchesBorder = true;
+      if (x > 0 && near[p - 1] && !seenNear[p - 1]) {
+        seenNear[p - 1] = 1;
+        stack.push(p - 1);
+      }
+      if (x + 1 < w && near[p + 1] && !seenNear[p + 1]) {
+        seenNear[p + 1] = 1;
+        stack.push(p + 1);
+      }
+      if (y > 0 && near[p - w] && !seenNear[p - w]) {
+        seenNear[p - w] = 1;
+        stack.push(p - w);
+      }
+      if (y + 1 < h && near[p + w] && !seenNear[p + w]) {
+        seenNear[p + w] = 1;
+        stack.push(p + w);
+      }
+    }
+    if (touchesBorder || comp.length < 80) continue;
+    let sumDist = 0;
+    for (const p of comp) sumDist += distAt(p);
+    const avg = sumDist / comp.length;
+    if (comp.length > 20000 && avg >= 10) continue;
+    let boundary = 0;
+    let chromatic = 0;
+    for (const p of comp) {
+      const x = p % w;
+      const y = (p - x) / w;
+      const neighbors = [p - 1, p + 1, p - w, p + w];
+      for (const n of neighbors) {
+        if (n < 0 || n >= w * h) continue;
+        const nx = n % w;
+        if (Math.abs(nx - x) > 1) continue;
+        if (near[n]) continue;
+        boundary++;
+        const i = n * ch;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const sat = Math.max(r, g, b) - Math.min(r, g, b);
+        const lum = (r + g + b) / 3;
+        if (sat > 42 || (lum > 55 && lum < 165)) chromatic++;
+      }
+    }
+    const frac = boundary === 0 ? 1 : chromatic / boundary;
+    // جزیره‌ی تقریباً هم‌رنگ پس‌زمینه حتی اگر به پوست چسبیده باشد پاک می‌شود؛
+    // پارچه‌ی روشن معمولاً فاصله‌ی بیشتری از پس‌زمینه دارد و این‌جا نمی‌افتد.
+    const pureBackdrop = avg < 10 && comp.length > 500 && frac < 0.75;
+    if (frac < 0.2 || pureBackdrop) for (const p of comp) bgMask[p] = 1;
+  }
+
+  const seen = new Uint8Array(w * h);
+  for (let start = 0; start < w * h; start++) {
+    if (bgMask[start] || seen[start]) continue;
+    const stack = [start];
+    const comp = [];
+    seen[start] = 1;
+    while (stack.length) {
+      const p = stack.pop();
+      comp.push(p);
+      const x = p % w;
+      const y = (p - x) / w;
+      if (x > 0 && !bgMask[p - 1] && !seen[p - 1]) {
+        seen[p - 1] = 1;
+        stack.push(p - 1);
+      }
+      if (x + 1 < w && !bgMask[p + 1] && !seen[p + 1]) {
+        seen[p + 1] = 1;
+        stack.push(p + 1);
+      }
+      if (y > 0 && !bgMask[p - w] && !seen[p - w]) {
+        seen[p - w] = 1;
+        stack.push(p - w);
+      }
+      if (y + 1 < h && !bgMask[p + w] && !seen[p + w]) {
+        seen[p + w] = 1;
+        stack.push(p + w);
+      }
+    }
+    if (comp.length < 80) for (const p of comp) bgMask[p] = 1;
+  }
+
+  const out = Buffer.alloc(w * h * 4);
+  for (let p = 0; p < w * h; p++) {
+    if (bgMask[p]) continue;
+    const i = p * ch;
+    const o = p * 4;
+    out[o] = data[i];
+    out[o + 1] = data[i + 1];
+    out[o + 2] = data[i + 2];
+    out[o + 3] = 255;
+  }
+  return sharp(out, { raw: { width: w, height: h, channels: 4 } });
+}
+
+/**
  * حذف پس‌زمینه‌ی روشن یکدست (نمونه‌گیری حاشیه + فاصله‌ی رنگی + unmix لبه).
  * خروجی: pipeline خام sharp با کانال آلفا.
  */

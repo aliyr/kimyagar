@@ -17,7 +17,7 @@
 import sharp from 'sharp';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { ensureDirs, removeLightBackground } from './image_utils.mjs';
+import { ensureDirs, removeFlatBackdrop } from './image_utils.mjs';
 
 const [srcDir, ...names] = process.argv.slice(2);
 if (!srcDir) {
@@ -60,7 +60,7 @@ for (const appearance of appearances) {
       console.warn(`skip (missing): ${src}`);
       continue;
     }
-    const cut = await removeLightBackground(src);
+    const cut = await removeFlatBackdrop(src);
     const { data, info } = await cut.raw().toBuffer({ resolveWithObject: true });
     variants.push({ file, emo, data, info, bounds: alphaBounds(data, info.width, info.height) });
   }
