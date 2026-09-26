@@ -139,4 +139,63 @@ describe('ClassicBrewSim', () => {
     expect(dist(after, target)).toBeLessThan(dist(hexToRgb(before), target));
     expect(dist(after, target)).toBeLessThan(dist(after, water));
   });
+
+  it('hides the pot on discard, keeps it hidden through a content reset, then drops a new one in', () => {
+    const sim = new ClassicBrewSim(6);
+    drop(sim, [chip()]);
+    expect(sim.potVisible).toBe(true);
+    expect(sim.potSettled).toBe(true);
+
+    sim.hidePot();
+    expect(sim.potVisible).toBe(false);
+    for (let i = 0; i < 60; i++) sim.update(1 / 60);
+    expect(sim.potVisible).toBe(false);
+
+    // ریست محتوا (مثل خالی‌شدن store) دیگ پنهان را نمی‌پراند
+    sim.reset(6);
+    expect(sim.chips.length).toBe(0);
+    expect(sim.potVisible).toBe(false);
+
+    sim.respawn();
+    expect(sim.potVisible).toBe(true);
+    expect(sim.spawnY).toBeLessThan(-400);
+    expect(sim.fill).toBe(0);
+    expect(sim.potSettled).toBe(false);
+
+    let landings = 0;
+    let firstImpact = 0;
+    let fillStarts = 0;
+    let steps = 0;
+    while (!sim.potSettled && steps < 60 * 6) {
+      sim.update(1 / 60);
+      const impact = sim.takeLanding();
+      if (impact > 0) {
+        landings++;
+        if (firstImpact === 0) firstImpact = impact;
+      }
+      if (sim.takeFillStart()) fillStarts++;
+      steps++;
+    }
+    expect(sim.potSettled).toBe(true);
+    expect(steps).toBeLessThan(60 * 3);
+    expect(sim.spawnY).toBe(0);
+    expect(sim.fill).toBe(1);
+    expect(sim.rock).toBe(0);
+    // یک فرود محکم و چند لقی آرام‌تر؛ آب یک بار شروع به پرشدن می‌کند
+    expect(landings).toBeGreaterThanOrEqual(2);
+    expect(firstImpact).toBeGreaterThan(1500);
+    expect(fillStarts).toBe(1);
+  });
+
+  it('waits the requested delay before the new pot starts falling', () => {
+    const sim = new ClassicBrewSim(8);
+    sim.hidePot();
+    sim.respawn(0.5);
+    expect(sim.potVisible).toBe(false);
+    for (let i = 0; i < 24; i++) sim.update(1 / 60);
+    expect(sim.potVisible).toBe(false);
+    for (let i = 0; i < 12; i++) sim.update(1 / 60);
+    expect(sim.potVisible).toBe(true);
+    expect(sim.spawnY).toBeGreaterThan(-560);
+  });
 });

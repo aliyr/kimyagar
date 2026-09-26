@@ -162,12 +162,30 @@ export class ClassicBrewPainter {
     liquid: RGB,
     sim: ClassicBrewSim,
   ): void {
+    // سطح آب: با fill<1 (دیگ نو در حال پرشدن) سطح از تهِ دیگ (پایینِ دهانه، کوچک‌تر و
+    // تیره‌تر) به‌سمت لبه بالا می‌آید و پهن می‌شود — پرشدن از پایین به بالا.
+    const fill = sim.fill;
+    if (fill <= 0.01) return;
+    const depth = 1 - fill;
+    const level = 0.42 + 0.58 * fill;
     const ox = sim.sloshX * rx;
     const oy = sim.sloshY * ry + sim.shiver * ry * 0.02 + (sim.dome > 0 ? -ry * 0.03 * sim.dome : 0);
     const lx = mx + ox;
-    const ly = my - ry * 0.04 + oy;
-    const lrx = rx * 0.97;
-    const lry = ry * 0.88;
+    const lrx = rx * 0.97 * level;
+    const lry = ry * 0.88 * level;
+    // سطحِ کوچک‌تر پایینِ دهانه می‌نشیند و با پرشدن بالا می‌آید (کمی از تهِ بیضی می‌گذرد تا عمق حس شود)
+    const ly = my - ry * 0.04 + oy + depth * (ry * 1.15 - lry);
+    if (depth > 0) {
+      // سایه‌ی دیواره‌ی داخلی روی آبِ پایین: هرچه عمیق‌تر، تیره‌تر
+      ctx.save();
+      ctx.globalAlpha = 0.55 * depth;
+      const wall = ctx.createLinearGradient(0, ly - lry, 0, ly + lry);
+      wall.addColorStop(0, 'rgba(0,0,0,0.6)');
+      wall.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = wall;
+      ctx.fillRect(mx - rx, my - ry, rx * 2, ry * 2);
+      ctx.restore();
+    }
     const hex = rgbToHex(liquid);
     const deep = rgbToHex(tintWhite(liquid, -0.01));
     const g = ctx.createRadialGradient(lx - lrx * 0.15, ly - lry * 0.2, lrx * 0.1, lx, ly, lrx);
@@ -213,6 +231,20 @@ export class ClassicBrewPainter {
     ctx.beginPath();
     ctx.ellipse(hx, hy, lrx * 0.38, lry * 0.28, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // پرشدن: حلقه‌های موج از مرکز به لبه
+    if (fill < 1) {
+      ctx.strokeStyle = 'rgba(255,250,240,0.9)';
+      ctx.lineWidth = Math.max(1, ry * 0.04);
+      for (let i = 0; i < 3; i++) {
+        const p = (sim.time * 1.7 + i / 3) % 1;
+        ctx.globalAlpha = (1 - p) * 0.4 * Math.min(1, fill * 4);
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, lrx * (0.1 + 0.85 * p), lry * (0.1 + 0.85 * p), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
 
     if (sim.fireGlow > 0.02) {
       ctx.globalAlpha = sim.fireGlow * 0.28;

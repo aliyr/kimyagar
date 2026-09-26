@@ -18,9 +18,10 @@ import { SCENE_ZONES } from './artManifest';
 import { rectStyle } from './Zone';
 import { useUiState } from './uiState';
 import { sfx } from '../audio/sfx';
+import { haptic } from '../platform/haptics';
 import { bakeChipsFor } from './mortarPile';
 import { takeCauldronDrop } from './cauldron/cauldronDropChannel';
-import { strengthFor, type ClassicBrewSim } from './cauldron/ClassicBrewSim';
+import { RESPAWN, strengthFor, type ClassicBrewSim } from './cauldron/ClassicBrewSim';
 import { ClassicBrewPainter } from './cauldron/ClassicBrewPainter';
 import { getFireGlow } from './cauldron/fireGlow';
 import type { MortarChip } from './mortarPile';
@@ -97,8 +98,11 @@ export function ClassicCauldronFx({
     const known = knownEntryIds.current;
     if (entries.length === 0) {
       if (known.size > 0) {
-        sim.reset(seed);
-        sim.setHeatLevel(flatHeatLevel(useGameStore.getState().brew.currentHeat));
+        // دور ریختن: دیگ پنهان است و DiscardFx خودش در لحظه‌ی آمدن دیگ نو ریست می‌کند
+        if (sim.potVisible) {
+          sim.reset(seed);
+          sim.setHeatLevel(flatHeatLevel(useGameStore.getState().brew.currentHeat));
+        }
         known.clear();
       }
       return;
@@ -190,17 +194,30 @@ export function ClassicCauldronFx({
       } catch (err) {
         canvas.dataset.fxError = err instanceof Error ? err.message : String(err);
       }
+      // فرود دیگ نو: شق و لقی، بعد شرشر آب
+      const impact = sim.takeLanding();
+      if (impact > 0) {
+        const strength = Math.min(1, impact / 1900);
+        sfx.cauldronLand(strength);
+        haptic(strength > 0.5 ? 'heavy' : 'light');
+      }
+      if (sim.takeFillStart()) sfx.waterFill(RESPAWN.fillDur);
+
       const { x, y } = sim.squash;
-      const transform = `rotate(${sim.tilt.toFixed(2)}deg) scale(${x.toFixed(4)}, ${y.toFixed(4)})`;
+      const transform = `translateY(${sim.spawnY.toFixed(1)}px) rotate(${(sim.tilt + sim.rock).toFixed(2)}deg) scale(${x.toFixed(4)}, ${y.toFixed(4)})`;
+      const visibility = sim.potVisible ? '' : 'hidden';
       const body = bodyRef.current;
       if (body) {
         body.style.transformOrigin = BODY_ORIGIN;
         body.style.transform = transform;
+        body.style.visibility = visibility;
         body.style.setProperty('--soot', sim.soot.toFixed(3));
       }
       canvas.style.transformOrigin = FX_ORIGIN;
       canvas.style.transform = transform;
+      canvas.style.visibility = visibility;
       canvas.dataset.sparkles = String(sim.sparkleCount);
+      canvas.dataset.pot = sim.potSettled ? 'settled' : sim.potVisible ? 'landing' : 'away';
     };
     raf = requestAnimationFrame(loop);
     return () => {

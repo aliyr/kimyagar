@@ -572,6 +572,78 @@ export const sfx = {
       }, 60 + i * (40 + Math.random() * 70));
     }
   },
+  /** پرت‌شدن دیگ: هووش نویز bandpass با sweep بالا‌رونده + بدنه‌ی بم */
+  cauldronThrow(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.45, type: 'bandpass', freq: 380, q: 0.7, gain: 0.34, freqEnd: 1900 });
+    noiseBurst(c, { dur: 0.3, type: 'lowpass', freq: 500, freqEnd: 900, gain: 0.16 });
+  },
+  /** شلپِ سنگین محتوا روی دیوار + چند چکه‌ی پراکنده */
+  cauldronSplat(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.38, type: 'lowpass', freq: 2600, freqEnd: 260, gain: 0.55 });
+    tone(c, { freq: 230, dur: 0.26, gain: 0.22, freqEnd: 75 });
+    noiseBurst(c, { dur: 0.22, type: 'bandpass', freq: 1400, q: 0.9, gain: 0.2, freqEnd: 500 });
+    for (let i = 0; i < 4; i++) {
+      window.setTimeout(() => {
+        const c2 = live();
+        if (!c2) return;
+        const f0 = 700 + Math.random() * 500;
+        tone(c2, { freq: f0, freqEnd: f0 * 1.8, dur: 0.06 + Math.random() * 0.05, gain: 0.05 });
+      }, 140 + i * (70 + Math.random() * 120));
+    }
+  },
+  /** کوبیده‌شدن فلز دیگ به دیوار: ضربه‌ی بم + زنگ‌های فلزیِ میرا */
+  cauldronClang(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.22, type: 'highpass', freq: 1100, q: 0.6, gain: 0.42 });
+    noiseBurst(c, { dur: 0.12, type: 'lowpass', freq: 900, freqEnd: 180, gain: 0.55 });
+    tone(c, { freq: 150, dur: 0.16, type: 'triangle', gain: 0.3, freqEnd: 65 });
+    tone(c, { freq: 610, dur: 0.85, type: 'sine', gain: 0.2 });
+    tone(c, { freq: 870, dur: 0.6, type: 'sine', gain: 0.1, at: 0.005 });
+    tone(c, { freq: 1290, dur: 0.45, type: 'sine', gain: 0.06, at: 0.008 });
+    tone(c, { freq: 2040, dur: 0.3, type: 'sine', gain: 0.03, at: 0.01 });
+  },
+  /** تالاپِ خفه‌ی دیگ روی زمینِ پشت میز */
+  cauldronThud(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.2, type: 'lowpass', freq: 480, freqEnd: 110, gain: 0.34 });
+    tone(c, { freq: 95, dur: 0.22, type: 'triangle', gain: 0.24, freqEnd: 48 });
+    tone(c, { freq: 420, dur: 0.25, type: 'sine', gain: 0.04 });
+  },
+  /**
+   * «شق» نشستن دیگ نو روی اجاق: strength ۰..۱ (لقی‌های بعدی آرام‌تر).
+   * تق بم + کلیک زیر + حلقه‌های زنگ فلزی.
+   */
+  cauldronLand(strength = 1): void {
+    const c = live();
+    if (!c) return;
+    const s = Math.min(1, Math.max(0.15, strength));
+    noiseBurst(c, { dur: 0.05, type: 'bandpass', freq: 3000, q: 1.4, gain: 0.5 * s });
+    noiseBurst(c, { dur: 0.13, type: 'lowpass', freq: 950, freqEnd: 200, gain: 0.55 * s });
+    tone(c, { freq: 165, dur: 0.14, type: 'triangle', gain: 0.32 * s, freqEnd: 80 });
+    tone(c, { freq: 740, dur: 0.7 * (0.5 + 0.5 * s), type: 'sine', gain: 0.15 * s });
+    tone(c, { freq: 1120, dur: 0.5 * (0.5 + 0.5 * s), type: 'sine', gain: 0.07 * s, at: 0.004 });
+    tone(c, { freq: 1860, dur: 0.32, type: 'sine', gain: 0.035 * s, at: 0.006 });
+  },
+  /** پرشدن آب خالی در دیگ نو: شرشر با sweep بالا‌رونده + حباب‌های ریز */
+  waterFill(durationSec = 0.95): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: durationSec, type: 'bandpass', freq: 520, q: 1.1, gain: 0.26, freqEnd: 1500 });
+    tone(c, { freq: 180, dur: durationSec, type: 'sine', gain: 0.05, freqEnd: 420 });
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      window.setTimeout(() => {
+        const c2 = live();
+        if (c2) bubble(c2, 0.5);
+      }, 60 + (i / n) * durationSec * 900 + Math.random() * 60);
+    }
+  },
   /** سطح قل‌قل پیوسته (۰..۱) — با حرارت و پُر بودن پاتیل */
   setSimmer(level: number): void {
     simmerLevel = Math.min(1, Math.max(0, level));

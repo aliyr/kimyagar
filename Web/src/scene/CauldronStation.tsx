@@ -12,6 +12,8 @@
  *   با شمسه و هاله‌ی طلایی نشان داده می‌شود، نه با قفل.
  *   استثنا: معجون سوخته هرگز بطری/تحویل نمی‌شود و فقط با سطل دور ریخته می‌شود.
  * - دما بدون عقربه: شدت آتش کوره، حباب، بخار و نور کف دیگ (FurnaceFire/FireLight).
+ * - سطل (cauldron/discard): دیگِ پر به دیوار پشت پرت می‌شود (DiscardFx)، بدنه‌ی
+ *   واقعی پنهان است تا دیگ نو از بالا بیفتد و آب پر شود؛ در این مدت قفل است.
  */
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -23,8 +25,10 @@ import { PROPS } from './layout';
 import { ArtLayer, rectStyle, zoneStyle } from './Zone';
 import { useUiState } from './uiState';
 import { ClassicCauldronFx } from './ClassicCauldronFx';
+import { DiscardFx } from './DiscardFx';
 import { CLASSIC_MOUTH, classicSpoonAngleFor } from './classicCauldronGeometry';
 import { ClassicBrewSim } from './cauldron/ClassicBrewSim';
+import { registerDiscardSim } from './cauldron/discard';
 import { sfx } from '../audio/sfx';
 import './classic-stations.css';
 
@@ -44,17 +48,33 @@ export function CauldronStation() {
   const pour = useUiState((s) => s.pour);
   const transfer = useUiState((s) => s.transfer);
   const setPour = useUiState((s) => s.setPour);
+  /** دیگ پرت شده و هنوز دیگ نو ننشسته ⇒ هیچ تعاملی با دیگ */
+  const discarding = useUiState((s) => s.discard !== null && !s.discard.settled);
 
   const filled = entries.length > 0;
   const overprocessed = entries.some((e) => e.stage === 'overprocessed');
   const allReady = filled && !overprocessed && entries.every((e) => e.stage === 'ready');
-  const canBottle = filled && !overprocessed && !bottled && pour === null && transfer === null;
+  const canBottle = filled && !overprocessed && !bottled && pour === null && transfer === null && !discarding;
 
   const scene = useMemo(() => new ClassicBrewSim(1), []);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
+  // شبیه‌ساز زنده برای فرمان دور ریختن (سطل / تلاش دوباره). با رفتن صحنه در
+  // میانه‌ی پرت‌شدن، وضعیت discard بسته می‌شود تا قفل سطل نماند.
+  useEffect(() => {
+    const unregister = registerDiscardSim(scene);
+    return () => {
+      unregister();
+      const ui = useUiState.getState();
+      if (ui.discard) {
+        ui.settleDiscard(ui.discard.id);
+        ui.endDiscard(ui.discard.id);
+      }
+    };
+  }, [scene]);
+
   const stirGesture = useCircleGesture({
-    enabled: filled && !bottled && pour === null,
+    enabled: filled && !bottled && pour === null && !discarding,
     onCircle: () => {
       stir();
       pulse('swirlPulse');
@@ -83,9 +103,10 @@ export function CauldronStation() {
         data-testid="cauldron"
         data-ready={allReady ? 'true' : undefined}
         data-burnt={overprocessed && !bottled ? 'true' : undefined}
+        data-discarding={discarding ? 'true' : undefined}
         className={`cauldron cst-cauldron interactive${stirring ? ' is-stirring' : ''}${
           allReady && canBottle ? ' is-ready' : ''
-        }${canBottle ? ' can-bottle' : ''}`}
+        }${canBottle ? ' can-bottle' : ''}${discarding ? ' is-discarding' : ''}`}
         style={zoneStyle(SCENE_ZONES.cauldron)}
         {...stirGesture}
       >
@@ -113,6 +134,7 @@ export function CauldronStation() {
       </div>
 
       <ClassicCauldronFx sim={scene} bodyRef={bodyRef} />
+      <DiscardFx sim={scene} />
 
       {overprocessed && !bottled ? (
         <div className="hint hint--stir hint--burnt" data-testid="burnt-hint" style={rectStyle(BOTTLE_HINT, 60)}>

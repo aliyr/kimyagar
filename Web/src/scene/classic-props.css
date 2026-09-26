@@ -287,6 +287,14 @@
   animation: prop-bucket-glow 1.8s ease-in-out infinite;
 }
 
+/* دیگ در راه است: سطل کم‌رنگ و بی‌اثر تا دیگ نو بنشیند */
+.bucket.prop-bucket.is-locked {
+  pointer-events: none;
+  cursor: default;
+  opacity: 0.55;
+  transition: opacity 0.25s ease;
+}
+
 @keyframes prop-bucket-glow {
   0%,
   100% {

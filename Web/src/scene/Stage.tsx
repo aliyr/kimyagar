@@ -82,7 +82,23 @@ export function Stage({
   const cameraRef = useRef<HTMLDivElement | null>(null);
   const camera = useUiState((s) => s.camera);
   const letterbox = useUiState((s) => s.letterbox);
+  const shakePulse = useUiState((s) => s.shakePulse);
+  /** لایه‌ی لرزش کل صحنه (برخورد دیگ به دیوار) — زیر دوربین تا با زوم قاطی نشود */
+  const shakeRef = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState<Fit>(fitStage);
+
+  useEffect(() => {
+    if (!shakePulse) return;
+    const el = shakeRef.current;
+    if (!el) return;
+    // شروع دوباره‌ی انیمیشن حتی اگر لرزش قبلی هنوز تمام نشده باشد
+    el.classList.remove('is-shaking');
+    void el.offsetWidth;
+    el.classList.add('is-shaking');
+    const done = () => el.classList.remove('is-shaking');
+    el.addEventListener('animationend', done, { once: true });
+    return () => el.removeEventListener('animationend', done);
+  }, [shakePulse]);
 
   useEffect(() => {
     const update = () => setFit(fitStage());
@@ -150,7 +166,9 @@ export function Stage({
             transitionDuration: `${camera?.ms ?? 900}ms`,
           }}
         >
-          <StageContext.Provider value={space}>{children}</StageContext.Provider>
+          <div ref={shakeRef} className="scene-shake" data-testid="scene-shake">
+            <StageContext.Provider value={space}>{children}</StageContext.Provider>
+          </div>
         </div>
         <div className="scene-vignette" />
         <div className={`cine-bars${letterbox ? ' is-on' : ''}`} data-testid="cine-bars" aria-hidden>

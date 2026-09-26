@@ -21,6 +21,7 @@ import { useArtStyle } from '../scene/v2/contracts';
 import { desaturate, mixColors, rgbString, shade } from '../scene/colors';
 import { FlatPotSvg } from '../art/flat/react/FlatPotSvg';
 import { sfx } from '../audio/sfx';
+import { discardCauldron } from '../scene/cauldron/discard';
 import '../scene/classic-ambience.css';
 
 /** مدت پخش واکنش مشتری روی صحنه پیش از نمایش پنل متنی */
@@ -57,7 +58,8 @@ export function ResultOverlay() {
   const customer = useGameStore((s) => s.currentCustomer());
   const deliver = useGameStore((s) => s.deliver);
   const nextCustomer = useGameStore((s) => s.nextCustomer);
-  const resetBrew = useGameStore((s) => s.resetBrew);
+  /** تلاش دوباره = همان دور ریختن سطل: ریست store + پرت‌شدن دیگ در صحنه‌ی کلاسیک */
+  const resetBrew = discardCauldron;
   const repeatLastBrew = useGameStore((s) => s.repeatLastBrew);
   const closeOverlay = useGameStore((s) => s.closeOverlay);
   const lastRecipe = useGameStore((s) => s.lastRecipe);

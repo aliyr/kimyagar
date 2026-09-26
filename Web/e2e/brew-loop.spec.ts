@@ -281,6 +281,100 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     expect((await storeState(page)).entries).toBe(0);
   });
 
+  test('bucket throws the full cauldron at the back wall, shakes the scene, then a fresh one drops in', async ({
+    page,
+  }) => {
+    type Harness = {
+      setState: (partial: Record<string, unknown>) => void;
+      getState: () => { closeOverlay: () => void; addMortarToCauldron: () => void };
+    };
+    await page.evaluate(() => {
+      const store = (window as unknown as { __kimyagarStore?: Harness }).__kimyagarStore;
+      if (!store) throw new Error('window.__kimyagarStore is missing');
+      store.getState().closeOverlay();
+      store.setState({
+        mortar: { ingredientId: 'saffron', quantity: 2, grindState: 'fine', grindWork: 4, grinding: false },
+      });
+      store.getState().addMortarToCauldron();
+    });
+    const fx = page.getByTestId('cauldron-fx-canvas');
+    const bucket = page.getByTestId('reset-button');
+    const cauldron = page.getByTestId('cauldron');
+    await expect(fx).toHaveAttribute('data-pot', 'settled');
+    expect((await storeState(page)).entries).toBe(1);
+
+    // گذارها داخل صفحه ثبت می‌شوند تا تست به سرعت ماشین وابسته نباشد
+    await page.evaluate(() => {
+      const log: string[] = [];
+      const w = window as unknown as { __discardLog: string[] };
+      w.__discardLog = log;
+      const push = (s: string) => {
+        if (log[log.length - 1] !== s) log.push(s);
+      };
+      const tick = () => {
+        const pot = document.querySelector('[data-testid="cauldron-fx-canvas"]')?.getAttribute('data-pot');
+        const fxEl = document.querySelector('[data-testid="discard-fx"]');
+        const wall = document.querySelector('[data-testid="discard-wall"]');
+        const shaking = document.querySelector('[data-testid="scene-shake"]')?.classList.contains('is-shaking');
+        push(`pot:${pot}`);
+        push(`fx:${fxEl ? fxEl.getAttribute('data-phase') : 'none'}`);
+        push(`wall:${wall ? 'on' : 'off'}`);
+        if (shaking) push('shake');
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+
+    await bucket.click();
+    // store همان لحظه خالی است؛ نمایش پرت‌شدن شروع شده و دیگ/سطل قفل‌اند
+    expect((await storeState(page)).entries).toBe(0);
+    await expect(bucket).toHaveAttribute('data-locked', 'true');
+    await expect(cauldron).toHaveAttribute('data-discarding', 'true');
+
+    // دیگ نو می‌نشیند ⇒ قفل‌ها باز؛ لکه می‌ماند و در پایان همه‌چیز جمع می‌شود
+    await expect(bucket).not.toHaveAttribute('data-locked', { timeout: 12_000 });
+    await expect(cauldron).not.toHaveAttribute('data-discarding');
+    await expect(fx).toHaveAttribute('data-pot', 'settled');
+    await expect(page.getByTestId('discard-fx')).toHaveCount(0, { timeout: 12_000 });
+    await expect(page.getByTestId('discard-wall')).toHaveCount(0);
+
+    // دو فریم صبر تا نمونه‌گیر آخرین وضعیت (برداشته‌شدن افکت) را هم ثبت کند
+    const log = await page.evaluate(
+      () =>
+        new Promise<string[]>((resolve) =>
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => resolve((window as unknown as { __discardLog: string[] }).__discardLog)),
+          ),
+        ),
+    );
+    const order = (...keys: string[]) => {
+      let last = -1;
+      for (const key of keys) {
+        const idx = log.indexOf(key, last + 1);
+        expect(idx, `${key} after ${keys.slice(0, keys.indexOf(key)).join(' → ')} in ${log.join(', ')}`).toBeGreaterThan(last);
+        last = idx;
+      }
+    };
+    // فازهای کوتاه (wall/done) ممکن است بین دو فریمِ نمونه‌گیری بیفتند؛ فقط گذارهای بلند بررسی می‌شوند.
+    // دیگ: نشسته ⇒ غایب (پرت شد) ⇒ در حال فرود (دیگ نو) ⇒ نشسته
+    order('pot:settled', 'pot:away', 'pot:landing', 'pot:settled');
+    // افکت: پرتاب ⇒ دیگ نو ⇒ برداشته شد
+    order('fx:throw', 'fx:respawn', 'fx:none');
+    // لکه‌ی دیوار همراه افکت می‌آید و می‌رود؛ لرزش صحنه پس از پرتاب
+    order('wall:off', 'wall:on', 'wall:off');
+    order('fx:throw', 'shake');
+  });
+
+  test('bucket on an empty cauldron just resets, without the throw', async ({ page }) => {
+    await tapJarAndLand(page, page.getByTestId('jar-chamomile'));
+    await expect(page.getByTestId('mortar')).toHaveAttribute('data-mortar-units', '1');
+    await page.getByTestId('reset-button').click();
+    await pause(page, 300);
+    await expect(page.getByTestId('discard-fx')).toHaveCount(0);
+    await expect(page.getByTestId('mortar')).toHaveAttribute('data-mortar-units', '0');
+    await expect(page.getByTestId('cauldron-fx-canvas')).toHaveAttribute('data-pot', 'settled');
+  });
+
   test('reset-button empties process history', async ({ page }) => {
     await page.getByTestId('reset-button').click();
     await pause(page, 150);

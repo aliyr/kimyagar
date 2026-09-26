@@ -296,6 +296,22 @@
   pointer-events: none;
   will-change: transform;
 }
+/* دیگ پرت شده و دیگ نو هنوز ننشسته: هیچ لمسی */
+.cst-cauldron.is-discarding {
+  pointer-events: none;
+  cursor: default;
+}
+/* Canvas پرت‌شدن دیگ (DiscardFx، لایه‌ی کار) */
+.cst-discard-fx {
+  pointer-events: none;
+}
+/* لکه‌ی دیوار (DiscardWallFx، لایه‌ی پشت): مایع با multiply روی بافت چوب می‌نشیند، برق جدا */
+.cst-discard-wall {
+  pointer-events: none;
+}
+.cst-discard-wall--stain {
+  mix-blend-mode: multiply;
+}
 /* هاله‌ی طلایی «رسیده — لمس کن» دور دهانه */
 .cst-cauldron__ready {
   position: absolute;

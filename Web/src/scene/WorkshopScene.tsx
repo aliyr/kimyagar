@@ -12,6 +12,7 @@ import { useRouteKind } from '../route';
 import { useSceneTilt } from './tilt/useSceneTilt';
 import { TiltPinContext } from './tilt/tiltPin';
 import { Backdrop } from './Backdrop';
+import { DiscardWallFx } from './DiscardWallFx';
 import { ContactShadows } from './ContactShadows';
 import { StoveHole } from './StoveHole';
 import { StoveFlames } from './cauldron/StoveFlames';
@@ -42,6 +43,8 @@ export function WorkshopScene() {
           <Cinematic />
           <div className="scene-depth scene-depth--back">
             <Backdrop />
+            {/* لکه‌ی دیگِ دورریخته روی دیوار: پشتِ قفسه (لایه‌ی میانی) و زیرِ میز */}
+            <DiscardWallFx />
           </div>
           <div className="scene-depth scene-depth--mid">
             <ShelfStationClassic />

@@ -47,6 +47,26 @@ const INSIDE = 0.9;
 
 const WATER_RGB = hexToRgb(WATER);
 
+/** فرود دیگ نو از بالا: شروع بالای قاب، گرانش پیکسل/ث²، جهش‌های لقی */
+export const RESPAWN = {
+  /** آفست شروع (پیکسل صحنه) — بدنه کامل بیرون از بالای قاب */
+  startY: -560,
+  gravity: 3400,
+  /** سهم سرعت که در هر جهش برمی‌گردد */
+  restitution: 0.22,
+  /** جهش کوچک‌تر از این ⇒ نشست */
+  minBounce: 60,
+  /** کج‌شدن اولیه‌ی لقی پس از فرود (درجه) و میرایی آن */
+  rockDeg: 7,
+  rockHz: 4.2,
+  rockDamp: 4.5,
+  /** آب بعد از این تأخیر از فرود شروع می‌شود و در fillDur پر می‌شود (ثانیه) */
+  fillDelay: 0.22,
+  fillDur: 0.95,
+} as const;
+
+export type SpawnPhase = 'none' | 'hidden' | 'wait' | 'fall' | 'settle';
+
 export type BoilTier = 'off' | 'warm' | 'simmer' | 'rolling';
 
 export interface BrewChip {
@@ -246,6 +266,24 @@ export class ClassicBrewSim {
   tilt = 0;
   squashX = 1;
   squashY = 1;
+  /**
+   * حضور دیگ: پس از دور ریختن پنهان است، بعد از بالا می‌افتد (spawnY آفست
+   * عمودی بدنه)، لقی می‌زند (rock) و آب تا fill=1 پر می‌شود. جدا از reset تا
+   * ریستِ محتوا در میانه‌ی فرود، دیگ را «تله‌پورت» نکند.
+   */
+  spawnPhase: SpawnPhase = 'none';
+  spawnY = 0;
+  spawnVy = 0;
+  /** سطح آب ۰..۱ (۱ = پر، حالت عادی) */
+  fill = 1;
+  /** کج‌شدن لقی پس از فرود (درجه) — روی tilt اضافه می‌شود */
+  rock = 0;
+  private spawnWait = 0;
+  private rockT = -1;
+  private fillT = -1;
+  /** سرعت برخورد هر فرود (پیکسل/ث) تا مصرف با takeLanding */
+  private landings: number[] = [];
+  private fillStarts = 0;
 
   private rng: Rng;
   private seed: number;
@@ -270,6 +308,10 @@ export class ClassicBrewSim {
     this.rng = new Rng(seed);
   }
 
+  /**
+   * ریست محتوا (مایع، تکه‌ها، حباب…). حضور دیگ (spawnPhase/fill) دست نمی‌خورد
+   * تا ریست در میانه‌ی دور ریختن، دیگ نو را نپراند؛ آن با hidePot/respawn است.
+   */
   reset(seed: number = this.seed): void {
     this.seed = seed;
     this.rng = new Rng(seed);
@@ -419,6 +461,54 @@ export class ClassicBrewSim {
     this.fireGlow = clamp(glow, 0, 1);
   }
 
+  /** دیگ پرت شد: بدنه و دهانه پنهان تا respawn */
+  hidePot(): void {
+    this.spawnPhase = 'hidden';
+    this.spawnY = 0;
+    this.spawnVy = 0;
+    this.rock = 0;
+    this.rockT = -1;
+    this.fillT = -1;
+    this.landings = [];
+    this.fillStarts = 0;
+  }
+
+  /** دیگ نو پس از `delay` ثانیه از بالا می‌افتد؛ خالی می‌آید و بعد آب پر می‌شود */
+  respawn(delay = 0): void {
+    this.spawnPhase = delay > 0 ? 'wait' : 'fall';
+    this.spawnWait = delay;
+    this.spawnY = RESPAWN.startY;
+    this.spawnVy = 0;
+    this.fill = 0;
+    this.rock = 0;
+    this.rockT = -1;
+    this.fillT = -1;
+    this.landings = [];
+    this.fillStarts = 0;
+  }
+
+  /** دیگ در صحنه هست (حتی اگر در حال افتادن) */
+  get potVisible(): boolean {
+    return this.spawnPhase !== 'hidden' && this.spawnPhase !== 'wait';
+  }
+
+  /** دیگ سر جایش نشسته و آب پر است */
+  get potSettled(): boolean {
+    return this.spawnPhase === 'none';
+  }
+
+  /** سرعت برخورد فرود بعدی (پیکسل/ث) برای صدای شق/هپتیک؛ ۰ یعنی فرودی نمانده */
+  takeLanding(): number {
+    return this.landings.shift() ?? 0;
+  }
+
+  /** یک بار true وقتی پرشدن آب شروع می‌شود (صدای شرشر) */
+  takeFillStart(): boolean {
+    if (this.fillStarts === 0) return false;
+    this.fillStarts--;
+    return true;
+  }
+
   get isStirring(): boolean {
     return this.spoonMode === 'stir';
   }
@@ -480,6 +570,7 @@ export class ClassicBrewSim {
     this.updateSparkles(dt);
     this.updateSlosh(dt);
     this.updateSquash(dt);
+    this.updateSpawn(dt);
     this.tilt += (this.tiltTarget - this.tilt) * Math.min(1, dt * TILT_EASE);
     if (this.heat > 0.85) this.soot = Math.min(1, this.soot + dt / 28);
     this.shiver = this.heat > 0.05 ? this.heat * (0.35 + 0.65 * Math.sin(this.time * 11)) : 0;
@@ -853,5 +944,55 @@ export class ClassicBrewSim {
     this.squashVy += (-SQUASH_STIFFNESS * (this.squashY - 1) - SQUASH_DAMPING * this.squashVy) * dt;
     this.squashX += this.squashVx * dt;
     this.squashY += this.squashVy * dt;
+  }
+
+  /** فرود دیگ نو: سقوط با گرانش، جهش‌های کوچک، لقی میرا، بعد پرشدن آب */
+  private updateSpawn(dt: number): void {
+    const phase = this.spawnPhase;
+    if (phase === 'none' || phase === 'hidden') return;
+    if (phase === 'wait') {
+      this.spawnWait -= dt;
+      if (this.spawnWait <= 0) this.spawnPhase = 'fall';
+      return;
+    }
+    if (phase === 'fall') {
+      this.spawnVy += RESPAWN.gravity * dt;
+      this.spawnY += this.spawnVy * dt;
+      if (this.spawnY >= 0) {
+        this.spawnY = 0;
+        const impact = this.spawnVy;
+        // ضربه‌ی نشست: له‌شدن به‌اندازه‌ی سرعت برخورد؛ هر برخورد یک «شق»
+        const k = Math.min(1, impact / 2200);
+        this.squashY -= 0.16 * k;
+        this.squashX += 0.1 * k;
+        this.landings.push(impact);
+        if (this.rockT < 0) this.rockT = 0;
+        if (impact * RESPAWN.restitution > RESPAWN.minBounce) {
+          this.spawnVy = -impact * RESPAWN.restitution;
+        } else {
+          this.spawnVy = 0;
+          this.spawnPhase = 'settle';
+          this.fillT = -RESPAWN.fillDelay;
+        }
+      }
+      this.updateRock(dt);
+      return;
+    }
+    // settle: لقی میرا و پرشدن آب
+    this.updateRock(dt);
+    const before = this.fillT;
+    this.fillT += dt;
+    if (before < 0 && this.fillT >= 0) this.fillStarts++;
+    if (this.fillT >= 0) this.fill = easeOut(clamp(this.fillT / RESPAWN.fillDur, 0, 1));
+    if (this.fill >= 1 && Math.abs(this.rock) < 0.05) {
+      this.rock = 0;
+      this.spawnPhase = 'none';
+    }
+  }
+
+  private updateRock(dt: number): void {
+    if (this.rockT < 0) return;
+    this.rockT += dt;
+    this.rock = RESPAWN.rockDeg * Math.exp(-this.rockT * RESPAWN.rockDamp) * Math.sin(this.rockT * RESPAWN.rockHz * Math.PI * 2);
   }
 }

@@ -2,7 +2,8 @@
  * سه شیء کوچک و کم‌سروصدا (بدون دکمه‌ی بزرگ، همه فیزیکی):
  * - دفترچه‌ی چرمی پایین‌راست (جلوی پیشخوان) ⇒ Overlay دفترچه
  * - دسته‌کاغذ کنار پاتیل ⇒ آنچه تا حالا ریخته‌ای
- * - سطل چوبی ⇒ خالی کردن پاتیل
+ * - سطل چوبی ⇒ خالی کردن پاتیل: دیگِ پر به دیوار پرت می‌شود (cauldron/discard)
+ *   و تا نشستن دیگ نو، سطل قفل است.
  */
 
 import { useGameStore } from '../store/gameStore';
@@ -11,13 +12,16 @@ import { tapProps } from '../gestures';
 import { CLASSIC_ART } from './artManifest';
 import { PROPS } from './layout';
 import { ArtLayer, rectStyle } from './Zone';
+import { useUiState } from './uiState';
+import { discardCauldron } from './cauldron/discard';
 import './classic-props.css';
 
 export function TableProps({ part = 'all' }: { part?: 'all' | 'notebook' | 'history' | 'bucket' }) {
   const show = (name: 'notebook' | 'history' | 'bucket') => part === 'all' || part === name;
   const openOverlay = useGameStore((s) => s.openOverlayAction);
-  const resetBrew = useGameStore((s) => s.resetBrew);
   const hasBrew = useGameStore((s) => s.brew.entries.length > 0 || s.mortar !== null);
+  /** دیگ در راه است ⇒ سطل قفل (discardCauldron خودش هم نادیده می‌گیرد) */
+  const discarding = useUiState((s) => s.discard !== null && !s.discard.settled);
   /**
    * نتیجه‌ی ناموفق/ناقص و Overlay بسته ⇒ صحنه در مکث است و تنها راه ادامه،
    * خالی‌کردن پاتیل است: سطل بالای Vignette می‌آید و می‌درخشد.
@@ -74,10 +78,13 @@ export function TableProps({ part = 'all' }: { part?: 'all' | 'notebook' | 'hist
       <div
         data-testid="reset-button"
         data-retry={urgent ? 'true' : undefined}
-        className={`bucket prop-bucket interactive${hasBrew ? ' is-live' : ''}${urgent ? ' is-retry' : ''}`}
+        data-locked={discarding ? 'true' : undefined}
+        className={`bucket prop-bucket interactive${hasBrew && !discarding ? ' is-live' : ''}${
+          urgent ? ' is-retry' : ''
+        }${discarding ? ' is-locked' : ''}`}
         title={urgent ? urgentLabel : uiLabels.resetBrew}
         style={rectStyle(PROPS.bucket, needsRetry ? 86 : 45)}
-        {...tapProps(resetBrew)}
+        {...tapProps(discardCauldron)}
       >
         <ArtLayer src={CLASSIC_ART.bucket} fit="contain" className="prop-bucket-img">
           <div className="prop-bucket-ph">

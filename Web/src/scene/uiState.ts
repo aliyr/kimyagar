@@ -29,6 +29,27 @@ export interface CameraShot {
   ms: number;
 }
 
+/**
+ * دور ریختن دیگ (کلاسیک): با ضربه به سطل، دیگِ پر به دیوار پشت پرت می‌شود،
+ * محتوایش روی دیوار می‌ماند و دیگ نو از بالا می‌افتد. store همان لحظه ریست
+ * می‌شود؛ این فقط وضعیت نمایشی است (DiscardFx + ClassicBrewSim).
+ */
+export interface DiscardState {
+  /** شمارنده‌ی یکتا — هر دور ریختن یک key تازه */
+  id: number;
+  /** رنگ مایع در لحظه‌ی پرت‌شدن (hex) */
+  liquid: string;
+  /** معجون سوخته بود (لکه‌ی تیره‌تر و دودی) */
+  burnt: boolean;
+  /** performance.now() لحظه‌ی شروع — مبنای زمان مشترک دیگِ پرنده (لایه‌ی کار) و لکه‌ی دیوار (لایه‌ی پشت) */
+  startedAt: number;
+  /**
+   * دیگ نو نشسته و آب پر شده ⇒ دیگ و سطل دوباره آزادند.
+   * لکه‌ی دیوار ممکن است هنوز بماند؛ پایان کامل با endDiscard.
+   */
+  settled: boolean;
+}
+
 export interface DragState {
   kind: DragKind;
   ingredientId?: IngredientId;
@@ -55,6 +76,8 @@ export interface UiState {
   mortarShakePulse: number;
   /** هر «ضربه»ی کوبش خودکار (~۰٫۳۵ث) — برای صدا/هپتیک و لرزش کوبه */
   grindTickPulse: number;
+  /** لرزش کل صحنه (برخورد دیگ به دیوار) — Stage آن را پخش می‌کند */
+  shakePulse: number;
   /** انتقال هاون ⇒ دیگ با قاشق (کلاسیک) */
   transfer: TransferPhase;
   /** ریختن دیگ ⇒ شیشه ⇒ مشتری (کلاسیک) */
@@ -70,6 +93,8 @@ export interface UiState {
    * null یعنی هنوز آماده نیست — دوربین ورود نباید شروع شود.
    */
   customerArtReady: number | null;
+  /** دور ریختن دیگ در جریان (null ⇒ هیچ) */
+  discard: DiscardState | null;
 
   beginDrag: (d: Omit<DragState, 'over'>) => void;
   updateDrag: (x: number, y: number, over: DropTargetId | null) => void;
@@ -82,8 +107,16 @@ export interface UiState {
   setCamera: (shot: CameraShot | null, letterbox?: boolean) => void;
   setSceneArtReady: (ready: boolean) => void;
   setCustomerArtReady: (index: number | null) => void;
-  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse' | 'grindTickPulse') => void;
+  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse' | 'grindTickPulse' | 'shakePulse') => void;
+  /** شروع دور ریختن — اگر یکی در جریان است، نادیده گرفته می‌شود */
+  startDiscard: (liquid: string, burnt: boolean) => void;
+  /** دیگ نو نشست و پر شد */
+  settleDiscard: (id: number) => void;
+  /** لکه‌ی دیوار هم رفت — پایان */
+  endDiscard: (id: number) => void;
 }
+
+let discardSeq = 0;
 
 export const useUiState = create<UiState>((set) => ({
   drag: null,
@@ -95,12 +128,14 @@ export const useUiState = create<UiState>((set) => ({
   pourPulse: 0,
   mortarShakePulse: 0,
   grindTickPulse: 0,
+  shakePulse: 0,
   transfer: null,
   pour: null,
   camera: null,
   letterbox: false,
   sceneArtReady: false,
   customerArtReady: null,
+  discard: null,
 
   beginDrag: (d) => set({ drag: { ...d, over: null } }),
   updateDrag: (x, y, over) =>
@@ -115,4 +150,13 @@ export const useUiState = create<UiState>((set) => ({
   setSceneArtReady: (ready) => set({ sceneArtReady: ready }),
   setCustomerArtReady: (index) => set({ customerArtReady: index }),
   pulse: (key) => set((s) => ({ [key]: s[key] + 1 }) as Partial<UiState>),
+  startDiscard: (liquid, burnt) =>
+    set((s) =>
+      s.discard && !s.discard.settled
+        ? {}
+        : { discard: { id: ++discardSeq, liquid, burnt, startedAt: performance.now(), settled: false } },
+    ),
+  settleDiscard: (id) =>
+    set((s) => (s.discard && s.discard.id === id ? { discard: { ...s.discard, settled: true } } : {})),
+  endDiscard: (id) => set((s) => (s.discard && s.discard.id === id ? { discard: null } : {})),
 }));

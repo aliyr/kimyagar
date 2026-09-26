@@ -119,6 +119,8 @@ export function MortarStation() {
 
   const transfer = useUiState((s) => s.transfer);
   const setTransfer = useUiState((s) => s.setTransfer);
+  /** دیگ پرت شده و هنوز ننشسته ⇒ قاشق چیزی برای ریختن ندارد؛ کوبش آزاد می‌ماند */
+  const potAway = useUiState((s) => s.discard !== null && !s.discard.settled);
   const mortarShakePulse = useUiState((s) => s.mortarShakePulse);
   const setGrindingUi = useUiState((s) => s.setGrinding);
   const setCamera = useUiState((s) => s.setCamera);
@@ -130,7 +132,7 @@ export function MortarStation() {
   const units = totalUnits;
   /** بعد از برداشتن با قاشق، کاسه خالی دیده می‌شود (store تا لحظه‌ی drop پر است) */
   const contentsVisible = mortar !== null && (transfer === null || transfer === 'scoop');
-  const canTap = mortar !== null && transfer === null && !paused;
+  const canTap = mortar !== null && transfer === null && !paused && !potAway;
   const hasMortar = mortar !== null;
   const residue = useResidue();
   const mixColor = portions.length > 0 ? mixColors(portions.map((p) => colorOf(p.ingredientId))) : '#8a7a52';

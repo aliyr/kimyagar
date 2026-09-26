@@ -64,6 +64,58 @@
   backface-visibility: hidden;
 }
 
+/*
+ * لرزش کل صحنه (برخورد دیگ به دیوار): لایه‌ای زیر دوربین تا با زوم سینمایی
+ * قاطی نشود. جابه‌جایی‌های میرا با چرخش خیلی کم؛ نوارهای سینمایی و Vignette
+ * بیرون از آن ثابت می‌مانند.
+ */
+.scene-shake {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 60%;
+  backface-visibility: hidden;
+}
+.scene-shake.is-shaking {
+  animation: scene-shake 0.62s cubic-bezier(0.2, 0.55, 0.3, 1) both;
+  will-change: transform;
+}
+@keyframes scene-shake {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  7% {
+    transform: translate(-18px, 12px) rotate(-0.55deg);
+  }
+  16% {
+    transform: translate(16px, -9px) rotate(0.5deg);
+  }
+  26% {
+    transform: translate(-12px, 7px) rotate(-0.38deg);
+  }
+  38% {
+    transform: translate(9px, -5px) rotate(0.26deg);
+  }
+  52% {
+    transform: translate(-6px, 3px) rotate(-0.16deg);
+  }
+  68% {
+    transform: translate(3px, -2px) rotate(0.08deg);
+  }
+  84% {
+    transform: translate(-1px, 1px) rotate(0deg);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-shake.is-shaking {
+    animation: none;
+  }
+}
+
 /* تیلت کارگاه — اعداد با tiltMath.ts یکی است. زوم سینمایی روی scene-camera می‌ماند. */
 .scene-tilt {
   position: absolute;
