@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { uiLabels } from '../data/labels';
 import { useCircleGesture } from '../gestures';
-import { SCENE_ZONES } from './artManifest';
+import { artUrl, SCENE_ZONES } from './artManifest';
 import { PROPS } from './layout';
 import { ArtLayer, rectStyle, zoneStyle } from './Zone';
 import { useUiState } from './uiState';
@@ -34,6 +34,12 @@ import './classic-stations.css';
 
 /** راهنمای کوتاه «برای ریختن، پاتیل را لمس کن» — بالای لبه */
 const BOTTLE_HINT = { ...PROPS.stirHint, y: PROPS.stirHint.y - 4 };
+
+/** دوده فقط روی پیکسل‌های خودِ دیگ؛ بیرونِ بدنه (شفافِ PNG) دست‌نخورده می‌ماند */
+const SOOT_MASK = (() => {
+  const mask = `url(${artUrl(SCENE_ZONES.cauldron.img!)}) center / contain no-repeat`;
+  return { WebkitMask: mask, mask } as const;
+})();
 
 export function CauldronStation() {
   const entries = useGameStore((s) => s.brew.entries);
@@ -111,7 +117,7 @@ export function CauldronStation() {
         {...stirGesture}
       >
         <div ref={bodyRef} className="cst-cauldron__body">
-          <div className="cst-cauldron__soot" aria-hidden />
+          <div className="cst-cauldron__soot" style={SOOT_MASK} aria-hidden />
           <ArtLayer src={SCENE_ZONES.cauldron.img}>
             <div className="cauldron__ph">
               <div className="cauldron__belly" />
