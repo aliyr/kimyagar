@@ -11,6 +11,10 @@
  * دادن سهم مثبت، جریمه‌ی قوی جداگانه (وزن tuning.avoid × میزان نقض) می‌خورد.
  * Preferred فقط Bonus کوچک است و با ضریب min(avoid satisfaction) مقیاس می‌شود
  * تا هرگز یک avoid خراب را جبران نکند.
+ *
+ * واکنش مشتری (Human Debugger): اگر هیچ Requirement ای نقض نشده ولی نتیجه
+ * عالی نیست، علت (بزرگ‌ترین Side Effect ناخواسته یا ناپایداری) به‌عنوان
+ * «مشکل» گفته می‌شود تا با Band نمایش‌داده‌شده تناقض نداشته باشد.
  */
 
 import type {
@@ -108,13 +112,17 @@ export function evaluate(
   // و از آستانه‌ی معافیت بالاترند جریمه می‌گیرند (Neutral Extra مجانی است)
   const requestedProperties = new Set(customer.requirements.map((r) => r.propertyId));
   let sideEffectPenalty = 0;
+  let worstSideEffect: { propertyId: PropertyId; over: number } | null = null;
   for (const [propertyId, value] of Object.entries(result.effectProfile) as [
     PropertyId,
     number,
   ][]) {
     if (requestedProperties.has(propertyId)) continue;
     const over = value - w.sideEffectFreeThreshold;
-    if (over > 0) sideEffectPenalty += w.sideEffectPenaltyPerUnit * over;
+    if (over > 0) {
+      sideEffectPenalty += w.sideEffectPenaltyPerUnit * over;
+      if (!worstSideEffect || over > worstSideEffect.over) worstSideEffect = { propertyId, over };
+    }
   }
 
   const stabilityModifier = stabilityModifierFor(result.stability, defs.tuning);
@@ -148,15 +156,34 @@ export function evaluate(
   const worstViolation = violations[0] ?? null;
 
   const keySuccessFa = bestSuccess ? bestSuccess.requirement.metFeedbackFa : null;
-  const keyProblemFa = worstViolation ? worstViolation.requirement.unmetFeedbackFa : null;
+  let keyProblemFa = worstViolation ? worstViolation.requirement.unmetFeedbackFa : null;
+
+  // هیچ Requirement ای نقض نشده ولی نتیجه عالی نیست ⇒ مشکل از Side Effect
+  // ناخواسته یا ناپایداری است؛ باید گفته شود تا مشتری «دقیقاً همان» نگوید.
+  if (!keyProblemFa && band !== 'excellent') {
+    const stabilityLoss = Math.max(0, core - sideEffectPenalty) * (1 - stabilityModifier);
+    if (worstSideEffect && sideEffectPenalty >= stabilityLoss) {
+      const sideId = worstSideEffect.propertyId;
+      const nameFa = defs.properties.find((p) => p.id === sideId)?.nameFa ?? sideId;
+      keyProblemFa = `${nameFa} زیادی هم داشت که نخواسته بودم.`;
+    } else if (stabilityModifier < 1) {
+      keyProblemFa = 'اثرش ناپایدار بود و زود از تنم رفت.';
+    }
+  }
+
+  // نقطه‌ی پایانی جمله‌ها را برمی‌داریم تا با اتصال‌دهنده دو نقطه پشت هم نیاید
+  const trimEnd = (s: string) => s.replace(/[.\s]+$/u, '');
+  // بعضی متن‌های unmet خودشان با «ولی/اما» شروع می‌شوند
+  const startsWithBut = (s: string) => /^(ولی|اما)\s/u.test(s);
 
   let reactionFa: string;
   if (keySuccessFa && keyProblemFa) {
-    reactionFa = `${keySuccessFa}؛ ولی ${keyProblemFa}`;
+    const joiner = startsWithBut(keyProblemFa) ? '؛ ' : '؛ ولی ';
+    reactionFa = `${trimEnd(keySuccessFa)}${joiner}${keyProblemFa}`;
   } else if (keySuccessFa) {
-    reactionFa = `${keySuccessFa}. دقیقاً همان چیزی بود که می‌خواستم!`;
+    reactionFa = `${trimEnd(keySuccessFa)}. دقیقاً همان چیزی بود که می‌خواستم!`;
   } else if (keyProblemFa) {
-    reactionFa = `${keyProblemFa}. این آن چیزی نبود که می‌خواستم…`;
+    reactionFa = `${trimEnd(keyProblemFa)}. این آن چیزی نبود که می‌خواستم…`;
   } else {
     reactionFa = 'چیز خاصی حس نکردم…';
   }

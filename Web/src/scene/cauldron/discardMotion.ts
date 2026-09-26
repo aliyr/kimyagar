@@ -206,6 +206,8 @@ export interface Gob {
   r: number;
   /** قوس پرواز */
   arc: number;
+  /** جابه‌جایی عمود بر مسیر تا گلوله‌ها در یک خط به هم نچسبند */
+  sway: number;
 }
 
 /** تعداد نقاط دورِ هر توده (برای شکل ناهموار) */
@@ -290,20 +292,21 @@ export function buildDiscardScene(seed: number): DiscardScene {
   for (let i = 0; i < n; i++) {
     const spreadX = rng.range(-1, 1);
     const spreadY = rng.range(-1, 1);
-    const leave = T.gobsLeave + rng.range(0, 0.08);
+    const leave = T.gobsLeave + rng.range(0, 0.12);
     const from = mouthCenter(potPose(leave));
+    const fan = rng.range(-1.1, 1.1);
     const r = rng.range(9, 26);
     gobs.push({
       leave,
       hit: T.gobsHit + rng.range(-0.03, 0.04),
-      fx: from.x,
-      fy: from.y,
+      fx: from.x + Math.sin(fan) * 26,
+      fy: from.y + (1 - Math.cos(fan)) * 10,
       tx: T.impact.x + spreadX * 120 * (0.3 + 0.7 * Math.abs(spreadX)),
       // فرود همیشه زیر تخته‌ی قفسه (با احتساب شعاع)؛ لکه کمی بالاتر از مرکز برخورد تا جا برای چکه بماند
       ty: Math.max(SHELF_BOTTOM + r + 6, T.impact.y - 14 + spreadY * 32),
       r,
-      // قوس کم و رو به بالا: جلوتر از دیگ ولی زیر قفسه
-      arc: rng.range(6, 30),
+      arc: rng.range(4, 22),
+      sway: rng.range(-38, 38),
     });
   }
 
@@ -379,9 +382,16 @@ export function buildDiscardScene(seed: number): DiscardScene {
 export function gobPosition(g: Gob, t: number): { x: number; y: number; u: number } | null {
   if (t < g.leave || t >= g.hit) return null;
   const u = (t - g.leave) / (g.hit - g.leave);
+  const dx = g.tx - g.fx;
+  const dy = g.ty - g.fy;
+  const len = Math.hypot(dx, dy) || 1;
+  const side = Math.sin(Math.PI * u) * g.sway;
+  let y = lerp(g.fy, g.ty, u) + (dx / len) * side - g.arc * Math.sin(Math.PI * u);
+  const underShelf = SHELF_BOTTOM + g.r + 6;
+  if (y < underShelf) y = underShelf;
   return {
-    x: lerp(g.fx, g.tx, u),
-    y: lerp(g.fy, g.ty, u) - g.arc * Math.sin(Math.PI * u),
+    x: lerp(g.fx, g.tx, u) + (-dy / len) * side,
+    y,
     u,
   };
 }

@@ -76,8 +76,9 @@ export interface UiState {
   mortarShakePulse: number;
   /** هر «ضربه»ی کوبش خودکار (~۰٫۳۵ث) — برای صدا/هپتیک و لرزش کوبه */
   grindTickPulse: number;
-  /** لرزش کل صحنه (برخورد دیگ به دیوار) — Stage آن را پخش می‌کند */
+  /** لرزش کل صحنه — Stage آن را پخش می‌کند. hit = برخورد به دیوار، drop = فرود دیگ نو */
   shakePulse: number;
+  shakeKind: 'hit' | 'drop';
   /** انتقال هاون ⇒ دیگ با قاشق (کلاسیک) */
   transfer: TransferPhase;
   /** ریختن دیگ ⇒ شیشه ⇒ مشتری (کلاسیک) */
@@ -107,7 +108,9 @@ export interface UiState {
   setCamera: (shot: CameraShot | null, letterbox?: boolean) => void;
   setSceneArtReady: (ready: boolean) => void;
   setCustomerArtReady: (index: number | null) => void;
-  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse' | 'grindTickPulse' | 'shakePulse') => void;
+  pulse: (key: 'splashPulse' | 'swirlPulse' | 'pourPulse' | 'mortarShakePulse' | 'grindTickPulse') => void;
+  /** لرزش کل صحنه: hit برخورد به دیوار، drop فرود دیگ نو از بالا */
+  shakeScene: (kind: 'hit' | 'drop') => void;
   /** شروع دور ریختن — اگر یکی در جریان است، نادیده گرفته می‌شود */
   startDiscard: (liquid: string, burnt: boolean) => void;
   /** دیگ نو نشست و پر شد */
@@ -129,6 +132,7 @@ export const useUiState = create<UiState>((set) => ({
   mortarShakePulse: 0,
   grindTickPulse: 0,
   shakePulse: 0,
+  shakeKind: 'hit',
   transfer: null,
   pour: null,
   camera: null,
@@ -150,6 +154,7 @@ export const useUiState = create<UiState>((set) => ({
   setSceneArtReady: (ready) => set({ sceneArtReady: ready }),
   setCustomerArtReady: (index) => set({ customerArtReady: index }),
   pulse: (key) => set((s) => ({ [key]: s[key] + 1 }) as Partial<UiState>),
+  shakeScene: (kind) => set((s) => ({ shakePulse: s.shakePulse + 1, shakeKind: kind })),
   startDiscard: (liquid, burnt) =>
     set((s) =>
       s.discard && !s.discard.settled

@@ -4,7 +4,7 @@
  * چکه‌ها زیر لبه‌ی پشتی میز خودبه‌خود پنهان می‌شوند).
  *
  * دو Canvas روی هم:
- *   - stain (mix-blend-mode: multiply): خودِ مایع؛ بافت چوب از زیرش دیده می‌شود.
+ *   - stain (normal): خودِ مایع، نزدیک به رنگ داخل دیگ.
  *   - gloss (normal): برق خیسی، لبه‌ی تیره‌ی ضخامت، حلقه‌ی برخورد؛ با خشک‌شدن کم می‌شود.
  *
  * زمان از `discard.startedAt` می‌آید تا با دیگِ پرنده (DiscardFx در لایه‌ی کار)
@@ -76,7 +76,7 @@ class WallPainter {
     ctx.clip();
   }
 
-  /** لایه‌ی مایع (multiply روی چوب) */
+  /** لایه‌ی مایع */
   stain(ctx: CanvasRenderingContext2D, viewW: number, viewH: number, t: number): void {
     const alpha = splatAlpha(t);
     if (alpha <= 0) return;
@@ -146,7 +146,7 @@ class WallPainter {
       const g = blobGrow(b, t) * shrink;
       if (g <= 0) continue;
       const grad = ctx.createRadialGradient(b.x, b.y + b.ry * 0.15, 0, b.x, b.y, b.rx * g);
-      grad.addColorStop(0, rgbA(tone.deep, 0.55 * (1 - 0.5 * dry)));
+      grad.addColorStop(0, rgbA(tone.base, 0.35 * (1 - 0.4 * dry)));
       grad.addColorStop(0.7, rgbA(tone.deep, 0.15));
       grad.addColorStop(1, rgbA(tone.deep, 0));
       ctx.globalAlpha = alpha;
@@ -230,7 +230,7 @@ class WallPainter {
       ctx.stroke();
       // برق خیسی بالا-چپ (نور از بالا-چپ می‌آید)
       if (b.rx >= 30) {
-        ctx.globalAlpha = alpha * 0.42 * wet;
+        ctx.globalAlpha = alpha * 0.2 * wet;
         const hx = b.x - b.rx * g * 0.32;
         const hy = b.y - b.ry * g * 0.36;
         const hg = ctx.createRadialGradient(hx, hy, 0, hx, hy, b.rx * g * 0.5);

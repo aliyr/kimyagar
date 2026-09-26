@@ -200,6 +200,8 @@ export function ClassicCauldronFx({
         const strength = Math.min(1, impact / 1900);
         sfx.cauldronLand(strength);
         haptic(strength > 0.5 ? 'heavy' : 'light');
+        // فقط فرودِ سختِ اول (افتادن از بالا)؛ جهش‌های بعدی آرام‌ترند و صحنه را تکان نمی‌دهند
+        if (impact > 900) useUiState.getState().shakeScene('drop');
       }
       if (sim.takeFillStart()) sfx.waterFill(RESPAWN.fillDur);
 

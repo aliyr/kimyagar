@@ -11,9 +11,10 @@ export interface DiscardTones {
 
 export function tonesFor(hex: string, burnt: boolean): DiscardTones {
   const raw = hexToRgb(hex);
-  // مایعِ ریخته غلیظ‌تر و پررنگ‌تر از سطحِ روشنِ داخل دیگ دیده می‌شود
-  const base = burnt ? scaleRgb(raw, 0.7) : saturate(scaleRgb(raw, 0.9), 1.15);
-  return { base, deep: scaleRgb(base, 0.5), light: tintWhite(base, 0.3), glint: tintWhite(base, 0.72) };
+  // همان فام مایع داخل دیگ، کمی اشباع‌تر تا روی چوب تیره زنده بماند.
+  // سوخته تقریباً همان رنگ تیرهٔ داخل دیگ می‌ماند.
+  const base = burnt ? scaleRgb(raw, 0.96) : saturate(raw, 1.22);
+  return { base, deep: scaleRgb(base, 0.86), light: tintWhite(base, 0.14), glint: tintWhite(base, 0.32) };
 }
 
 export function rgbA([r, g, b]: RGB, a: number): string {

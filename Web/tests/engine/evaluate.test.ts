@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as engine from '../../src/engine';
 import { satisfactionOf } from '../../src/engine/evaluation';
 import type { QualityTagRule } from '../../src/engine/types';
-import { CHAMOMILE, customer, ing, makeDefs, readyPotion, req } from './fixtures';
+import { CHAMOMILE, SAFFRON, customer, ing, makeDefs, readyPotion, req } from './fixtures';
 
 const CALMY = ing({ id: 'calmy', baseProperties: { calm: 1.5, warm: 0.6 } });
 const defs = makeDefs({ ingredients: [CHAMOMILE, CALMY] });
@@ -188,6 +188,36 @@ describe('customer evaluation', () => {
     const evaluation = engine.evaluate(calmyPotion(), C1, defs);
     expect(evaluation.keySuccessFa).toBeNull();
     expect(evaluation.reactionFa).toContain('unmet:calm');
+  });
+
+  it('must_have met but polluted with unrequested ingredients ⇒ side effect is named, not «exactly what I wanted»', () => {
+    const allDefs = makeDefs();
+    // بابونه (Calm ✓) + زعفران بی‌ربط ⇒ Joy ~۳ ناخواسته
+    const potion = readyPotion(allDefs, [{ id: CHAMOMILE.id }, { id: SAFFRON.id }]);
+    const evaluation = engine.evaluate(potion, C1, allDefs);
+
+    expect(evaluation.perRequirement[0].satisfied).toBe(true);
+    expect(evaluation.band).not.toBe('excellent');
+    expect(evaluation.keySuccessFa).toBe('met:calm');
+    expect(evaluation.keyProblemFa).toContain('joy'); // nameFa در Fixture = id
+    expect(evaluation.reactionFa).toContain('ولی');
+    expect(evaluation.reactionFa).not.toContain('دقیقاً همان چیزی بود');
+  });
+
+  it('a clean excellent brew still gets the «exactly what I wanted» line', () => {
+    const evaluation = engine.evaluate(chamomilePotion(), C1, defs);
+    expect(evaluation.band).toBe('excellent');
+    expect(evaluation.keyProblemFa).toBeNull();
+    expect(evaluation.reactionFa).toContain('دقیقاً همان چیزی بود');
+  });
+
+  it('joins success and problem without doubled punctuation or «ولی ولی»', () => {
+    const c = customer('join', [
+      req('must_have', 'calm', 1.8, 'at_least', { metFeedbackFa: 'آرام شدم.' }),
+      req('avoid', 'sleep', 1.2, 'at_most', { unmetFeedbackFa: 'ولی خوابم برد.' }),
+    ]);
+    const evaluation = engine.evaluate(chamomilePotion(), c, defs);
+    expect(evaluation.reactionFa).toBe('آرام شدم؛ ولی خوابم برد.');
   });
 });
 

@@ -305,12 +305,9 @@
 .cst-discard-fx {
   pointer-events: none;
 }
-/* لکه‌ی دیوار (DiscardWallFx، لایه‌ی پشت): مایع با multiply روی بافت چوب می‌نشیند، برق جدا */
+/* لکه‌ی دیوار (DiscardWallFx، لایه‌ی پشت). بدون multiply تا رنگ مایع همان رنگ داخل دیگ بماند */
 .cst-discard-wall {
   pointer-events: none;
-}
-.cst-discard-wall--stain {
-  mix-blend-mode: multiply;
 }
 /* هاله‌ی طلایی «رسیده — لمس کن» دور دهانه */
 .cst-cauldron__ready {

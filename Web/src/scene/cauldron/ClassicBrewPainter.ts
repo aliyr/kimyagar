@@ -14,7 +14,6 @@ import {
   dropGroundY,
   dropScreen,
   tableVisible,
-  type BrewChip,
   type ClassicBrewSim,
   type SplashDrop,
 } from './ClassicBrewSim';
@@ -133,7 +132,6 @@ export class ClassicBrewPainter {
     this.interior(ctx, mx, my, rx, ry);
     this.liquid(ctx, mx, my, rx, ry, liquid, sim);
     this.blooms(ctx, mx, my, rx, ry, sim);
-    this.powder(ctx, mx, my, rx, ry, sim);
     this.chips(ctx, mx, my, rx, ry, liquid, sim);
     this.bubbles(ctx, mx, my, rx, ry, liquid, sim);
     this.spots(ctx, mx, my, rx, ry, sim);
@@ -270,32 +268,6 @@ export class ClassicBrewPainter {
     ctx.globalAlpha = 1;
   }
 
-  private powder(ctx: CanvasRenderingContext2D, mx: number, my: number, rx: number, ry: number, sim: ClassicBrewSim): void {
-    const groups = new Map<string, BrewChip[]>();
-    for (const c of sim.chips) {
-      if (!c.powder || c.depth > 0.92) continue;
-      const list = groups.get(c.color) ?? [];
-      list.push(c);
-      groups.set(c.color, list);
-    }
-    for (const [color, list] of groups) {
-      if (list.length < 2) continue;
-      const ordered = [...list].sort((a, b) => Math.atan2(a.v, a.u) - Math.atan2(b.v, b.u));
-      ctx.beginPath();
-      ordered.forEach((c, i) => {
-        const x = mx + c.u * rx;
-        const y = my + c.v * ry;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.strokeStyle = rgba(color, 0.45);
-      ctx.lineWidth = Math.max(4, ry * 0.18);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    }
-  }
-
   private chips(
     ctx: CanvasRenderingContext2D,
     mx: number,
@@ -331,7 +303,7 @@ export class ClassicBrewPainter {
       ctx.globalAlpha = alpha;
       if (c.powder) {
         const sprite = this.soft(c.color, 0.9);
-        ctx.drawImage(sprite, -w, -h, w * 2, h * 2);
+        ctx.drawImage(sprite, -w * 0.55, -h * 0.55, w * 1.1, h * 1.1);
       } else {
         const img = this.piece(c.kind, c.sprite);
         ctx.translate(-w / 2, -h / 2);
@@ -349,12 +321,15 @@ export class ClassicBrewPainter {
           ctx.fillStyle = c.color;
           ctx.fillRect(0, 0, w, h);
         } else {
-          const grd = ctx.createLinearGradient(0, 0, w, h);
-          grd.addColorStop(0, rgba(c.color, 1));
-          grd.addColorStop(0.55, '#fff0d2');
-          grd.addColorStop(1, rgba(c.color, 1));
-          ctx.fillStyle = c.depth > 0.45 ? hex : grd;
+          ctx.fillStyle = c.depth > 0.45 ? hex : c.color;
           ctx.fillRect(0, 0, w, h);
+          if (c.depth <= 0.45) {
+            ctx.globalAlpha = alpha * 0.28;
+            ctx.fillStyle = 'rgba(255,244,220,0.85)';
+            ctx.beginPath();
+            ctx.ellipse(w * 0.34, h * 0.3, w * 0.16, h * 0.1, -0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
       ctx.restore();

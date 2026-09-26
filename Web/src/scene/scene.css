@@ -81,6 +81,10 @@
   animation: scene-shake 0.62s cubic-bezier(0.2, 0.55, 0.3, 1) both;
   will-change: transform;
 }
+.scene-shake.is-shaking--drop {
+  animation: scene-shake-drop 0.42s cubic-bezier(0.2, 0.55, 0.3, 1) both;
+  will-change: transform;
+}
 @keyframes scene-shake {
   0% {
     transform: translate(0, 0) rotate(0deg);
@@ -110,8 +114,29 @@
     transform: translate(0, 0) rotate(0deg);
   }
 }
+@keyframes scene-shake-drop {
+  0% {
+    transform: translate(0, 0);
+  }
+  14% {
+    transform: translate(2px, 8px);
+  }
+  32% {
+    transform: translate(-2px, -3px);
+  }
+  52% {
+    transform: translate(1px, 2px);
+  }
+  74% {
+    transform: translate(0, -1px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .scene-shake.is-shaking {
+  .scene-shake.is-shaking,
+  .scene-shake.is-shaking--drop {
     animation: none;
   }
 }

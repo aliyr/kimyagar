@@ -91,11 +91,11 @@ export function Stage({
     if (!shakePulse) return;
     const el = shakeRef.current;
     if (!el) return;
-    // شروع دوباره‌ی انیمیشن حتی اگر لرزش قبلی هنوز تمام نشده باشد
-    el.classList.remove('is-shaking');
+    const kind = useUiState.getState().shakeKind;
+    el.classList.remove('is-shaking', 'is-shaking--drop');
     void el.offsetWidth;
-    el.classList.add('is-shaking');
-    const done = () => el.classList.remove('is-shaking');
+    el.classList.add(kind === 'drop' ? 'is-shaking--drop' : 'is-shaking');
+    const done = () => el.classList.remove('is-shaking', 'is-shaking--drop');
     el.addEventListener('animationend', done, { once: true });
     return () => el.removeEventListener('animationend', done);
   }, [shakePulse]);

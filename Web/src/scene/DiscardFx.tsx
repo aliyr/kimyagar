@@ -81,7 +81,7 @@ class DiscardPainter {
       if (!p) continue;
       const next = gobPosition(g, Math.min(g.hit - 0.001, t + 0.016)) ?? p;
       const ang = Math.atan2(next.y - p.y, next.x - p.x);
-      const stretch = 1 + 0.6 * Math.min(1, Math.hypot(next.x - p.x, next.y - p.y) / 14);
+      const stretch = 1 + 0.22 * Math.min(1, Math.hypot(next.x - p.x, next.y - p.y) / 14);
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(ang);
@@ -123,32 +123,30 @@ class DiscardPainter {
     ctx.scale(pose.scale, pose.scale);
     const w = POT_SIZE.width;
     const h = POT_SIZE.height;
-    if (ready) {
-      const layer = this.potSprite(img, pose.dark);
-      ctx.drawImage(layer, -w / 2, -h / 2, w, h);
-    } else {
-      // بدنه‌ی مسی ساده تا تصویر بیاید
-      ctx.fillStyle = `rgb(${Math.round(150 * (1 - pose.dark))},${Math.round(80 * (1 - pose.dark))},${Math.round(40 * (1 - pose.dark))})`;
-      ctx.beginPath();
-      ctx.ellipse(0, h * 0.1, w * 0.42, h * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // دهانه: تاریکی درون و مایعِ باقی‌مانده
+    // مایع زیر PNG: فقط از سوراخ شفاف دهانه دیده می‌شود و روی مس فلش نمی‌زند
+    ctx.save();
     ctx.beginPath();
-    ctx.ellipse(MOUTH_LOCAL.x, MOUTH_LOCAL.y, MOUTH_LOCAL.rx, MOUTH_LOCAL.ry, 0, 0, Math.PI * 2);
+    ctx.ellipse(MOUTH_LOCAL.x, MOUTH_LOCAL.y, MOUTH_LOCAL.rx * 0.92, MOUTH_LOCAL.ry * 0.9, 0, 0, Math.PI * 2);
+    ctx.clip();
     ctx.fillStyle = `rgba(30,14,8,${(1 - pose.dark * 0.6).toFixed(3)})`;
-    ctx.fill();
+    ctx.fillRect(MOUTH_LOCAL.x - MOUTH_LOCAL.rx, MOUTH_LOCAL.y - MOUTH_LOCAL.ry, MOUTH_LOCAL.rx * 2, MOUTH_LOCAL.ry * 2);
     const liquid = mouthLiquid(t);
     if (liquid > 0.01) {
       ctx.globalAlpha = liquid;
       ctx.fillStyle = rgbA(this.tones.base, 1);
       ctx.beginPath();
-      ctx.ellipse(MOUTH_LOCAL.x, MOUTH_LOCAL.y, MOUTH_LOCAL.rx * 0.96, MOUTH_LOCAL.ry * 0.86 * liquid, 0, 0, Math.PI * 2);
+      ctx.ellipse(MOUTH_LOCAL.x, MOUTH_LOCAL.y, MOUTH_LOCAL.rx * 0.9, MOUTH_LOCAL.ry * 0.82 * liquid, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalAlpha = liquid * 0.4;
-      ctx.fillStyle = rgbA(this.tones.glint, 1);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    if (ready) {
+      const layer = this.potSprite(img, pose.dark);
+      ctx.drawImage(layer, -w / 2, -h / 2, w, h);
+    } else {
+      ctx.fillStyle = `rgb(${Math.round(150 * (1 - pose.dark))},${Math.round(80 * (1 - pose.dark))},${Math.round(40 * (1 - pose.dark))})`;
       ctx.beginPath();
-      ctx.ellipse(MOUTH_LOCAL.x - MOUTH_LOCAL.rx * 0.25, MOUTH_LOCAL.y - MOUTH_LOCAL.ry * 0.25, MOUTH_LOCAL.rx * 0.3, MOUTH_LOCAL.ry * 0.25, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, h * 0.1, w * 0.42, h * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -265,8 +263,7 @@ function DiscardRun({
         clangFired = true;
         sfx.cauldronClang();
         haptic('heavy');
-        // برخورد با دیوار ⇒ کل صحنه می‌لرزد (Stage)
-        ui.pulse('shakePulse');
+        ui.shakeScene('hit');
       }
       if (!thudFired && t >= DISCARD.thudAt) {
         thudFired = true;

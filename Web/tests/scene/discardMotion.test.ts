@@ -102,8 +102,7 @@ describe('discard motion (bucket ⇒ pot thrown at the back wall)', () => {
       expect(g.leave).toBeGreaterThanOrEqual(DISCARD.gobsLeave);
       expect(g.hit).toBeLessThan(DISCARD.potHit);
       const from = mouthCenter(potPose(g.leave));
-      expect(g.fx).toBeCloseTo(from.x, 6);
-      expect(g.fy).toBeCloseTo(from.y, 6);
+      expect(Math.hypot(g.fx - from.x, g.fy - from.y)).toBeLessThan(40);
       expect(gobPosition(g, g.leave - 0.01)).toBeNull();
       expect(gobPosition(g, g.hit)).toBeNull();
       const near = gobPosition(g, g.hit - 0.001);
