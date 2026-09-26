@@ -1,29 +1,35 @@
 /**
  * تیلت مشترک سردر و کارگاه: موس روی دسکتاپ، ژیروسکوپ روی گوشی.
  *
- * `--px` و `--py` روی ریشه نوشته می‌شوند. حلقهٔ rAF تا رسیدن به هدف زنده است.
+ * موتور:
+ * - لایه‌ها با data-attribute پیدا می‌شوند: `[data-tilt-rig]` (چرخش سه‌بعدی) و
+ *   `[data-tilt-depth="N"]` (جابه‌جایی N پیکسل صحنه در ±۱). هر فریم فقط همین چند
+ *   `style.transform` نوشته می‌شود؛ هیچ CSS variable ارث‌بری‌شده‌ای عوض نمی‌شود، پس
+ *   درخت صحنه style recalc نمی‌خورد.
+ * - پلهٔ موتور (full/lite/flat/off) از platform/quality می‌آید و روی ریشه
+ *   `data-tilt="<mode>"` و برای هر پلهٔ جز full `data-lite` می‌گذارد (نه کلاس:
+ *   className ریشهٔ سردر را React با هر render بازنویسی می‌کند). وقتی تیلت موقتاً
+ *   غیرفعال است (باز شدن در) همین attributeها می‌مانند تا ظاهر وسط کار عوض نشود.
+ * - حلقهٔ rAF زمان فریم را به پروب کیفیت می‌دهد؛ اگر در flat هم کند ماند، تیلت
+ *   برای این نشست خاموش می‌شود.
+ * - با resize/چرخش صفحه لایه‌ها یک بار از GPU پایین و دوباره بالا می‌آیند تا
+ *   raster-scale کهنه نماند.
  *
  * سنسور:
  * - اندروید/کروم اجازه نمی‌خواهد ⇒ شنونده همان اول وصل می‌شود، بدون لمس.
- * - آیفون `requestPermission` دارد و فقط از داخل یک لمس جواب می‌دهد ⇒ آن‌جا تا
- *   اولین pointerdown صبر می‌کنیم.
- * - مبنا (وضعیت «صاف» گوشی) از میانگین چند نمونهٔ اول می‌آید، نه اولین نمونه، تا
- *   اولین فریم‌های ناپایدار سنسور صفحه را نپرانند.
- * - نمونه‌ای که از نمونهٔ قبلی بیش از حد دور است پرت حساب می‌شود و رد می‌شود.
- * - `deviceorientationabsolute` روی اندروید دقیق‌تر است و ترجیح دارد.
- * - نرم‌شدن با سنسور آرام‌تر از موس است؛ برگهٔ پنهان سنسور را می‌خواباند.
+ * - آیفون `requestPermission` دارد و فقط از داخل یک لمس جواب می‌دهد.
+ * - مبنا از میانگین چند نمونهٔ اول؛ نمونهٔ پرت رد می‌شود؛
+ *   `deviceorientationabsolute` ترجیح دارد؛ برگهٔ پنهان سنسور را می‌خواباند.
  *
  * اگر `pointer` روشن باشد، وضعیت نرم‌شده برای toScene منتشر می‌شود — فقط کارگاه.
  */
 
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
-import { angleDelta, pointerTilt, screenTilt } from './tiltMath';
-import { publishTiltPose } from './tiltPose';
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
+import { getQuality, reportFrameTime, subscribeQuality } from '../../platform/quality';
+import { angleDelta, depthTransform, pointerTilt, rigTransform, screenTilt, tiltModeFor } from './tiltMath';
+import type { TiltMode } from './tiltMath';
+import { publishTiltMode, publishTiltPose } from './tiltPose';
 
 function orientationAngle(): number {
   const angle = window.screen?.orientation?.angle;
@@ -43,6 +49,12 @@ const MAX_JUMP_DEG = 25;
 /** نرم‌شدن: موس تندتر، سنسور آرام‌تر (لرزش دست را می‌خورد) */
 const RATE_POINTER = 3.8;
 const RATE_GYRO = 2.6;
+/** پروب خاموشی در پلهٔ flat: میانگین این تعداد فریم بالای این آستانه ⇒ off */
+const OFF_PROBE_SAMPLES = 90;
+const OFF_PROBE_MS = 20;
+
+/** خاموشی خودکار برای کل نشست می‌ماند تا با هر mount دوباره امتحان نشود */
+let latchedOff = false;
 
 export function useSceneTilt(
   rootRef: RefObject<HTMLElement | null>,
@@ -53,10 +65,40 @@ export function useSceneTilt(
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || !enabled || prefersReducedMotion()) {
+    if (!root) return;
+
+    const rig = root.querySelector<HTMLElement>('[data-tilt-rig]');
+    const depths = Array.from(root.querySelectorAll<HTMLElement>('[data-tilt-depth]')).map((el) => ({
+      el,
+      depth: Number(el.dataset.tiltDepth) || 0,
+    }));
+
+    let mode: TiltMode = 'off';
+
+    const applyModeAttrs = () => {
+      root.dataset.tilt = mode;
+      root.toggleAttribute('data-lite', mode !== 'full');
+      publishTiltMode(mode);
+    };
+
+    const clearTransforms = () => {
+      if (rig) rig.style.transform = '';
+      for (const d of depths) d.el.style.transform = '';
+    };
+
+    if (!enabled) {
+      clearTransforms();
       if (pointer) publishTiltPose(0, 0, false);
       return;
     }
+
+    const computeMode = (): TiltMode => {
+      const q = getQuality();
+      return tiltModeFor(q.tier, q.reducedMotion, latchedOff);
+    };
+
+    mode = computeMode();
+    applyModeAttrs();
 
     let targetX = 0;
     let targetY = 0;
@@ -67,6 +109,7 @@ export function useSceneTilt(
     let disposed = false;
     let last = 0;
     let rate = RATE_POINTER;
+    const offSamples: number[] = [];
 
     let gyroLive = false;
     let sensorsOn = false;
@@ -84,15 +127,24 @@ export function useSceneTilt(
     const EPS = 0.0005;
 
     const write = () => {
-      root.style.setProperty('--px', curX.toFixed(4));
-      root.style.setProperty('--py', curY.toFixed(4));
+      if (mode === 'off') return;
+      const pose = { px: curX, py: curY };
+      if (rig) rig.style.transform = rigTransform(pose, mode);
+      for (const d of depths) d.el.style.transform = depthTransform(pose, d.depth, mode);
       if (pointer) publishTiltPose(curX, curY, true);
     };
 
     const step = (now: number) => {
       if (disposed) return;
-      const dt = Math.min((now - last) / 1000, 0.1);
+      const frameMs = now - last;
+      const dt = Math.min(frameMs / 1000, 0.1);
       last = now;
+      reportFrameTime(frameMs);
+      if (mode === 'flat') probeOff(frameMs);
+      if (mode === 'off') {
+        running = false;
+        return;
+      }
       const k = 1 - Math.exp(-dt * rate);
       curX += (targetX - curX) * k;
       curY += (targetY - curY) * k;
@@ -108,7 +160,7 @@ export function useSceneTilt(
     };
 
     const kick = () => {
-      if (running || disposed) return;
+      if (running || disposed || mode === 'off') return;
       running = true;
       last = performance.now();
       raf = requestAnimationFrame(step);
@@ -147,7 +199,6 @@ export function useSceneTilt(
         return;
       }
 
-      // نمونهٔ پرت: جهش ناگهانی نسبت به نمونهٔ قبل
       if (lastBeta !== null && lastGamma !== null) {
         const jb = Math.abs(angleDelta(beta, lastBeta, 360));
         const jg = Math.abs(angleDelta(gamma, lastGamma, 180));
@@ -160,7 +211,6 @@ export function useSceneTilt(
       lastBeta = beta;
       lastGamma = gamma;
 
-      // مبنا هنوز آماده نیست: جمع می‌کنیم، صفحه صاف می‌ماند
       if (baseBeta === null || baseGamma === null) {
         sumBeta += beta;
         sumGamma += gamma;
@@ -181,15 +231,27 @@ export function useSceneTilt(
     const onRelative = (e: DeviceOrientationEvent) => onOrient(e, false);
     const onAbsolute = (e: DeviceOrientationEvent) => onOrient(e, true);
 
+    /** لایه‌ها را یک فریم از GPU پایین می‌آورد تا با مقیاس تازه دوباره raster شوند */
+    let repromoteRaf = 0;
+    const repromote = () => {
+      const layers = [rig, ...depths.map((d) => d.el)].filter((el): el is HTMLElement => !!el);
+      for (const el of layers) el.style.willChange = 'auto';
+      cancelAnimationFrame(repromoteRaf);
+      repromoteRaf = requestAnimationFrame(() => {
+        for (const el of layers) el.style.willChange = '';
+      });
+    };
+
     const onOrientationChange = () => {
       resetBaseline();
       targetX = 0;
       targetY = 0;
+      repromote();
       kick();
     };
 
     const attachSensors = () => {
-      if (sensorsOn || disposed) return;
+      if (sensorsOn || disposed || mode === 'off') return;
       sensorsOn = true;
       resetBaseline();
       window.addEventListener('deviceorientation', onRelative, { passive: true });
@@ -213,7 +275,6 @@ export function useSceneTilt(
     const ctor = typeof DeviceOrientationEvent === 'undefined' ? null : (DeviceOrientationEvent as PermissionedOrientation);
     const needsPermission = !!ctor && typeof ctor.requestPermission === 'function';
 
-    /** آیفون: اجازه فقط از داخل یک لمس داده می‌شود */
     const arm = () => {
       if (armed || disposed || !ctor) return;
       armed = true;
@@ -239,8 +300,50 @@ export function useSceneTilt(
       if (armed) attachSensors();
     };
 
+    const onResize = () => repromote();
+
+    const shutDown = () => {
+      cancelAnimationFrame(raf);
+      running = false;
+      detachSensors();
+      clearTransforms();
+      if (pointer) publishTiltPose(0, 0, false);
+    };
+
+    /** پلهٔ تازه: کلاس‌ها و transformها همان لحظه به‌روز می‌شوند */
+    const setMode = (next: TiltMode) => {
+      if (next === mode) return;
+      const wasOff = mode === 'off';
+      mode = next;
+      offSamples.length = 0;
+      applyModeAttrs();
+      if (mode === 'off') {
+        shutDown();
+        return;
+      }
+      if (wasOff && armed && !document.hidden) attachSensors();
+      write();
+    };
+
+    function probeOff(frameMs: number) {
+      if (!(frameMs > 0) || frameMs > 250) return;
+      offSamples.push(frameMs);
+      if (offSamples.length < OFF_PROBE_SAMPLES) return;
+      let sum = 0;
+      for (const s of offSamples) sum += s;
+      const mean = sum / offSamples.length;
+      offSamples.length = 0;
+      if (mean > OFF_PROBE_MS) {
+        latchedOff = true;
+        setMode('off');
+      }
+    }
+
+    const unsubQuality = subscribeQuality(() => setMode(computeMode()));
+
     write();
     window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('resize', onResize);
     document.addEventListener('visibilitychange', onVisibility);
     if (needsPermission) {
       window.addEventListener('pointerdown', onPointerDown, { passive: true });
@@ -250,14 +353,15 @@ export function useSceneTilt(
 
     return () => {
       disposed = true;
-      cancelAnimationFrame(raf);
+      unsubQuality();
+      cancelAnimationFrame(repromoteRaf);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', onVisibility);
-      detachSensors();
-      root.style.removeProperty('--px');
-      root.style.removeProperty('--py');
-      if (pointer) publishTiltPose(0, 0, false);
+      shutDown();
+      for (const el of [rig, ...depths.map((d) => d.el)]) if (el) el.style.willChange = '';
+      publishTiltMode('off');
     };
   }, [rootRef, enabled, pointer]);
 }

@@ -10,6 +10,7 @@ import { useRef, useState } from 'react';
 import './classic-ambience.css';
 import { useRouteKind } from '../route';
 import { useSceneTilt } from './tilt/useSceneTilt';
+import { TILT } from './tilt/tiltMath';
 import { TiltPinContext } from './tilt/tiltPin';
 import { Backdrop } from './Backdrop';
 import { DiscardWallFx } from './DiscardWallFx';
@@ -38,20 +39,22 @@ export function WorkshopScene() {
   return (
     <TiltPinContext.Provider value={pin}>
       <div ref={tiltRef} className="scene-tilt">
-        <div className="scene-tilt__rig">
-          <ScenePreload />
-          <Cinematic />
-          <div className="scene-depth scene-depth--back">
-            <Backdrop />
-            {/* لکه‌ی دیگِ دورریخته روی دیوار: پشتِ قفسه (لایه‌ی میانی) و زیرِ میز */}
-            <DiscardWallFx />
-          </div>
-          <div className="scene-depth scene-depth--mid">
-            <ShelfStationClassic />
+        <div className="scene-tilt__persp">
+          <div className="scene-tilt__rig" data-tilt-rig="">
+            <ScenePreload />
+            <Cinematic />
+            <div className="scene-depth scene-depth--back" data-tilt-depth={TILT.depthBack}>
+              <Backdrop />
+              {/* لکه‌ی دیگِ دورریخته روی دیوار: پشتِ قفسه (لایه‌ی میانی) و زیرِ میز */}
+              <DiscardWallFx />
+            </div>
+            <div className="scene-depth scene-depth--mid" data-tilt-depth={TILT.depthMid}>
+              <ShelfStationClassic />
+            </div>
           </div>
         </div>
         {/* بیرون از چرخش: فقط ۲ پیکسل، تا دیگ و هاون از زیر دست نلغزند */}
-        <div className="scene-depth scene-depth--work">
+        <div className="scene-depth scene-depth--work" data-tilt-depth={TILT.depthWork}>
           <ContactShadows />
           <StoveHole />
           <StoveFlames />
@@ -63,7 +66,7 @@ export function WorkshopScene() {
           <DragGhost />
           <TableProps part="history" />
         </div>
-        <div className="scene-depth scene-depth--near">
+        <div className="scene-depth scene-depth--near" data-tilt-depth={TILT.depthNear}>
           <CustomerArea />
           <GoalNote />
         </div>

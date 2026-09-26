@@ -6,9 +6,10 @@
  *
  * متغیرهای وقتِ روز (timeOfDay.ts) روی ریشه: --sky-a/b/c، --moon-opacity،
  * --facade-brightness، --facade-saturate، --ambient-tint، --lantern-strength.
- * --k ضریب سرعت ورود (۱ بار اول، ۰٫۶ بعدها)؛ --px/--py تیلت (−۱..۱).
- * عمق و زاویه با tiltMath.ts یکی است: عقب ۱۸، وسط ۳۶، جلو ۶۰ پیکسل؛
- * چرخش حدود ۲ درجه و scale ریگ ۱٫۰۶.
+ * --k ضریب سرعت ورود (۱ بار اول، ۰٫۶ بعدها).
+ * تیلت: useSceneTilt هر فریم style.transform ریگ ([data-tilt-rig]) و لایه‌های
+ * [data-tilt-depth] را مستقیم می‌نویسد؛ پله‌اش data-tilt="full|lite|flat|off" و
+ * برای هر پلهٔ جز full، data-lite روی ریشه است.
  */
 
 .intro {
@@ -20,14 +21,6 @@
   transform-origin: 955px 745px;
   /* will-change روی ریشه ممنوع: لایه‌ی compositor بزرگ در Chromium گوشه‌ی آسمان را نمی‌کشید */
   --k: 1;
-  --px: 0;
-  --py: 0;
-  --depth-back: 18;
-  --depth-mid: 36;
-  --depth-front: 60;
-  --tilt-x: 2;
-  --tilt-y: 2.2;
-  --tilt-rig: 1.06;
 }
 .intro__tilt {
   position: absolute;
@@ -36,15 +29,22 @@
   perspective-origin: 50% 50%;
   pointer-events: none;
 }
-/* لایه‌های تیلت روی GPU (will-change فقط روی لایه‌های داخلی، نه ریشه) تا فریم‌های سنسور نپرند */
+.intro[data-tilt='flat'] .intro__tilt,
+.intro[data-tilt='off'] .intro__tilt {
+  perspective: none;
+}
+/*
+ * بودجهٔ لایه: فقط ریگ و سه لایهٔ عمق روی GPU. transform-style: flat تا فرزندان
+ * متحرک داخل لایه‌ها context سه‌بعدی نسازند و هرکدام تکسچر جدا نخورند.
+ */
 .intro__tilt-rig {
   position: absolute;
   inset: 0;
   transform-origin: 50% 50%;
   pointer-events: none;
   will-change: transform;
-  backface-visibility: hidden;
-  transform: scale(var(--tilt-rig)) rotateX(calc(var(--py) * var(--tilt-x) * -1deg)) rotateY(calc(var(--px) * var(--tilt-y) * 1deg));
+  transform-style: flat;
+  transform: scale(1.06);
 }
 .intro.is-loading {
   opacity: 0;
@@ -77,8 +77,6 @@
   inset: -24px -24px auto;
   height: 470px;
   will-change: transform;
-  backface-visibility: hidden;
-  transform: translate3d(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px), 0);
 }
 .intro__sky-gradient {
   position: absolute;
@@ -118,14 +116,10 @@
 .intro__layer--facade {
   transform-origin: 50% 50%;
   will-change: transform;
-  backface-visibility: hidden;
-  transform: translate3d(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px), 0);
 }
 .intro__layer--front {
   pointer-events: none;
   will-change: transform;
-  backface-visibility: hidden;
-  transform: translate3d(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px), 0);
 }
 .intro__pin {
   position: absolute;
@@ -133,15 +127,45 @@
   z-index: 5;
   pointer-events: none;
 }
+/* !important چون transform تیلت inline است */
 .intro.is-opening .intro__tilt-rig,
 .intro.is-entering .intro__tilt-rig,
-.intro.is-opening .intro__layer--sky,
-.intro.is-opening .intro__layer--facade,
-.intro.is-opening .intro__layer--front,
-.intro.is-entering .intro__layer--sky,
-.intro.is-entering .intro__layer--facade,
-.intro.is-entering .intro__layer--front {
-  transform: none;
+.intro.is-opening [data-tilt-depth],
+.intro.is-entering [data-tilt-depth] {
+  transform: none !important;
+}
+.intro[data-tilt='off'] .intro__tilt-rig,
+.intro[data-tilt='off'] [data-tilt-depth] {
+  will-change: auto;
+}
+/*
+ * data-lite (گوشی/پلهٔ medium به پایین): چرخش می‌ماند، ولی فیلترهای سایه داخل
+ * لایه‌های متحرک و ذرات تزئینی نمی‌آیند — هر کدام تکسچر و raster جدا می‌خواستند.
+ * تاب تابلو، نفس گربه، تاب نقشه و سوسوی فانوس می‌مانند.
+ */
+.intro[data-lite] .intro__sign-board,
+.intro[data-lite] .intro__lantern img,
+.intro[data-lite] .intro__knocker img,
+.intro[data-lite] .intro__settings img {
+  filter: none;
+}
+.intro[data-lite] .intro__logo {
+  filter: drop-shadow(0 2px 0 rgba(60, 30, 5, 0.9));
+}
+.intro[data-lite] .intro__cat img {
+  filter: brightness(var(--facade-brightness));
+}
+.intro[data-lite] .intro__passer img {
+  filter: brightness(0.22);
+}
+.intro[data-lite] .intro__fireflies,
+.intro[data-lite] .intro__dust,
+.intro[data-lite] .intro__smoke {
+  display: none;
+}
+.intro[data-lite] .intro__window-glow {
+  animation: none;
+  opacity: 0.85;
 }
 
 /* لنگه‌ها پشت نما — فقط از دهانه دیده می‌شوند؛ نسبتِ طبیعی، لولا پشت دیوار */
@@ -675,7 +699,6 @@
   top: 848px;
   width: 200px;
   height: 185px;
-  transform: translate(calc(var(--px) * 2px), calc(var(--py) * 2px));
 }
 .intro__settings {
   left: 1764px;

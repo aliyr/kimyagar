@@ -3,12 +3,42 @@ import {
   angleDelta,
   applyDeadzone,
   clampUnit,
+  depthTransform,
   pointerTilt,
   projectMid,
+  rigTransform,
   screenTilt,
+  tiltModeFor,
   unprojectMid,
   unprojectWork,
 } from '../../src/scene/tilt/tiltMath';
+
+describe('tilt engine modes', () => {
+  it('maps quality tier to mode, with reduced motion and the session latch forcing off', () => {
+    expect(tiltModeFor('high', false, false)).toBe('full');
+    expect(tiltModeFor('medium', false, false)).toBe('lite');
+    expect(tiltModeFor('low', false, false)).toBe('flat');
+    expect(tiltModeFor('high', true, false)).toBe('off');
+    expect(tiltModeFor('medium', false, true)).toBe('off');
+  });
+
+  it('keeps the 3D rotation in full and lite, drops it in flat, and clears in off', () => {
+    const pose = { px: 0.5, py: -1 };
+    expect(rigTransform(pose, 'full')).toBe('scale(1.06) rotateX(2deg) rotateY(1.1deg)');
+    expect(rigTransform(pose, 'lite')).toBe(rigTransform(pose, 'full'));
+    expect(rigTransform(pose, 'flat')).toBe('scale(1.06)');
+    expect(rigTransform(pose, 'off')).toBe('');
+    expect(rigTransform({ px: 0, py: 0 }, 'full')).toBe('scale(1.06) rotateX(0deg) rotateY(0deg)');
+  });
+
+  it('translates depth layers by their depth in every mode but off', () => {
+    const pose = { px: 0.25, py: -0.5 };
+    expect(depthTransform(pose, 36, 'full')).toBe('translate3d(9px, -18px, 0)');
+    expect(depthTransform(pose, 36, 'flat')).toBe('translate3d(9px, -18px, 0)');
+    expect(depthTransform(pose, 36, 'off')).toBe('');
+    expect(depthTransform({ px: 1 / 3, py: 0 }, 2, 'lite')).toBe('translate3d(0.667px, 0px, 0)');
+  });
+});
 
 describe('screenTilt', () => {
   it('unwraps angle deltas across the ±180 / ±90 seams', () => {

@@ -2,9 +2,11 @@
  * Debug View — جدا از UI بازیکن؛ اعداد خام فقط اینجا مجازند.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useReducer } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { uiLabels } from '../data/labels';
+import { describeQuality, subscribeQuality } from '../platform/quality';
+import { describeTilt } from '../scene/tilt/tiltPose';
 import './debug.css';
 
 function n(value: number): string {
@@ -49,10 +51,15 @@ function DebugPanel() {
   const result = useGameStore((s) => s.result);
   const evaluation = useGameStore((s) => s.evaluation);
   const customer = useGameStore((s) => s.currentCustomer());
+  const [, bump] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => subscribeQuality(bump), []);
 
   return (
     <aside className="kimi-debug-panel" data-testid="debug-panel" dir="ltr">
       <h2>Debug View</h2>
+      <p className="kimi-debug-muted" data-testid="debug-render">
+        quality={describeQuality()} tilt={describeTilt()}
+      </p>
 
       <section>
         <h3>BrewState</h3>

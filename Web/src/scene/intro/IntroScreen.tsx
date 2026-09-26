@@ -25,6 +25,7 @@ import { IntroPanels } from './IntroPanels';
 import { markIntroSeen, readIntroSeen, useIntroState } from './introState';
 import { SKY_THEMES, currentTimeOfDay, skyVars } from './timeOfDay';
 import { useSceneTilt } from '../tilt/useSceneTilt';
+import { TILT } from '../tilt/tiltMath';
 import './intro.css';
 
 /** زمان‌بندی ورود (میلی‌ثانیه، پیش از ضریب سرعت) */
@@ -203,9 +204,9 @@ export function IntroScreen() {
   return (
     <div ref={rootRef} className={classes} style={rootStyle} data-testid="gate-screen" data-phase={phase} data-time={timeOfDay}>
       <div className="intro__tilt">
-      <div className="intro__tilt-rig">
+      <div className="intro__tilt-rig" data-tilt-rig="">
       {/* ---------------- آسمان ---------------- */}
-      <div className="intro__layer intro__layer--sky">
+      <div className="intro__layer intro__layer--sky" data-tilt-depth={TILT.depthBack}>
         <div className="intro__sky-gradient" />
         <img className="intro__sky-fx" src={artUrl(INTRO_ART.skyFx)} alt="" draggable={false} />
         {theme.fireflies ? (
@@ -218,7 +219,7 @@ export function IntroScreen() {
       </div>
 
       {/* ---------------- نما + در ---------------- */}
-      <div className="intro__layer intro__layer--facade">
+      <div className="intro__layer intro__layer--facade" data-tilt-depth={TILT.depthMid}>
         <div className="intro__doors" aria-hidden>
           <div className="intro__leaf intro__leaf--west">
             <img src={artUrl(GATE_ART.doorWest)} alt="" draggable={false} />
@@ -278,7 +279,7 @@ export function IntroScreen() {
         </button>
       </div>
 
-      <div className="intro__layer intro__layer--front">
+      <div className="intro__layer intro__layer--front" data-tilt-depth={TILT.depthFront}>
         {/* تابلو با زنجیر، لوگوتایپ برنجی */}
         <div className="intro__sign">
           <div className="intro__sign-swing">
@@ -325,6 +326,7 @@ export function IntroScreen() {
           type="button"
           className="intro__ledger interactive"
           data-testid="gate-scores"
+          data-tilt-depth={TILT.depthWork}
           aria-haspopup="dialog"
           aria-expanded={panel === 'scores'}
           disabled={busy}

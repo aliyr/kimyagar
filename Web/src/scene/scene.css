@@ -61,7 +61,6 @@
   transform-origin: 50% 50%;
   transition-property: transform;
   transition-timing-function: cubic-bezier(0.45, 0.05, 0.18, 1);
-  backface-visibility: hidden;
 }
 
 /*
@@ -75,7 +74,6 @@
   width: 100%;
   height: 100%;
   transform-origin: 50% 60%;
-  backface-visibility: hidden;
 }
 .scene-shake.is-shaking {
   animation: scene-shake 0.62s cubic-bezier(0.2, 0.55, 0.3, 1) both;
@@ -141,47 +139,71 @@
   }
 }
 
-/* تیلت کارگاه — اعداد با tiltMath.ts یکی است. زوم سینمایی روی scene-camera می‌ماند. */
+/*
+ * تیلت کارگاه. useSceneTilt هر فریم style.transform ریگ ([data-tilt-rig]) و
+ * لایه‌های [data-tilt-depth] را مستقیم می‌نویسد؛ پله‌اش data-tilt="full|lite|flat|off"
+ * و برای هر پلهٔ جز full، data-lite روی .scene-tilt است. زوم سینمایی روی
+ * scene-camera می‌ماند.
+ *
+ * perspective فقط دور ریگ (scene-tilt__persp) است؛ work/near/pin بیرون از context
+ * سه‌بعدی‌اند تا با صفحهٔ چرخان BSP-split نشوند. بودجهٔ GPU: ریگ + دو لایهٔ داخلش
+ * + work + near؛ pin لایهٔ جدا نمی‌گیرد.
+ */
 .scene-tilt {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+.scene-tilt__persp {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   perspective: 1400px;
   perspective-origin: 50% 50%;
   pointer-events: none;
-  --px: 0;
-  --py: 0;
-  --depth-back: 18;
-  --depth-mid: 36;
-  --depth-front: 60;
-  --depth-work: 2;
-  --depth-near: 12;
-  --tilt-x: 2;
-  --tilt-y: 2.2;
-  --tilt-rig: 1.06;
 }
-/*
- * لایه‌های تیلت روی GPU می‌مانند (will-change + translateZ) تا با هر فریمِ سنسور
- * دوباره raster نشوند؛ روی گوشی وگرنه پرش و لحظه‌های سیاه می‌آید. سردر خودش
- * روی ریشه will-change ندارد (باگ گوشهٔ آسمان) ولی لایه‌های داخلی مجازند.
- */
+.scene-tilt[data-tilt='flat'] .scene-tilt__persp,
+.scene-tilt[data-tilt='off'] .scene-tilt__persp {
+  perspective: none;
+}
 .scene-tilt__rig {
   position: absolute;
   inset: 0;
   transform-origin: 50% 50%;
   pointer-events: none;
   will-change: transform;
-  backface-visibility: hidden;
-  transform: scale(var(--tilt-rig)) rotateX(calc(var(--py) * var(--tilt-x) * -1deg)) rotateY(calc(var(--px) * var(--tilt-y) * 1deg));
+  transform-style: flat;
+  transform: scale(1.06);
 }
 .scene-depth {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  will-change: transform;
-  backface-visibility: hidden;
 }
-.scene-depth--pin {
+.scene-depth[data-tilt-depth] {
+  will-change: transform;
+}
+.scene-tilt[data-tilt='off'] .scene-tilt__rig,
+.scene-tilt[data-tilt='off'] .scene-depth[data-tilt-depth] {
   will-change: auto;
+}
+/*
+ * data-lite: چرخش می‌ماند؛ نورهای blend‌شدهٔ متحرک داخل لایهٔ چرخان ثابت می‌شوند،
+ * غبار شناور و blur هالهٔ آتش نمی‌آیند (هر کدام تکسچر تمام‌صفحه یا raster جدا).
+ */
+.scene-tilt[data-lite] .amb-dust {
+  display: none;
+}
+.scene-tilt[data-lite] .amb-rays,
+.scene-tilt[data-lite] .amb-warmth {
+  animation: none;
+  will-change: auto;
+}
+.scene-tilt[data-lite] .amb-rays {
+  opacity: 0.7;
+}
+.scene-tilt[data-lite] .amb-fire {
+  filter: none;
 }
 .scene-depth--back {
   z-index: 0;
@@ -201,28 +223,10 @@
 .scene-depth--pin {
   z-index: 5;
 }
-.scene-depth--back {
-  transform: translate3d(calc(var(--px) * var(--depth-back) * 1px), calc(var(--py) * var(--depth-back) * 1px), 0);
-}
-.scene-depth--mid {
-  transform: translate3d(calc(var(--px) * var(--depth-mid) * 1px), calc(var(--py) * var(--depth-mid) * 1px), 0);
-}
-.scene-depth--front {
-  transform: translate3d(calc(var(--px) * var(--depth-front) * 1px), calc(var(--py) * var(--depth-front) * 1px), 0);
-}
-.scene-depth--work {
-  transform: translate3d(calc(var(--px) * var(--depth-work) * 1px), calc(var(--py) * var(--depth-work) * 1px), 0);
-}
-.scene-depth--near {
-  transform: translate3d(calc(var(--px) * var(--depth-near) * 1px), calc(var(--py) * var(--depth-near) * 1px), 0);
-}
+/* !important چون transform تیلت inline است */
 .workshop-behind-gate .scene-tilt__rig,
-.workshop-behind-gate .scene-depth--back,
-.workshop-behind-gate .scene-depth--mid,
-.workshop-behind-gate .scene-depth--front,
-.workshop-behind-gate .scene-depth--work,
-.workshop-behind-gate .scene-depth--near {
-  transform: none;
+.workshop-behind-gate .scene-depth[data-tilt-depth] {
+  transform: none !important;
 }
 
 /* نوارهای سینمایی — بیرون از زوم، روی لبه‌ی قاب ۱۶:۹ */
@@ -256,11 +260,7 @@
     transition: none;
   }
   .scene-tilt__rig,
-  .scene-depth--back,
-  .scene-depth--mid,
-  .scene-depth--front,
-  .scene-depth--work,
-  .scene-depth--near {
+  .scene-depth[data-tilt-depth] {
     transform: none;
   }
   .cine-bars__top,

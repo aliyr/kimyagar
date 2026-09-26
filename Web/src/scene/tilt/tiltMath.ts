@@ -1,8 +1,8 @@
 /**
  * تیلت موس/ژیروسکوپ — منطق خالص.
  *
- * اعداد باید با CSS هم‌خوان بمانند (intro.css و scene.css):
- *   perspective ۱۴۰۰px، rotateX = −py×۲°، rotateY = px×۲٫۲°،
+ * transformها را useSceneTilt مستقیم روی لایه‌ها می‌نویسد؛ perspective ۱۴۰۰px در CSS است:
+ *   rotateX = −py×۲°، rotateY = px×۲٫۲°،
  *   عمق عقب/وسط/جلو ۱۸/۳۶/۶۰ پیکسل صحنه، و scale ۱٫۰۶ روی ریگ
  *   تا گوشه‌ها بعد از چرخش از قاب نزنند بیرون.
  *
@@ -35,6 +35,47 @@ export const TILT = {
 export interface TiltPose {
   px: number;
   py: number;
+}
+
+/**
+ * پلهٔ موتور تیلت:
+ *   full — چرخش سه‌بعدی + عمق + تزئینات کامل
+ *   lite — چرخش سه‌بعدی + عمق، بدون فیلتر سایه و ذرات تزئینی داخل لایه‌ها
+ *   flat — بدون perspective و چرخش، فقط جابه‌جایی عمق
+ *   off  — تیلت خاموش
+ */
+export type TiltMode = 'full' | 'lite' | 'flat' | 'off';
+
+export function tiltModeFor(
+  tier: 'high' | 'medium' | 'low',
+  reducedMotion: boolean,
+  latchedOff: boolean,
+): TiltMode {
+  if (reducedMotion || latchedOff) return 'off';
+  if (tier === 'high') return 'full';
+  if (tier === 'medium') return 'lite';
+  return 'flat';
+}
+
+function num(v: number): string {
+  const r = Math.round(v * 1000) / 1000;
+  return Object.is(r, -0) ? '0' : String(r);
+}
+
+/** transform ریگ؛ scale در همهٔ پله‌ها جز off می‌ماند تا لبه‌ها از قاب بیرون نزنند */
+export function rigTransform(pose: TiltPose, mode: TiltMode): string {
+  if (mode === 'off') return '';
+  const scale = `scale(${TILT.rigScale})`;
+  if (mode === 'flat') return scale;
+  const ax = -pose.py * TILT.rotateXAtFull;
+  const ay = pose.px * TILT.rotateYAtFull;
+  return `${scale} rotateX(${num(ax)}deg) rotateY(${num(ay)}deg)`;
+}
+
+/** transform یک لایهٔ عمق (پیکسل صحنه در ±۱) */
+export function depthTransform(pose: TiltPose, depth: number, mode: TiltMode): string {
+  if (mode === 'off') return '';
+  return `translate3d(${num(pose.px * depth)}px, ${num(pose.py * depth)}px, 0)`;
 }
 
 const D2R = Math.PI / 180;
