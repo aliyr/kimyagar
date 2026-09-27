@@ -1,0 +1,186 @@
+[
+  {
+    "name": "chamomile fine low 20s",
+    "heat": "low",
+    "steps": [
+      {
+        "op": "add",
+        "id": "chamomile",
+        "qty": 1,
+        "grind": "fine"
+      },
+      {
+        "op": "time",
+        "dt": 20
+      }
+    ],
+    "stability": 0.9785714285714285,
+    "effect": {
+      "sleep": 2,
+      "warm": 0.6,
+      "calm": 3
+    },
+    "tags": [
+      "restful"
+    ],
+    "label": "stable"
+  },
+  {
+    "name": "ginger high crushed stir",
+    "heat": "high",
+    "steps": [
+      {
+        "op": "add",
+        "id": "ginger",
+        "qty": 1.5,
+        "grind": "crushed"
+      },
+      {
+        "op": "time",
+        "dt": 8
+      },
+      {
+        "op": "stir"
+      },
+      {
+        "op": "stir"
+      },
+      {
+        "op": "time",
+        "dt": 6
+      }
+    ],
+    "stability": 1,
+    "effect": {
+      "wake": 0.84,
+      "warm": 5.249999999999999,
+      "excitement": 1.5399999999999998,
+      "strength": 3.6959999999999997
+    },
+    "tags": [],
+    "label": "stable"
+  },
+  {
+    "name": "mix ready",
+    "heat": "medium",
+    "steps": [
+      {
+        "op": "add",
+        "id": "mint",
+        "qty": 1,
+        "grind": "fine"
+      },
+      {
+        "op": "add",
+        "id": "chamomile",
+        "qty": 1,
+        "grind": "coarse"
+      },
+      {
+        "op": "time",
+        "dt": 16
+      },
+      {
+        "op": "stir"
+      }
+    ],
+    "stability": 0.8942857142857142,
+    "effect": {
+      "wake": 0.040000000000000036,
+      "cold": 1.27,
+      "calm": 3,
+      "focus": 0.85,
+      "pain_relief": 0.6
+    },
+    "tags": [],
+    "label": "stable",
+    "customer": "c11_joy",
+    "band": "failure",
+    "score": 13.669577142857143,
+    "reaction": "همان ترش‌رویی خودم؛ این معجون لبخندی نیاورد. این آن چیزی نبود که می‌خواستم…"
+  },
+  {
+    "name": "saffron over",
+    "heat": "high",
+    "steps": [
+      {
+        "op": "add",
+        "id": "saffron",
+        "qty": 2,
+        "grind": "fine"
+      },
+      {
+        "op": "time",
+        "dt": 40
+      }
+    ],
+    "stability": 0.7285714285714285,
+    "effect": {
+      "warm": 2.55,
+      "excitement": 1.02,
+      "focus": 3.57,
+      "joy": 5.1
+    },
+    "tags": [],
+    "label": "slightly_unstable"
+  },
+  {
+    "name": "poppy borage",
+    "heat": "medium",
+    "steps": [
+      {
+        "op": "heat",
+        "heat": "low"
+      },
+      {
+        "op": "add",
+        "id": "poppy",
+        "qty": 0.5,
+        "grind": "fine"
+      },
+      {
+        "op": "heat",
+        "heat": "high"
+      },
+      {
+        "op": "add",
+        "id": "borage",
+        "qty": 2,
+        "grind": "crushed"
+      },
+      {
+        "op": "time",
+        "dt": 12
+      },
+      {
+        "op": "stir"
+      },
+      {
+        "op": "stir"
+      },
+      {
+        "op": "stir"
+      },
+      {
+        "op": "stir"
+      }
+    ],
+    "stability": 1,
+    "effect": {
+      "sleep": 2.9899999999999998,
+      "warm": 0.85,
+      "calm": 4.5,
+      "weakness": 1.2,
+      "pain_relief": 1.9799999999999998,
+      "joy": 1.36
+    },
+    "tags": [
+      "restful"
+    ],
+    "label": "stable",
+    "customer": "c11_joy",
+    "band": "failure",
+    "score": 8.405377229080933,
+    "reaction": "همان ترش‌رویی خودم؛ این معجون لبخندی نیاورد. این آن چیزی نبود که می‌خواستم…"
+  }
+]
