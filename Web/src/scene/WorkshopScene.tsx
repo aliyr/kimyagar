@@ -2,8 +2,9 @@
  * ترکیب لایه‌های کارگاه. ترتیب رندر مهم نیست چون z-index از
  * SCENE_ZONES می‌آید؛ ترتیب زیر فقط برای خوانایی است.
  *
- * قفسه‌ی دیواری (ShelfStationClassic) جای کابینت کشویی را گرفته است؛ فایل
- * Cabinet.tsx دست‌نخورده می‌ماند اما دیگر رندر نمی‌شود.
+ * کابینت ایستاده‌ی سمت چپ میز (SideCabinetClassic، لایه‌ی کار) جای قفسه‌ی
+ * دیواری افقی را گرفته است؛ فایل Cabinet.tsx دست‌نخورده می‌ماند اما دیگر رندر
+ * نمی‌شود.
  */
 
 import { useRef, useState } from 'react';
@@ -23,7 +24,7 @@ import { MortarStation } from './MortarStation';
 import { BottlingSequence } from './BottlingSequence';
 import { TableProps } from './TableProps';
 import { CustomerArea } from './CustomerArea';
-import { ShelfStationClassic } from './ShelfStationClassic';
+import { SideCabinetClassic } from './SideCabinetClassic';
 import { GoalNote } from './GoalNote';
 import { DragGhost } from './DragGhost';
 import { BurntSmoke } from './BurntSmoke';
@@ -45,11 +46,8 @@ export function WorkshopScene() {
             <Cinematic />
             <div className="scene-depth scene-depth--back" data-tilt-depth={TILT.depthBack}>
               <Backdrop />
-              {/* لکه‌ی دیگِ دورریخته روی دیوار: پشتِ قفسه (لایه‌ی میانی) و زیرِ میز */}
+              {/* لکه‌ی دیگِ دورریخته روی دیوار: زیرِ میز */}
               <DiscardWallFx />
-            </div>
-            <div className="scene-depth scene-depth--mid" data-tilt-depth={TILT.depthMid}>
-              <ShelfStationClassic />
             </div>
           </div>
         </div>
@@ -60,6 +58,7 @@ export function WorkshopScene() {
           <StoveFlames />
           <FurnaceFire />
           <CauldronStation />
+          <SideCabinetClassic />
           <MortarStation />
           <BottlingSequence />
           <BurntSmoke />

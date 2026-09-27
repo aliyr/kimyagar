@@ -432,6 +432,13 @@ export const sfx = {
     if (!c) return;
     noiseBurst(c, { dur: 0.12, type: 'bandpass', freq: 1800, q: 1.2, gain: 0.25 });
   },
+  /** تقه‌ی چوبی برخورد اسکرول به انتهای کابینت */
+  woodBump(): void {
+    const c = live();
+    if (!c) return;
+    noiseBurst(c, { dur: 0.09, type: 'lowpass', freq: 240, gain: 0.22 });
+    noiseBurst(c, { dur: 0.025, type: 'highpass', freq: 2200, gain: 0.06 });
+  },
   /** خش‌خش ورق پوستی (بزرگ/کوچک شدن ورق عطار) */
   paperRustle(): void {
     const c = live();

@@ -22,8 +22,8 @@ import { SCENE_ZONES } from '../artManifest';
 import { CAULDRON_IMAGE, CAULDRON_IMAGE_SCALE, CLASSIC_MOUTH, MOUTH_IN_IMAGE } from '../classicCauldronGeometry';
 
 /**
- * لبه‌ی پایینی تخته‌ی قفسه‌ی دیواری در فضای صحنه (پیکسل‌های دیده‌شدنیِ
- * shelf_board.png داخل SCENE_ZONES.wallShelf). دیگ و محتوا از زیر آن رد می‌شوند.
+ * قفسه‌ی دیواری دیگر در صحنه‌ی کلاسیک رسم نمی‌شود (جایش کابینت ایستاده‌ی کناری
+ * آمده). مقدار مانده تا مسیرِ آزموده‌شده‌ی پرتاب، زیر جایی که قفسه بود، حفظ شود.
  */
 export const SHELF_BOTTOM = 448;
 

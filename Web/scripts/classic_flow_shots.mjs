@@ -1,5 +1,5 @@
 /**
- * اسکرین‌شات‌های فلو کلیکی کلاسیک (روت /) + گزارش خطاهای کنسول.
+ * اسکرین‌شات‌های فلو کلیکی کلاسیک (روت #/classic) + گزارش خطاهای کنسول.
  * Usage: node scripts/classic_flow_shots.mjs   (dev server باید روی 5173 بالا باشد)
  * خروجی: screenshots/classic-flow/
  */
@@ -33,7 +33,8 @@ async function shot(name) {
 const tid = (id) => page.getByTestId(id);
 
 // ۱) کارگاه خالی — میز با کوره، قفسه، دفترچه‌ی پایین‌راست
-await page.goto(`${BASE}/`);
+// #/classic کارگاه را بدون سردر باز می‌کند
+await page.goto(`${BASE}/#/classic`);
 await tid('stage').waitFor({ timeout: 20000 });
 await page.waitForTimeout(1800);
 await shot('workshop');
@@ -65,8 +66,23 @@ await tid('heat-high').click();
 await page.waitForTimeout(1600);
 await shot('brewing_high_heat');
 
-// ۷) ماده‌ی دوم (خشخاش، آهسته‌تر فرو می‌رود؛ در دید اولیه‌ی قفسه است — قفسه clip است و
-//    Playwright نمی‌تواند شیشه‌های بیرون از دید را اسکرول کند) + هم‌زدن خودکار
+// ۷) ماده‌ی دوم (خشخاش، آهسته‌تر فرو می‌رود) + هم‌زدن خودکار. خشخاش شیشه‌ی پنجم است و
+//    فقط نیمه از پایین دهانه پیداست؛ کابینت با transform اسکرول می‌شود و Playwright
+//    خودش نمی‌تواند آن را بیاورد ⇒ کشیدن دستی به بالا
+{
+  const box = await tid('shelf').boundingBox();
+  const x = box.x + box.width * 0.5;
+  const y0 = box.y + box.height * 0.8;
+  await page.mouse.move(x, y0);
+  await page.mouse.down();
+  for (let i = 1; i <= 20; i++) {
+    await page.mouse.move(x, y0 - (box.height * 0.4 * i) / 20);
+    await page.waitForTimeout(16);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+  await shot('cabinet_scrolled');
+}
 await tid('jar-poppy').click();
 await tid('ingredient-flight').waitFor({ state: 'hidden', timeout: 5000 });
 await page.waitForTimeout(2600);

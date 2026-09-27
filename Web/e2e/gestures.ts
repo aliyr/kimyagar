@@ -97,6 +97,24 @@ export async function dragHorizontally(
   await pause(page, 80);
 }
 
+/** کشیدن عمودی با اشاره‌گر — برای اسکرول کابینت ایستاده. */
+export async function dragVertically(
+  page: Page,
+  from: { x: number; y: number },
+  dy: number,
+  steps = 20,
+): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await pause(page, 30);
+  for (let i = 1; i <= steps; i++) {
+    await page.mouse.move(from.x, from.y + (dy * i) / steps);
+    await pause(page, 18);
+  }
+  await page.mouse.up();
+  await pause(page, 80);
+}
+
 /** دو دور کامل حول مرکز (هم‌زدن). */
 export async function twoCircles(page: Page, locator: Locator, radius = 22): Promise<void> {
   const c = await centerOf(locator);

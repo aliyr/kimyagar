@@ -1,8 +1,10 @@
 /**
- * پرواز ماده از شیشه تا دهانه‌ی هاون (فلو کلیکی کلاسیک، v3).
+ * پرواز ماده از دهانه‌ی شیشه در کابینت کناری تا هاون (فلو کلیکی کلاسیک، v3).
  *
  * چند تکهٔ واقعی ماده (اسپرایت‌های `pieces/{kind}_{i}`) با اختلاف فاز روی یک قوس
- * سهمی از مرکز شیشه تا کف هاون می‌روند؛ هر تکه می‌چرخد، کمی کوچک می‌شود و در
+ * سهمی از دهانه‌ی شیشه‌ی کج‌شده تا کف هاون می‌روند (دهانه ممکن است بالاتر یا
+ * پایین‌تر از هاون باشد)؛ ابتدای مسیر کمی به راست پخش است تا «ریخته‌شدن» از دهانه
+ * دیده شود. هر تکه می‌چرخد، کمی کوچک می‌شود و در
  * انتها با پخش جانبی کوچک «فرود» می‌آید (~۳۴۰ms، rAF). در لحظه‌ی فرود `onLand`
  * صدا زده می‌شود (افزودن به هاون + شروع کوبش خودکار + پاف رنگی) و سپس `onDone`
  * تا میزبان آن را از فهرست پروازها بردارد.
@@ -30,6 +32,9 @@ export interface FlightSpec {
 type Piece = {
   el: HTMLSpanElement;
   delay: number;
+  /** پخش ابتدای مسیر از دهانه (پیکسل صحنه)؛ در طول مسیر محو می‌شود */
+  sx: number;
+  sy: number;
   /** پخش جانبی در فرود (پیکسل صحنه) */
   dx: number;
   dy: number;
@@ -65,11 +70,17 @@ export function IngredientFlight({
     if (!root) return;
     const { from } = flight;
     const to = { x: TARGET.x, y: TARGET.y };
-    const control = { x: (from.x + to.x) / 2, y: Math.min(from.y, to.y) - 170 };
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const control = {
+      x: from.x + (to.x - from.x) * 0.3,
+      y: Math.min(from.y, to.y) - Math.min(150, Math.max(70, 0.28 * dist)),
+    };
     const pieces: Piece[] = Array.from(root.querySelectorAll<HTMLSpanElement>('.shelf-flight__piece')).map(
       (el, i) => ({
         el,
         delay: i * STAGGER_MS,
+        sx: rand(flight.key * 29 + i) * 14,
+        sy: (rand(flight.key * 31 + i) - 0.5) * 8,
         dx: (rand(flight.key * 7 + i) - 0.5) * 34,
         dy: (rand(flight.key * 11 + i) - 0.5) * 10,
         rot0: rand(flight.key * 13 + i) * 360,
@@ -96,8 +107,8 @@ export function IngredientFlight({
         const k = Math.min(1, Math.max(0, (elapsed - p.delay) / FLIGHT_MS));
         const e = easeInOut(k);
         const u = 1 - e;
-        const x = u * u * from.x + 2 * u * e * control.x + e * e * (to.x + p.dx);
-        const y = u * u * from.y + 2 * u * e * control.y + e * e * (to.y + p.dy);
+        const x = u * u * (from.x + p.sx) + 2 * u * e * control.x + e * e * (to.x + p.dx);
+        const y = u * u * (from.y + p.sy) + 2 * u * e * control.y + e * e * (to.y + p.dy);
         const scale = 1 - 0.4 * e;
         const rot = p.rot0 + p.spin * e;
         p.el.style.transform = `translate(${(x - p.size / 2).toFixed(1)}px, ${(y - p.size / 2).toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${scale.toFixed(3)})`;

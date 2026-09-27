@@ -15,7 +15,7 @@ const APPEARANCES = SCENE_ZONES.customer.states as Record<string, string | undef
 const WORKSHOP_LAYERS = [
   SCENE_ZONES.background.img,
   SCENE_ZONES.workTable.img,
-  SCENE_ZONES.wallShelf.img,
+  SCENE_ZONES.sideCabinet.img,
   SCENE_ZONES.cauldron.img,
   SCENE_ZONES.mortar.img,
   CLASSIC_ART.mortar.back,
@@ -26,6 +26,7 @@ const WORKSHOP_LAYERS = [
   SCENE_ZONES.customerCounter.img,
   SCENE_ZONES.goalNote.img,
   CLASSIC_ART.bucket,
+  CLASSIC_ART.shelfBoard,
 ];
 
 const READY_FALLBACK_MS = 2800;

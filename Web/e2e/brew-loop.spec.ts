@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { dragHorizontally, pause, twoCircles } from './gestures';
+import { dragVertically, pause, twoCircles } from './gestures';
 
 type KimyagarStore = {
   getState: () => {
@@ -165,7 +165,7 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     expect((await storeState(page)).entries).toBe(1);
   });
 
-  test('shelf scrolls horizontally by pointer drag', async ({ page }) => {
+  test('cabinet scrolls vertically by pointer drag', async ({ page }) => {
     const shelf = page.getByTestId('shelf');
     await expect(shelf).toBeVisible();
 
@@ -174,28 +174,29 @@ test.describe('Kimyagar brew loop (classic, click flow)', () => {
     const count = await jars.count();
     expect(count).toBeGreaterThan(0);
 
-    const before: Array<{ x: number; y: number } | null> = [];
+    const before: Array<number | null> = [];
     for (let i = 0; i < count; i++) {
       const box = await jars.nth(i).boundingBox();
-      before.push(box ? { x: box.x, y: box.y } : null);
+      before.push(box ? box.y : null);
     }
 
     const shelfBox = await shelf.boundingBox();
     if (!shelfBox) throw new Error('shelf bounding box missing');
-    // نوار قفسه در شروع کاملاً سمت راست است (RTL)؛ کشیدن به راست
-    // شیشه‌های پنهانِ سمت چپ را می‌آورد.
-    await dragHorizontally(
+    // کابینت ایستاده از بالا شروع می‌شود؛ شیشه‌های پایین پنهان‌اند.
+    // کشیدن به بالا آن‌ها را بالا می‌آورد.
+    await dragVertically(
       page,
-      { x: shelfBox.x + shelfBox.width * 0.42, y: shelfBox.y + shelfBox.height * 0.82 },
-      shelfBox.width * 0.42,
+      { x: shelfBox.x + shelfBox.width * 0.5, y: shelfBox.y + shelfBox.height * 0.8 },
+      -shelfBox.height * 0.4,
     );
+    await pause(page, 500);
 
     let moved = 0;
     for (let i = 0; i < count; i++) {
       const box = await jars.nth(i).boundingBox();
       const prev = before[i];
-      if (!box || !prev) continue;
-      if (Math.abs(box.x - prev.x) > 8) moved += 1;
+      if (!box || prev == null) continue;
+      if (Math.abs(box.y - prev) > 8) moved += 1;
     }
     expect(moved).toBeGreaterThan(0);
   });
