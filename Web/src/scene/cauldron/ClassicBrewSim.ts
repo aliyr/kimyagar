@@ -23,7 +23,6 @@ import { BOWL_PX } from '../mortarLayout';
 import type { MortarChip, PieceKind } from '../mortarPile';
 
 const STIR_ENTER = 0.4;
-const STIR_HOLD = 2.2;
 const STIR_EXIT = 0.4;
 const STIR_OMEGA = (Math.PI * 2) / 1.2;
 const SPOON_R = 0.55;
@@ -397,22 +396,30 @@ export class ClassicBrewSim {
     if (this.chips.length > MAX_CHIPS) this.chips.splice(0, this.chips.length - MAX_CHIPS);
   }
 
+  /**
+   * قاشق سر بزی وارد دیگ می‌شود و همان‌جا می‌ماند و هم می‌زند.
+   * بیرون رفتن فقط با dismissSpoon (ریختن در شیشه) یا reset (دیگ خالی) است.
+   */
   stir(): void {
-    if (this.spoonMode !== 'none') return;
     this.spoonFollow = null;
+    if (this.spoonMode === 'stir' || this.spoonMode === 'enter') return;
     this.spoonMode = 'enter';
     this.spoonT = 0;
     this.spoonAngle = -Math.PI / 2;
   }
 
+  /** قاشق از دیگ بیرون می‌رود — هنگام بطری‌کردن. */
+  dismissSpoon(): void {
+    this.spoonFollow = null;
+    if (this.spoonMode === 'none' || this.spoonMode === 'exit') return;
+    this.spoonMode = 'exit';
+    this.spoonT = 0;
+  }
+
   setSpoonFollow(angle: number | null): void {
     if (angle === null) {
-      if (this.spoonFollow === null) return;
+      // دست برداشته شد؛ قاشق توی دیگ می‌ماند و خودش هم می‌زند
       this.spoonFollow = null;
-      if (this.spoonMode === 'stir') {
-        this.spoonMode = 'exit';
-        this.spoonT = 0;
-      }
       return;
     }
     this.spoonFollow = angle;
@@ -623,10 +630,6 @@ export class ClassicBrewSim {
       } else {
         this.spoonAngle += STIR_OMEGA * dt;
         this.spoonOmega = STIR_OMEGA;
-      }
-      if (this.spoonFollow === null && this.spoonT >= STIR_HOLD) {
-        this.spoonMode = 'exit';
-        this.spoonT = 0;
       }
     } else if (this.spoonMode === 'exit' && this.spoonT >= STIR_EXIT) {
       this.spoonMode = 'none';
@@ -914,8 +917,9 @@ export class ClassicBrewSim {
     this.sloshX += (tx - this.sloshX) * Math.min(1, dt * 3);
     this.sloshY += (ty - this.sloshY) * Math.min(1, dt * 3);
     if (stirring) {
-      this.foamTimer += dt * Math.min(3, Math.abs(this.spoonOmega) + 0.4);
-      if (Math.abs(this.spoonOmega) > 2 && this.rng.chance(dt * 2.2)) this.splash(1, 0.8);
+      const guided = this.spoonFollow !== null;
+      this.foamTimer += dt * (guided ? Math.min(3, Math.abs(this.spoonOmega) + 0.4) : 0.45);
+      if (guided && Math.abs(this.spoonOmega) > 2 && this.rng.chance(dt * 2.2)) this.splash(1, 0.8);
       while (this.foamTimer > 0.22 && this.foam.length < 10) {
         this.foamTimer -= 0.22;
         this.foam.push({

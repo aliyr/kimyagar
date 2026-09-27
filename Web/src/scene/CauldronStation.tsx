@@ -98,9 +98,9 @@ export function CauldronStation() {
     },
   });
 
-  // پس از بطری‌کردن اگر قاشق دستی مانده بود، بیرون بیاید
+  // هنگام ریختن در شیشه قاشق از دیگ بیرون می‌رود؛ وگرنه تا خالی شدن دیگ می‌ماند
   useEffect(() => {
-    if (bottled) scene.setSpoonFollow(null);
+    if (bottled) scene.dismissSpoon();
   }, [scene, bottled]);
 
   return (

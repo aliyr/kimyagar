@@ -36,7 +36,7 @@ function drop(sim: ClassicBrewSim, pieces: MortarChip[], id = 'saffron', tint = 
 }
 
 describe('ClassicBrewSim', () => {
-  it('spins the vortex up with the spoon and keeps coasting after release', () => {
+  it('keeps the goat spoon stirring after the hand lifts, and coasts only once it leaves', () => {
     const sim = new ClassicBrewSim(3);
     drop(sim, [chip(), chip({ id: 2 })]);
     let angle = 0;
@@ -49,10 +49,27 @@ describe('ClassicBrewSim', () => {
     const spinning = Math.abs(sim.omega);
     expect(spinning).toBeGreaterThan(0.8);
     sim.setSpoonFollow(null);
+    for (let i = 0; i < 4 * 60; i++) sim.update(1 / 60);
+    expect(sim.isStirring).toBe(true);
+    expect(sim.spoonDrop).toBe(1);
+    expect(Math.abs(sim.omega)).toBeGreaterThan(0.8);
+
+    sim.dismissSpoon();
     sim.update(0.2);
-    expect(Math.abs(sim.omega)).toBeGreaterThan(spinning * 0.5);
+    const leaving = Math.abs(sim.omega);
     for (let i = 0; i < 8 * 60; i++) sim.update(1 / 60);
-    expect(Math.abs(sim.omega)).toBeLessThan(spinning * 0.15);
+    expect(sim.isStirring).toBe(false);
+    expect(sim.spoonDrop).toBe(0);
+    expect(Math.abs(sim.omega)).toBeLessThan(leaving * 0.15);
+  });
+
+  it('stays in the pot after a scripted stir instead of leaving', () => {
+    const sim = new ClassicBrewSim(2);
+    drop(sim, [chip()]);
+    sim.stir();
+    for (let i = 0; i < 5 * 60; i++) sim.update(1 / 60);
+    expect(sim.isStirring).toBe(true);
+    expect(sim.spoonDrop).toBe(1);
   });
 
   it('pushes chips near the spoon harder than chips across the pot', () => {
