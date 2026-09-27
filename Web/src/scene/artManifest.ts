@@ -31,7 +31,7 @@ export interface SceneZone {
 
 /**
  * چیدمان اصلی کارگاه — طبق پرامپت هنری:
- * چپ: کابینت کشویی مواد | مرکز: میز کار، پاتیل، هاون، اجاق، بطری‌ها |
+ * چپ: کابینت ایستاده‌ی مواد | مرکز: میز کار، پاتیل، هاون، اجاق، بطری‌ها |
  * راست: پیشخوان جدای مشتری | بالا-راست: کاغذ خلاصه سفارش
  */
 export const SCENE_ZONES = {
@@ -50,9 +50,17 @@ export const SCENE_ZONES = {
     img: 'table/work_table.png',
   },
   /**
-   * قفسه‌ی دیواری مواد — پشت میز، همیشه دیده می‌شود، اسکرول افقی.
-   * جایگزین کابینت کشویی در صحنه‌ی کلاسیک؛ شیشه‌ها روی تخته می‌نشینند و
-   * z آن زیر میز/پاتیل است (قفسه روی دیوار عقب است).
+   * کابینت ایستاده‌ی مواد در چپ میز؛ همیشه باز، یک ستون قفسه با اسکرول عمودی.
+   * z آن بالاتر از میز (۱۰) و پایین‌تر از هاون (۳۵) است.
+   */
+  sideCabinet: {
+    id: 'side_cabinet',
+    x: 10, y: 100, width: 270, height: 950, z: 20,
+    img: 'shelf/side_cabinet.png',
+  },
+  /**
+   * میراثی: فقط برای v2 و ابزارهای هنری نگه داشته شده و دیگر در کلاسیک
+   * رندر نمی‌شود.
    */
   wallShelf: {
     id: 'wall_shelf',
@@ -166,6 +174,49 @@ export const SCENE_ZONES = {
       woman_glass: 'customer/customer_woman_glass.png',
       woman_spice: 'customer/customer_woman_spice.png',
       woman_chess: 'customer/customer_woman_chess.png',
+      // سری ششم — پیشه‌وران، ورزشکاران، مادربزرگ‌ها و چهره‌های جدا
+      woman_calligrapher: 'customer/customer_woman_calligrapher.png',
+      woman_tilemaker: 'customer/customer_woman_tilemaker.png',
+      woman_carpet: 'customer/customer_woman_carpet.png',
+      woman_tea: 'customer/customer_woman_tea.png',
+      woman_storyteller: 'customer/customer_woman_storyteller.png',
+      woman_silk: 'customer/customer_woman_silk.png',
+      woman_bookbinder: 'customer/customer_woman_bookbinder.png',
+      woman_pearl: 'customer/customer_woman_pearl.png',
+      woman_nomad: 'customer/customer_woman_nomad.png',
+      woman_midwife: 'customer/customer_woman_midwife.png',
+      woman_courier: 'customer/customer_woman_courier.png',
+      woman_santur: 'customer/customer_woman_santur.png',
+      woman_saffron: 'customer/customer_woman_saffron.png',
+      woman_mapmaker: 'customer/customer_woman_mapmaker.png',
+      woman_candle: 'customer/customer_woman_candle.png',
+      man_pahlevan: 'customer/customer_man_pahlevan.png',
+      man_wrestler: 'customer/customer_man_wrestler.png',
+      man_horseman: 'customer/customer_man_horseman.png',
+      man_archer: 'customer/customer_man_archer.png',
+      man_diver: 'customer/customer_man_diver.png',
+      man_mountaineer: 'customer/customer_man_mountaineer.png',
+      man_boatman: 'customer/customer_man_boatman.png',
+      man_polo: 'customer/customer_man_polo.png',
+      man_smith: 'customer/customer_man_smith.png',
+      man_runner: 'customer/customer_man_runner.png',
+      man_swordsman: 'customer/customer_man_swordsman.png',
+      man_hunter: 'customer/customer_man_hunter.png',
+      man_caravan: 'customer/customer_man_caravan.png',
+      man_lancer: 'customer/customer_man_lancer.png',
+      man_rope: 'customer/customer_man_rope.png',
+      woman_nana_spinner: 'customer/customer_woman_nana_spinner.png',
+      woman_nana_fortune: 'customer/customer_woman_nana_fortune.png',
+      woman_nana_baker: 'customer/customer_woman_nana_baker.png',
+      woman_nana_herbs: 'customer/customer_woman_nana_herbs.png',
+      woman_nana_nomad: 'customer/customer_woman_nana_nomad.png',
+      woman_elder_zahra: 'customer/customer_woman_elder_zahra.png',
+      woman_cloth: 'customer/customer_woman_cloth.png',
+      woman_letters: 'customer/customer_woman_letters.png',
+      woman_herbhealer: 'customer/customer_woman_herbhealer.png',
+      man_mason: 'customer/customer_man_mason.png',
+      man_porter: 'customer/customer_man_porter.png',
+      man_khwaja: 'customer/customer_man_khwaja.png',
     },
   },
   /** کاغذ خلاصه‌ی سفارش — دائمی، بالا-راست، فشرده */
@@ -223,6 +274,8 @@ export const CLASSIC_ART = {
   },
   /** سطل چوبی Reset — جایگزین سطل CSS */
   bucket: 'table/bucket.png',
+  /** بدنه‌ی کابینت ایستاده‌ی مواد */
+  sideCabinet: 'shelf/side_cabinet.png',
   /** تخته‌ی قفسه‌ی دیواری */
   shelfBoard: 'shelf/shelf_board.png',
   /**

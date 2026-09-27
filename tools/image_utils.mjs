@@ -30,6 +30,29 @@ export function borderMedian(data, w, h, ch) {
   return [med(rs), med(gs), med(bs)];
 }
 
+/** پیکسل‌های بیرون جزیره که فاصله‌ی ۴-همسایه‌شان از آن بین minD و maxD است */
+function ringAround(comp, w, h, minD, maxD) {
+  const dist = new Map();
+  for (const p of comp) dist.set(p, 0);
+  let frontier = comp.slice();
+  const ring = [];
+  for (let d = 1; d <= maxD; d++) {
+    const next = [];
+    for (const p of frontier) {
+      const x = p % w;
+      for (const n of [p - 1, p + 1, p - w, p + w]) {
+        if (n < 0 || n >= w * h || dist.has(n)) continue;
+        if (Math.abs((n % w) - x) > 1) continue;
+        dist.set(n, d);
+        next.push(n);
+        if (d >= minD) ring.push(n);
+      }
+    }
+    frontier = next;
+  }
+  return ring;
+}
+
 /**
  * پس‌زمینه‌ی تخت را از لبه سیل می‌کند. برای پرتره‌هایی که لباس روشن‌شان به رنگ
  * پس‌زمینه نزدیک است: آستانه‌ی سیل محافظه‌کار است و هاله‌ی کم‌رنگ فقط اگر به
@@ -39,6 +62,8 @@ export async function removeFlatBackdrop(inputPath) {
   const { data, info } = await sharp(inputPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h, channels: ch } = info;
   const [br, bg, bb] = borderMedian(data, w, h, ch);
+  /** پس‌زمینه‌ی کرم/گرم خودش اشباع دارد؛ «کم‌رنگ» یعنی نزدیک به اشباع خود پس‌زمینه */
+  const bgSat = Math.max(br, bg, bb) - Math.min(br, bg, bb);
   const distAt = (p) => {
     const i = p * ch;
     return Math.hypot(data[i] - br, data[i + 1] - bg, data[i + 2] - bb);
@@ -137,7 +162,7 @@ export async function removeFlatBackdrop(inputPath) {
   const near = new Uint8Array(w * h);
   for (let p = 0; p < w * h; p++) {
     if (bgMask[p]) continue;
-    if (distAt(p) < 22 && satAt(p) < 30 && lumAt(p) > 190) near[p] = 1;
+    if (distAt(p) < 40 && Math.abs(satAt(p) - bgSat) < 30 && lumAt(p) > 185) near[p] = 1;
   }
   const seenNear = new Uint8Array(w * h);
   for (let start = 0; start < w * h; start++) {
@@ -169,10 +194,10 @@ export async function removeFlatBackdrop(inputPath) {
         stack.push(p + w);
       }
     }
-    if (touchesBorder || comp.length < 80) continue;
     let sumDist = 0;
     for (const p of comp) sumDist += distAt(p);
     const avg = sumDist / comp.length;
+    if (touchesBorder || comp.length < 4) continue;
     if (comp.length > 20000 && avg >= 10) continue;
     let boundary = 0;
     let chromatic = 0;
@@ -196,10 +221,35 @@ export async function removeFlatBackdrop(inputPath) {
       }
     }
     const frac = boundary === 0 ? 1 : chromatic / boundary;
-    // جزیره‌ی تقریباً هم‌رنگ پس‌زمینه حتی اگر به پوست چسبیده باشد پاک می‌شود؛
-    // پارچه‌ی روشن معمولاً فاصله‌ی بیشتری از پس‌زمینه دارد و این‌جا نمی‌افتد.
-    const pureBackdrop = avg < 10 && comp.length > 500 && frac < 0.75;
-    if (frac < 0.2 || pureBackdrop) for (const p of comp) bgMask[p] = 1;
+    // لبه‌ی چسبیده به جزیره همیشه روشن (anti-alias) است؛ حلقه‌ی ۳–۵ پیکسل بیرون‌تر
+    // نشان می‌دهد دورش رشته‌ی مو است یا شیشه‌ی روشن معجون.
+    // پس‌زمینه‌ی حذف‌شده در حلقه شمرده نمی‌شود؛ وگرنه لای رشته‌های بیرونیِ مو شیشه به نظر می‌آید
+    const ring = ringAround(comp, w, h, 3, 5);
+    let hairish = 0;
+    let ringLum = 0;
+    let ringN = 0;
+    for (const n of ring) {
+      if (bgMask[n]) continue;
+      const l = lumAt(n);
+      ringLum += l;
+      ringN++;
+      if (l < 125) hairish++;
+    }
+    const hairFrac = ringN === 0 ? 1 : hairish / ringN;
+    ringLum = ringN === 0 ? 0 : ringLum / ringN;
+    let core = 0;
+    for (const p of comp) if (distAt(p) < 7) core++;
+    core /= comp.length;
+    // شیشه‌ی معجون رنگ پس‌زمینه را کمی کدر و گرم‌تر نشان می‌دهد (avg بالاتر، دورش روشن)
+    const glassy = avg >= 9 && ringLum > 205;
+    // تقریباً همان رنگ پس‌زمینه ⇒ پس‌زمینه است، هر چه دورش باشد؛ کمی دورتر فقط اگر لای مو باشد
+    // لکه‌ی خیلی ریز (لای حلقه‌ی مو) فقط اگر عیناً رنگ پس‌زمینه باشد، تا برق چشم نپرد
+    const removable =
+      !glassy &&
+      (comp.length < 30
+        ? avg < 6 || (core > 0.5 && hairFrac > 0.5)
+        : avg < 9 || core > 0.3 || (hairFrac > 0.3 && core > 0.15 && avg < 22) || (hairFrac > 0.3 && frac < 0.75 && avg < 22));
+    if (removable) for (const p of comp) bgMask[p] = 1;
   }
 
   const seen = new Uint8Array(w * h);
@@ -233,15 +283,139 @@ export async function removeFlatBackdrop(inputPath) {
     if (comp.length < 80) for (const p of comp) bgMask[p] = 1;
   }
 
+  // فاصله تا پس‌زمینه‌ی حذف‌شده (۰ = پس‌زمینه، تا EDGE پیکسل)
+  const EDGE = 3;
+  /** تا این فاصله از پس‌زمینه، رگه‌ی روشن لای موی تیره هم آمیزه حساب می‌شود */
+  const STRAND = 14;
+  const edgeDist = new Uint8Array(w * h).fill(255);
+  let ring = [];
+  for (let p = 0; p < w * h; p++) {
+    if (bgMask[p]) {
+      edgeDist[p] = 0;
+      ring.push(p);
+    }
+  }
+  for (let d = 1; d <= STRAND; d++) {
+    const next = [];
+    for (const p of ring) {
+      const x = p % w;
+      for (const n of [p - 1, p + 1, p - w, p + w]) {
+        if (n < 0 || n >= w * h || edgeDist[n] <= d) continue;
+        if (Math.abs((n % w) - x) > 1) continue;
+        edgeDist[n] = d;
+        next.push(n);
+      }
+    }
+    ring = next;
+  }
+
+  // لبه‌ی نرم: رنگ لبه آمیزه‌ای از پس‌زمینه و رنگ واقعیِ داخل (مو، پارچه) است. نزدیک‌ترین
+  // پیکسل‌های داخلی (بیرون از نوار لبه) رنگ fg را می‌دهند و آلفا از تصویرِ c روی خط bg→fg
+  // درمی‌آید؛ این‌طور نیم‌پیکسل مو روی پس‌زمینه‌ی روشن هاله‌ی سفید نمی‌سازد.
+  const R = EDGE + 3;
   const out = Buffer.alloc(w * h * 4);
   for (let p = 0; p < w * h; p++) {
     if (bgMask[p]) continue;
     const i = p * ch;
     const o = p * 4;
-    out[o] = data[i];
-    out[o + 1] = data[i + 1];
-    out[o + 2] = data[i + 2];
-    out[o + 3] = 255;
+    let r = data[i];
+    let g = data[i + 1];
+    let b = data[i + 2];
+    let a = 1;
+    if (edgeDist[p] <= EDGE) {
+      const x = p % w;
+      const y = (p - x) / w;
+      let fr = 0;
+      let fg = 0;
+      let fb = 0;
+      let wsum = 0;
+      for (let dy = -R; dy <= R; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -R; dx <= R; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          const q = yy * w + xx;
+          if (bgMask[q] || edgeDist[q] <= EDGE) continue;
+          const wt = 1 / (1 + dx * dx + dy * dy);
+          const j = q * ch;
+          fr += data[j] * wt;
+          fg += data[j + 1] * wt;
+          fb += data[j + 2] * wt;
+          wsum += wt;
+        }
+      }
+      if (wsum > 0) {
+        fr /= wsum;
+        fg /= wsum;
+        fb /= wsum;
+        const vr = fr - br;
+        const vg = fg - bg;
+        const vb = fb - bb;
+        const len2 = vr * vr + vg * vg + vb * vb;
+        if (len2 > 900) {
+          a = clamp(((r - br) * vr + (g - bg) * vg + (b - bb) * vb) / len2, 0, 1);
+          // رنگی که روی خط bg→fg نیست (برق مو، گلدوزی، لبه‌ی شیشه) آمیزه نیست و مات می‌ماند
+          const off = Math.hypot(r - (br + a * vr), g - (bg + a * vg), b - (bb + a * vb));
+          if (off > 38) a = Math.max(a, clamp((distAt(p) - 14) / 56, 0, 1));
+        } else {
+          a = clamp((distAt(p) - 14) / 56, 0, 1);
+        }
+      } else {
+        a = clamp((distAt(p) - 14) / 56, 0, 1);
+      }
+      if (a > 0.02 && a < 1) {
+        r = clamp((r - (1 - a) * br) / a, 0, 255);
+        g = clamp((g - (1 - a) * bg) / a, 0, 255);
+        b = clamp((b - (1 - a) * bb) / a, 0, 255);
+      }
+    } else if (edgeDist[p] <= STRAND && distAt(p) < 75 && Math.abs(satAt(p) - bgSat) < 35 && lumAt(p) > 150) {
+      // رگه‌ی روشنِ بی‌رنگ بین رشته‌های موی تیره: fg همان موی کنارش است
+      const x = p % w;
+      const y = (p - x) / w;
+      let fr = 0;
+      let fg = 0;
+      let fb = 0;
+      let cnt = 0;
+      for (let dy = -4; dy <= 4; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= h) continue;
+        for (let dx = -4; dx <= 4; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= w) continue;
+          const q = yy * w + xx;
+          if (bgMask[q] || lumAt(q) >= 100) continue;
+          const j = q * ch;
+          fr += data[j];
+          fg += data[j + 1];
+          fb += data[j + 2];
+          cnt++;
+        }
+      }
+      if (cnt >= 4) {
+        fr /= cnt;
+        fg /= cnt;
+        fb /= cnt;
+        const vr = fr - br;
+        const vg = fg - bg;
+        const vb = fb - bb;
+        const len2 = vr * vr + vg * vg + vb * vb;
+        const t = clamp(((r - br) * vr + (g - bg) * vg + (b - bb) * vb) / len2, 0, 1);
+        const off = Math.hypot(r - (br + t * vr), g - (bg + t * vg), b - (bb + t * vb));
+        if (off <= 30) {
+          a = t;
+          if (a > 0.02 && a < 1) {
+            r = clamp((r - (1 - a) * br) / a, 0, 255);
+            g = clamp((g - (1 - a) * bg) / a, 0, 255);
+            b = clamp((b - (1 - a) * bb) / a, 0, 255);
+          }
+        }
+      }
+    }
+    out[o] = r;
+    out[o + 1] = g;
+    out[o + 2] = b;
+    out[o + 3] = Math.round(a * 255);
   }
   return sharp(out, { raw: { width: w, height: h, channels: 4 } });
 }
