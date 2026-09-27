@@ -1,5 +1,714 @@
 [
   {
+    "id": "c11_joy",
+    "nameFa": "بانو مهرناز",
+    "requestFa": "از وقتی حجره‌ی پارچه‌ام را باز کرده‌ام، لبخندم را جا گذاشته‌ام. مشتری که می‌آید، از رویم می‌فهمد که خسته‌ام و می‌رود. چیزی می‌خواهم که دلم را باز کند و رنگ به رویم بیاورد؛ خریدار به روی خوش برمی‌گردد.",
+    "summaryFa": "شادی برای حجره‌دار",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "دلم باز شد؛ امروز از هر مشتری با خنده خداحافظی کردم.",
+        "unmetFeedbackFa": "همان ترش‌رویی خودم؛ این معجون لبخندی نیاورد."
+      }
+    ],
+    "appearance": "woman_cloth"
+  },
+  {
+    "id": "c29_focus_cold",
+    "nameFa": "شهرزاد زرگر",
+    "requestFa": "نگین فیروزه اگر یک خط کج بنشیند، حلقه را پس می‌دهند. ذهنی سرد و جمع می‌خواهم؛ اگر تا شب هم بیدار بمانم بهتر، کار حجره عقب است.",
+    "summaryFa": "ذهن جمع و سرِ خنک",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.6,
+        "direction": "at_least",
+        "metFeedbackFa": "نگین درست وسط نشست و حلقه را پذیرفتند.",
+        "unmetFeedbackFa": "خط کج شد و حلقه برگشت."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "cold",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "سرم خنک ماند و دستم عرق نکرد.",
+        "unmetFeedbackFa": "گرما به شقیقه‌ام زد و ذره‌بین را تار دیدم."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "wake",
+        "threshold": 1.0,
+        "direction": "at_least",
+        "metFeedbackFa": "تا شب هم بیدار ماندم و سفارش عقب‌مانده تمام شد.",
+        "unmetFeedbackFa": "کار درست شد اما نیمه‌شب چشمم گرم شد."
+      }
+    ],
+    "appearance": "woman_jeweler"
+  },
+  {
+    "id": "c60_joy_wake",
+    "nameFa": "دارا چوگان‌باز",
+    "requestFa": "میدان چوگان تا غروب غوغا دارد و اسب دلِ سوار گرفته را می‌فهمد. شادی به سینه و بیداری به چشمم بده؛ سرما هم به دست چوب‌گیرم ننشیند.",
+    "summaryFa": "شادی و بیداری چوگان",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "دل اسب و سوار با هم باز شد و میدان جان گرفت.", "unmetFeedbackFa": "تاختم، اما دلم از بازی عقب ماند." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "توپ را تا آخرین تاخت از چشم نینداختم.", "unmetFeedbackFa": "یک دم چشمم کند شد و توپ از کنارم گذشت." },
+      { "kind": "avoid", "propertyId": "cold", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دستم گرم ماند و چوب نلغزید.", "unmetFeedbackFa": "سرما پنجه‌ام را بست و چوب از دست رفت." }
+    ],
+    "appearance": "man_polo"
+  },
+  {
+    "id": "c36_wake_warm",
+    "nameFa": "دلارام",
+    "requestFa": "بازار از سحر باز می‌شود و کیسه‌های ادویه سنگین‌اند. چشمم باید بیدار باشد و تنم گرم، وگرنه زعفران را با گلرنگ عوض می‌کنند. اگر زور هم بیاید که بهتر.",
+    "summaryFa": "بیداری و گرما برای بازار",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.3,
+        "direction": "at_least",
+        "metFeedbackFa": "تا ظهر چشمم روشن ماند و هیچ کیسه‌ای عوض نشد.",
+        "unmetFeedbackFa": "نیمه‌ی بازار پلک بر هم رفت."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "warm",
+        "threshold": 1.4,
+        "direction": "at_least",
+        "metFeedbackFa": "دست‌هایم میان بوی ادویه گرم ماند.",
+        "unmetFeedbackFa": "بیدار بودم اما سرما به انگشتانم نشست."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "strength",
+        "threshold": 1.0,
+        "direction": "at_least",
+        "metFeedbackFa": "کیسه‌ها را هم خودم تا حجره بردم.",
+        "unmetFeedbackFa": "بازار گذشت اما برای بردن بار زورم نرسید."
+      }
+    ],
+    "appearance": "woman_spice"
+  },
+  {
+    "id": "c71_pain_calm",
+    "nameFa": "ننه شوکت",
+    "requestFa": "زانوانم از دامنه سنگی درد گرفته و هنوز یک دسته آویشن بالای تپه مانده است. درد را کم کن و نفسم را آرام؛ گیاه رم نمی‌کند، اما دست عجول ریشه‌اش را می‌شکند.",
+    "summaryFa": "تسکین و آرامش گیاه‌چینی",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "زانوانم باز شد و تا بوته آخر بالا رفتم.", "unmetFeedbackFa": "هر سنگ درد را دوباره در زانویم بیدار کرد." },
+      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "با حوصله چیدم و ریشه‌ای آسیب ندید.", "unmetFeedbackFa": "درد کمتر شد، اما عجله ساقه‌های جوان را شکست." }
+    ],
+    "appearance": "woman_nana_herbs"
+  },
+  {
+    "id": "c55_strength_wake",
+    "nameFa": "ایاز سوار",
+    "requestFa": "تا سپیده باید مرز را سواره بگردم و تازیانه از دست خسته می‌افتد. بازویم را نیرومند و چشمم را بیدار کن؛ خواب روی زین دشمنِ بی‌صداست.",
+    "summaryFa": "نیرو و بیداری برای سواری",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "مهار تا آخر گشت در مشتم محکم ماند.", "unmetFeedbackFa": "بازویم افتاد و اسب راه خودش را گرفت." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "تا روشن شدن دشت چشم از مرز برنداشتم.", "unmetFeedbackFa": "چشمم تار شد و نشان دور را ندیدم." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.3, "direction": "at_most", "metFeedbackFa": "خواب به زین نزدیک نشد.", "unmetFeedbackFa": "یک دم روی زین چرت زدم و راه از دست رفت." }
+    ],
+    "appearance": "man_horseman"
+  },
+  {
+    "id": "c24_joy_focus",
+    "nameFa": "نیلا نگارگر",
+    "requestFa": "امروز باید یک مجلس را با لاجورد و طلا تمام کنم. دلم باید باز باشد که رنگ زنده بنشیند، و چشمم جمع که خط طلا کج نرود. اگر هیجان به دستم بیفتد، قلم‌مو می‌لرزد.",
+    "summaryFa": "شادی و تمرکز، بی‌لرزش دست",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "رنگ جان گرفت؛ خودم هم از مجلس خوشم آمد.",
+        "unmetFeedbackFa": "مجلس سرد و بی‌جان ماند؛ شادی‌ای در این شیشه نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "خط طلا تا آخر راست نشست.",
+        "unmetFeedbackFa": "حواسم رفت و طلا از خط بیرون زد."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "excitement",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "metFeedbackFa": "دستم هم نلرزید.",
+        "unmetFeedbackFa": "ذهنم تیز شد اما دستم از هیجان لرزید."
+      }
+    ],
+    "appearance": "woman_painter"
+  },
+  {
+    "id": "c34_pain_cold",
+    "nameFa": "نرگس رنگ‌رز",
+    "requestFa": "انگشتانم از خمِ رنگ تاول زده و دیگ هنوز جوش است. درد را بگیر و سرم را خنک کن که بوی سوختگی را دیر نفهمم. فقط خوابم نکن؛ رنگ اگر ببندد، طاقه خراب می‌شود.",
+    "summaryFa": "تسکین دست و سرِ خنک",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 1.6,
+        "direction": "at_least",
+        "metFeedbackFa": "دست وا شد و دوباره نخ را گرفتم.",
+        "unmetFeedbackFa": "انگشتان همان آتش است؛ این معجون به دردم نرسید."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "cold",
+        "threshold": 1.0,
+        "direction": "at_least",
+        "metFeedbackFa": "سرم میان بخار دیگ خنک ماند.",
+        "unmetFeedbackFa": "درد کمتر شد اما گرما زد به شقیقه‌ام."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.6,
+        "direction": "at_most",
+        "metFeedbackFa": "چشمم روی دیگ ماند و رنگ نبست.",
+        "unmetFeedbackFa": "ولی کنار دیگ خوابم برد و طاقه خراب شد."
+      }
+    ],
+    "appearance": "woman_dyer"
+  },
+  {
+    "id": "c42_joy_focus",
+    "nameFa": "پگاه نقال",
+    "requestFa": "امشب باید قصه رستم را چنان بگویم که کودک و پیر نفس نگه دارند. دلم را شاد و ذهنم را جمع کن؛ اگر بیت یا نامی از یادم برود، پهلوان وسط میدان تنها می‌ماند.",
+    "summaryFa": "شادی و تمرکز برای قصه",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "شور قصه به صدایم آمد و مجلس جان گرفت.", "unmetFeedbackFa": "قصه از دهانم سرد بیرون آمد و کسی چشم از زمین برنداشت." },
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "هر نام و هر بیت به وقت خودش بر زبانم نشست.", "unmetFeedbackFa": "میان نبرد نام پهلوان از یادم پرید." },
+      { "kind": "preferred", "propertyId": "excitement", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "هیجان مهار شد و رشته قصه از دستم نرفت.", "unmetFeedbackFa": "شورم بالا گرفت و دو پرده قصه را جابه‌جا گفتم." }
+    ],
+    "appearance": "woman_storyteller"
+  },
+  {
+    "id": "c57_pain_awake",
+    "nameFa": "جابر غواص",
+    "requestFa": "گوشم از شیرجه دیروز درد می‌کند، اما جزر صبح برای صدف منتظر نمی‌ماند. درد را بگیر و چشمم را بیدار نگه دار؛ خواب و سستی زیر آب جای بخشش ندارند.",
+    "summaryFa": "تسکین و بیداری برای غواصی",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.2, "direction": "at_least", "metFeedbackFa": "فشار گوشم خوابید و تا بستر دریا پایین رفتم.", "unmetFeedbackFa": "درد با نخستین شیرجه در سرم پیچید." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.7, "direction": "at_most", "metFeedbackFa": "چشمم باز ماند و ریسمان را گم نکردم.", "unmetFeedbackFa": "سنگینی خواب زیر آب نفسم را آشفته کرد." },
+      { "kind": "preferred", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "تنم هم سست نشد و صدف را بالا آوردم.", "unmetFeedbackFa": "درد کمتر شد، اما زور بالا کشیدن نداشتم." }
+    ],
+    "appearance": "man_diver"
+  },
+  {
+    "id": "c20_warm_strength",
+    "nameFa": "یاسمن رهگذر",
+    "requestFa": "فردا از گردنه‌ی برفی می‌گذرم و کاروان منتظر هیچ‌کس نمی‌ماند. تنم را گرم کن و پاهایم را محکم؛ سستی در آن سرما یعنی جا ماندن از قافله.",
+    "summaryFa": "گرمی و نیرو برای گردنه",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "warm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "گرمی تا نوک انگشتانم رفت؛ برف را حس نکردم.",
+        "unmetFeedbackFa": "سرما تا مغز استخوانم رفت؛ گرمی‌ای در این شیشه نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "strength",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "پاهایم تا آن سوی گردنه محکم ماند.",
+        "unmetFeedbackFa": "نیمه‌ی راه پاهایم سست شد و قافله جلو رفت."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "weakness",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "metFeedbackFa": "کرختی هم نیامد؛ اول از همه رسیدم.",
+        "unmetFeedbackFa": "اما کرختی در تنم نشست و روی برف نشستم."
+      }
+    ],
+    "appearance": "woman_traveler"
+  },
+  {
+    "id": "c16_joy_strength",
+    "nameFa": "نوازنده بردیا",
+    "requestFa": "امشب در جشن عروسیِ بزرگ می‌نوازم و تا صبح باید انگشتانم روی تار برقصند. شادی می‌خواهم که به ساز بریزد و نیرو که دستم نیفتد. سستی و کرختی را از من دور کن.",
+    "summaryFa": "شادی و نیرو برای شب جشن",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "شادی از انگشتانم به تار ریخت؛ مجلس رقصید.",
+        "unmetFeedbackFa": "ساز خشک و بی‌جان ماند؛ شادی‌ای در این شیشه نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "strength",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "تا سحر نواختم و دستم نیفتاد.",
+        "unmetFeedbackFa": "نیمه‌ی شب دستم سست شد و ساز از کوک رفت."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "weakness",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "metFeedbackFa": "کرختی هم نیامد؛ چه شبی شد!",
+        "unmetFeedbackFa": "اما کرختی در تنم نشست و مضراب از دستم لیز خورد."
+      }
+    ],
+    "appearance": "man_musician"
+  },
+  {
+    "id": "c68_calm_pain",
+    "nameFa": "ننه خاور",
+    "requestFa": "از بس دوک را چرخانده‌ام، بند انگشتانم می‌سوزد و رشته با دست بی‌قرار پاره می‌شود. درد را کم کن و دلم را آرام؛ پشم با عجله نخ نمی‌شود، جانم.",
+    "summaryFa": "تسکین و آرامش پای دوک",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "سوزش انگشتانم خوابید و دوک دوباره چرخید.", "unmetFeedbackFa": "دستم هنوز آتش می‌گیرد و نخ از میان انگشتم می‌افتد." },
+      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دل هم آرام شد و رشته یک‌دست درآمد.", "unmetFeedbackFa": "درد کمتر شد، ولی بی‌قراری نخ را پاره کرد." }
+    ],
+    "appearance": "woman_nana_spinner"
+  },
+  {
+    "id": "c39_joy_focus",
+    "nameFa": "میترا کاشی‌گر",
+    "requestFa": "امروز باید ستاره‌های فیروزه‌ای ایوان را جفت کنم؛ رنگ بی‌دل می‌میرد و بندِ کج تا صد سال پیداست. شادی به دلم و تمرکز به چشمم بده، اما دستم را از شور نلرزان.",
+    "summaryFa": "شادی و دقت برای کاشی",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "فیروزه زیر دستم زنده شد و ایوان لبخند زد.", "unmetFeedbackFa": "رنگ‌ها سرد و مرده ماندند؛ دلم با کاشی همراه نشد." },
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "هر ستاره درست در بند همسایه نشست.", "unmetFeedbackFa": "یک بند کج شد و نقش تا بالای ایوان لغزید." },
+      { "kind": "preferred", "propertyId": "excitement", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "دستم هم آرام ماند و لعاب نشکست.", "unmetFeedbackFa": "ذهنم روشن شد، ولی شوق زیاد کاشی را از دستم انداخت." }
+    ],
+    "appearance": "woman_tilemaker"
+  },
+  {
+    "id": "c17_focus_wake",
+    "nameFa": "مریم شاگرد",
+    "requestFa": "فردا استادم از سه دفتر هندسه می‌پرسد و من هنوز یک دفتر را نخوانده‌ام. ذهنی روشن می‌خواهم که تا سحر روی خط‌ها بماند. خواب‌آور به من نده؛ هر چه بخوانم از سرم می‌رود.",
+    "summaryFa": "ذهن روشن تا سحر",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "خط‌ها یکی‌یکی در ذهنم نشست؛ صبح سربلند جواب دادم.",
+        "unmetFeedbackFa": "ذهنم مثل بادبادک هر طرف می‌رفت؛ تمرکزی در این معجون نبود."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "تا سحر بیدار ماندم و دفترها را تمام کردم.",
+        "unmetFeedbackFa": "روی دفتر خوابم برد و صبح با جوهر روی گونه بیدار شدم."
+      }
+    ],
+    "preferredTags": ["clear_mind"],
+    "appearance": "woman_student"
+  },
+  {
+    "id": "c22_pain_focus",
+    "nameFa": "سامان کاتب",
+    "requestFa": "از صبح تا شب برای استادم نسخه می‌نویسم و انگشتانم از قلم گرفته و می‌سوزد. دردش را بگیر و ذهنم را هم کمی جمع کن که سطر جا نیندازم؛ استاد هر سطر افتاده را از مزدم کم می‌کند.",
+    "summaryFa": "تسکین دست و ذهن جمع",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "دستم باز شد و قلم دوباره روان رفت.",
+        "unmetFeedbackFa": "انگشتانم هنوز گرفته است؛ این معجون به دردم نرسید."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "یک سطر هم جا نینداختم؛ استاد مزدم را کامل داد.",
+        "unmetFeedbackFa": "دو سطر جا انداختم و استاد مزدم را کم کرد."
+      }
+    ],
+    "appearance": "man_apprentice"
+  },
+  {
+    "id": "c27_joy_calm",
+    "nameFa": "مهتاب",
+    "requestFa": "فردا عقد است و از حالا دلم بالا و پایین می‌پرد. می‌خواهم شاد باشم و آرام، که جلوی آینه دستم نلرزد. فقط خواب‌آلودم نکن؛ حنا هنوز خشک نشده.",
+    "summaryFa": "شادی و آرامش شب عقد",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "لبخند خودش آمد؛ آینه را که دیدم دلم باز شد.",
+        "unmetFeedbackFa": "همان دلشوره ماند؛ شادی‌ای در این شیشه نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "دستم جلوی آینه آرام گرفت.",
+        "unmetFeedbackFa": "شاد شدم اما دل هنوز می‌لرزید."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "تا آخر شب بیدار ماندم و حنا خشک شد.",
+        "unmetFeedbackFa": "ولی روی پشتی خوابم برد و حنا پخش شد."
+      }
+    ],
+    "appearance": "woman_bride"
+  },
+  {
+    "id": "c13_pain_calm",
+    "nameFa": "بانو گیسو",
+    "requestFa": "از صبح تا شب پشت دار قالی نشسته‌ام و شانه‌ام گره خورده، انگشتانم می‌سوزد. دردم را بگیر، و اگر می‌شود این دلِ بی‌قرار را هم آرام کن؛ گره‌ها با دست لرزان کج می‌شوند.",
+    "summaryFa": "درد شانه و آرامش دست",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "شانه‌ام وا شد؛ انگشتانم دوباره رقصیدند روی دار.",
+        "unmetFeedbackFa": "شانه همان سنگ است که بود؛ به دردم نرسید."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "calm",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "دستم هم آرام گرفت و گره‌ها راست نشستند.",
+        "unmetFeedbackFa": "درد کم شد ولی دستم هنوز می‌لرزید."
+      }
+    ],
+    "appearance": "woman_weaver"
+  },
+  {
+    "id": "c49_joy_wake",
+    "nameFa": "سروناز سنتورنواز",
+    "requestFa": "مجلس امشب تا دیرگاه کش می‌آید و مضراب باید روی سیم برقصد. شادی به دلم و بیداری به چشمم بده، ولی سرما به انگشتانم نرسد که نغمه خفه می‌شود.",
+    "summaryFa": "شادی و بیداری برای سنتور",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "شادی از مضراب گذشت و مجلس با ساز نفس کشید.", "unmetFeedbackFa": "سیم صدا داد، اما نغمه بی‌جان ماند." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "تا ضرب آخر چشمم روشن و دستم میزان بود.", "unmetFeedbackFa": "پلکم افتاد و یک گوشه را از ضرب انداختم." },
+      { "kind": "avoid", "propertyId": "cold", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "انگشتانم گرم ماند و سیم‌ها روشن خواندند.", "unmetFeedbackFa": "سرما دستم را گرفت و مضراب روی سیم مرد." }
+    ],
+    "appearance": "woman_santur"
+  },
+  {
+    "id": "c3_pain",
+    "nameFa": "استاد کاظم",
+    "requestFa": "کمرم از بارهای انبار تیر می‌کشد؛ شب که به خانه می‌رسم کمر خم نمی‌شود. چیزی می‌خواهم که این درد را کم کند. کارم سنگین است و از تو معجزه نمی‌خواهم، فقط امان از این تیر کشیدن.",
+    "summaryFa": "تسکین درد کمر",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.2,
+        "direction": "at_least",
+        "metFeedbackFa": "دردم خیلی بهتر شد؛ کمرم دیگر مثل چوب خشک نیست.",
+        "unmetFeedbackFa": "هنوز همان تیر می‌کشد؛ این شربت به دردم نرسید."
+      }
+    ],
+    "appearance": "man_worker"
+  },
+  {
+    "id": "c72_warm_strength",
+    "nameFa": "ننه گوهر",
+    "requestFa": "امشب چادر ایل را باد می‌کشد و باید طناب‌ها را تا سپیده نگه داریم. تنم را گرم و دستم را نیرومند کن؛ سستی نیاور که یک گره شل همه خانه را می‌برد.",
+    "summaryFa": "گرما و نیرو برای چادر ایل",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "باد سرد پشت چادرم ماند و به تنم نرسید.", "unmetFeedbackFa": "سرما دست و پایم را بست و طناب از مشتم رفت." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "گره‌ها را محکم کشیدم و چادر تا صبح ایستاد.", "unmetFeedbackFa": "گرم شدم، اما زور کشیدن طناب را نداشتم." },
+      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "سستی نیامد و هیچ میخی از خاک بیرون نزد.", "unmetFeedbackFa": "کرختی به بازویم افتاد و یک سوی چادر خوابید." }
+    ],
+    "appearance": "woman_nana_nomad"
+  },
+  {
+    "id": "c43_joy_calm",
+    "nameFa": "هستی ابریشم‌فروش",
+    "requestFa": "فردا تاجران برای دیدن ابریشم‌های نو می‌آیند و دل من از حسابشان می‌لرزد. شادی می‌خواهم که رنگ‌ها را با لبخند نشان دهم و آرامشی که دستم روی پارچه نلرزد؛ خواب به چشمم نیاور.",
+    "summaryFa": "شادی آرام برای بازار ابریشم",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "رنگ ابریشم با لبخندم درخشید و حجره گرم شد.", "unmetFeedbackFa": "پارچه درخشید، اما دل گرفته‌ام مشتری را پس زد." },
+      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دستم آرام ماند و تا آخر چانه زدم.", "unmetFeedbackFa": "شاد شدم، ولی دلشوره حساب از سرم نیفتاد." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "پلکم سنگین نشد و همه طاقه‌ها را نشان دادم.", "unmetFeedbackFa": "میان معامله خمیازه کشیدم و تاجر راهش را گرفت." }
+    ],
+    "appearance": "woman_silk"
+  },
+  {
+    "id": "c56_focus_wake",
+    "nameFa": "کیوان کماندار",
+    "requestFa": "فردا سه تیر برای سه نشان دارم و باد فرصت دوباره نمی‌دهد. نگاهم را جمع و چشمم را بیدار نگه دار؛ گرمای زیاد کف دستم را خیس می‌کند و زه می‌لغزد.",
+    "summaryFa": "تمرکز و بیداری برای تیر",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.7, "direction": "at_least", "metFeedbackFa": "هر سه نشان در چشمم یکی شد و تیرها نشستند.", "unmetFeedbackFa": "نشان در نگاهم دوید و تیر به خاک خورد." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "تا نوبت آخر چشمم تیز و روشن ماند.", "unmetFeedbackFa": "پلکم سنگین شد و باد را دیر دیدم." },
+      { "kind": "avoid", "propertyId": "warm", "threshold": 1.5, "direction": "at_most", "metFeedbackFa": "کف دستم خشک ماند و زه نلغزید.", "unmetFeedbackFa": "گرما دستم را خیس کرد و زه از انگشت پرید." }
+    ],
+    "appearance": "man_archer"
+  },
+  {
+    "id": "c33_joy_warm",
+    "nameFa": "رؤیا",
+    "requestFa": "امشب در مجلس شعر می‌خوانم. دلم باید باز باشد که بیت جان بگیرد، و تنم گرم که صدا نلرزد. سرما اگر به گلویم بنشیند، ورق را می‌بندم.",
+    "summaryFa": "شادی و گرما برای مجلس شعر",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "صدا گرم شد و مجلس با بیت آخر نفس نگه داشت.",
+        "unmetFeedbackFa": "شعر خشک ماند؛ شادی‌ای در این شیشه نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "warm",
+        "threshold": 1.3,
+        "direction": "at_least",
+        "metFeedbackFa": "تنم گرم ماند تا آخر مجلس.",
+        "unmetFeedbackFa": "شادی بود اما سرما به شانه‌ام نشست."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "cold",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "metFeedbackFa": "گلو سرد نشد و بیت نبرید.",
+        "unmetFeedbackFa": "ولی سرما نشست به گلو و وسط بیت سرفه کردم."
+      }
+    ],
+    "appearance": "woman_poet"
+  },
+  {
+    "id": "c51_focus_cold",
+    "nameFa": "یکتا نقشه‌کش",
+    "requestFa": "راهِ کاروان را روی کاغذی می‌کشم که یک خطای انگشتش یک روز بیابان است. ذهنم را جمع و سرم را خنک کن؛ اگر تا شب بیدار بمانم، گردنه آخر را هم علامت می‌زنم.",
+    "summaryFa": "تمرکز و خنکی برای نقشه",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "هر رود و گردنه در جای خودش روی کاغذ نشست.", "unmetFeedbackFa": "حواسم لغزید و راه آب را به دل کویر بردم." },
+      { "kind": "must_have", "propertyId": "cold", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "سرم خنک ماند و اندازه‌ها با هم خواند.", "unmetFeedbackFa": "گرما چشمم را تار کرد و مقیاس از دست رفت." },
+      { "kind": "preferred", "propertyId": "wake", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "تا شب بیدار ماندم و نقشه مهر خورد.", "unmetFeedbackFa": "راه درست شد، اما گردنه آخر برای فردا ماند." }
+    ],
+    "appearance": "woman_mapmaker"
+  },
+  {
+    "id": "c46_strength_warm",
+    "nameFa": "آتوسا کوچ‌رو",
+    "requestFa": "صبح ایل از گردنه می‌گذرد و خورجین و چادر روی دست من است. نیرو به پاهایم و گرما به تنم بده، اما دل را چنان بی‌قرار نکن که راه باریک را خطا بروم.",
+    "summaryFa": "نیرو و گرما برای کوچ",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "خورجین سبک شد و قدمم تا قله کم نیاورد.", "unmetFeedbackFa": "پاهایم زیر بار ماند و ایل از من جلو زد." },
+      { "kind": "preferred", "propertyId": "warm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "باد گردنه از قبایم نگذشت.", "unmetFeedbackFa": "زور داشتم، اما سرما انگشتانم را بست." },
+      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دل آرام ماند و پیچ راه را درست گرفتم.", "unmetFeedbackFa": "بی‌قراری چشمم را بست و از پاکوب بیرون رفتم." }
+    ],
+    "appearance": "woman_nomad"
+  },
+  {
+    "id": "c61_pain_strength",
+    "nameFa": "ایرج آهنگر",
+    "requestFa": "چکش از صبح روی سندان است و ساعدم از درد می‌سوزد، ولی تیغه هنوز سرخ است. درد را کم و نیرو را برگردان؛ آهن داغ منتظر دست خسته نمی‌ماند.",
+    "summaryFa": "تسکین و نیرو برای آهنگری",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "سوزش ساعدم خوابید و چکش دوباره راست فرود آمد.", "unmetFeedbackFa": "هر ضربه درد را تا شانه‌ام برد." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "تیغه زیر ضربم رام شد و لبه گرفت.", "unmetFeedbackFa": "درد کمتر بود، اما چکش روی آهن جان نداشت." }
+    ],
+    "appearance": "man_smith"
+  },
+  {
+    "id": "c37_focus_wake",
+    "nameFa": "آزاده",
+    "requestFa": "بازی تا نصف شب طول می‌کشد و یک سهل‌انگاری مهره را می‌بازم. ذهنم باید جمع باشد و چشمم بیدار. خواب اگر بیاید، اسب را خودم تقدیم حریف کرده‌ام.",
+    "summaryFa": "تمرکز و بیداری پای شطرنج",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.6,
+        "direction": "at_least",
+        "metFeedbackFa": "تا آخر بازی هیچ مهره‌ای را ندیدم که نبازم.",
+        "unmetFeedbackFa": "حواسم پرت شد و اسب رفت."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.4,
+        "direction": "at_least",
+        "metFeedbackFa": "تا نصف شب چشمم روشن ماند.",
+        "unmetFeedbackFa": "نیمه‌ی بازی پلک‌هایم سنگین شد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "خواب نزدیک صفحه نیامد.",
+        "unmetFeedbackFa": "ولی سرِ صفحه چرت زدم و بازی را واگذار کردم."
+      }
+    ],
+    "appearance": "woman_chess"
+  },
+  {
+    "id": "c70_warm_wake",
+    "nameFa": "ننه کوکب",
+    "requestFa": "تنور پیش از سحر روشن می‌شود و خمیرها یکی‌یکی چشم باز می‌کنند. چشمم را بیدار و دستم را گرم نگه دار؛ اگر نیرویی هم باشد، طبق نان روی زمین نمی‌ماند.",
+    "summaryFa": "بیداری و گرما برای تنور",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.3, "direction": "at_least", "metFeedbackFa": "تا طلوع یک خمیر هم از چشمم دور نماند.", "unmetFeedbackFa": "کنار تنور چرت زدم و یک طبق بیش از حد ورآمد." },
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "گرما در دستم ماند و چانه‌ها خوب شکل گرفت.", "unmetFeedbackFa": "چشمم باز بود، ولی دست سرد خمیر را خراب کرد." },
+      { "kind": "preferred", "propertyId": "strength", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "طبق‌های نان را هم خودم تا دکان بردم.", "unmetFeedbackFa": "نان پخت، اما زور بردن طبق‌ها را نداشتم." }
+    ],
+    "appearance": "woman_nana_baker"
+  },
+  {
+    "id": "c63_focus_strength",
+    "nameFa": "سام شمشیرباز",
+    "requestFa": "در میدان، یک چشم بر لبه شمشیر است و یک چشم بر شانه حریف. ذهنم را جمع و بازویم را نیرومند کن؛ ضربه بی‌فکر از شکست بدتر است.",
+    "summaryFa": "تمرکز و نیرو برای شمشیر",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "حرکت شانه حریف را پیش از تیغه‌اش خواندم.", "unmetFeedbackFa": "نگاهم از تیغه جا ماند و راه ضربه را ندیدم." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "بازو تا آخرین بند شمشیر فرمان برد.", "unmetFeedbackFa": "فکر حاضر بود، اما تیغه در دستم سنگین شد." }
+    ],
+    "appearance": "man_swordsman"
+  },
+  {
+    "id": "c14_warm_calm",
+    "nameFa": "بانو شیرین",
+    "requestFa": "بیمارهای من در سرمای زمستان می‌لرزند و از ترس، خواب به چشم‌شان نمی‌آید. معجونی می‌خواهم که تن را گرم کند و دل را آرام؛ اما نه آن‌قدر خواب‌آور که نتوانند صبح برخیزند.",
+    "summaryFa": "گرمی و آرامش برای بیماران",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "warm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "لرزشان بند آمد؛ گرما نشست به تن‌شان.",
+        "unmetFeedbackFa": "هنوز می‌لرزند؛ این معجون گرم نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "ترس‌شان خوابید و نفس‌شان آرام شد.",
+        "unmetFeedbackFa": "گرم شدند اما دل‌شان همان شور را می‌زد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.8,
+        "direction": "at_most",
+        "metFeedbackFa": "صبح هم سرِ وقت برخاستند.",
+        "unmetFeedbackFa": "ولی تا ظهر خواب بودند و داروی صبح از دست رفت."
+      }
+    ],
+    "preferredTags": ["warming_comfort"],
+    "appearance": "woman_herbhealer"
+  },
+  {
+    "id": "c41_joy_wake",
+    "nameFa": "لادن چای‌دار",
+    "requestFa": "قهوه‌خانه تا سحر پر از مسافر است و استکان باید با روی خوش به دستشان برسد. دلم را باز و چشمم را روشن کن؛ سرما هم به دستم ننشیند که چای از سینی بریزد.",
+    "summaryFa": "شادی و بیداری قهوه‌خانه",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "با خنده چای ریختم و خستگی از مجلس رفت.", "unmetFeedbackFa": "استکان‌ها رسیدند، اما روی ترش من مهمان‌ها را خاموش کرد." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "تا سحر چشمم روشن ماند و سماور بی‌صاحب نشد.", "unmetFeedbackFa": "نیمه‌شب پلکم افتاد و سماور بی‌آب ماند." },
+      { "kind": "avoid", "propertyId": "cold", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دستم گرم ماند و استکانی نلرزید.", "unmetFeedbackFa": "سرما انگشتانم را گرفت و چای روی سینی ریخت." }
+    ],
+    "appearance": "woman_tea"
+  },
+  {
+    "id": "c40_pain_calm",
+    "nameFa": "بهار قالی‌باف",
+    "requestFa": "از سپیده پشت دار نشسته‌ام و شانه‌ام مثل گره کور بسته است. درد را نرم کن و دستم را آرام؛ یک لرزش کافی است تا ترنج قالی کج از آب درآید.",
+    "summaryFa": "تسکین شانه و دست آرام",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "گره شانه‌ام باز شد و دستم دوباره به پود رسید.", "unmetFeedbackFa": "شانه‌ام هنوز مثل چوب دار سفت است." },
+      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "انگشتانم آرام گرفت و ترنج راست نشست.", "unmetFeedbackFa": "درد کمتر شد، اما دست بی‌قرار گره را کج زد." }
+    ],
+    "appearance": "woman_carpet"
+  },
+  {
+    "id": "c62_wake_strength",
+    "nameFa": "بهزاد دونده",
+    "requestFa": "فرمان باید پیش از بسته شدن دروازه از این شهر به آن شهر برسد. چشمم را روشن و پاهایم را نیرومند کن؛ اگر سستی به زانویم بیفتد، مهر فرمان بی‌ارزش می‌شود.",
+    "summaryFa": "بیداری و نیرو برای چاپار",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.3, "direction": "at_least", "metFeedbackFa": "راه تا دروازه در چشمم روشن ماند.", "unmetFeedbackFa": "چشمم سنگین شد و پیچ آخر را دیر دیدم." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "پاهایم تا کوبه دروازه کم نیاورد.", "unmetFeedbackFa": "بیدار ماندم، اما زانویم پیش از شهر خالی کرد." },
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "نفس گرم ماند و باد راه سینه‌ام را نبست.", "unmetFeedbackFa": "سرما نفسم را برید و قدمم کوتاه شد." }
+    ],
+    "appearance": "man_runner"
+  },
+  {
+    "id": "c25_joy_wake",
+    "nameFa": "آوا خنیا",
+    "requestFa": "امشب در قهوه‌خانه می‌خوانم و تا آخر مجلس باید صدا داشته باشم. شادی می‌خواهم که به صدا برسد و بیداری که پلکم نیفتد. سرما هم به گلویم نخورد.",
+    "summaryFa": "شادی و بیداری برای آواز",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "صدا باز شد و مجلس با من خواند.",
+        "unmetFeedbackFa": "صدا خشک ماند؛ شادی‌ای در این معجون نبود."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.4,
+        "direction": "at_least",
+        "metFeedbackFa": "تا آخر مجلس چشمم روشن ماند.",
+        "unmetFeedbackFa": "نیمه‌ی مجلس پلک‌هایم سنگین شد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "cold",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "گلو گرم ماند و صدا نبرید.",
+        "unmetFeedbackFa": "ولی سرما نشست به گلو و وسط آواز سرفه کردم."
+      }
+    ],
+    "appearance": "woman_singer"
+  },
+  {
+    "id": "c54_pain_strength",
+    "nameFa": "کاوه کشتی‌گیر",
+    "requestFa": "زخم دیروز هنوز در شانه‌ام تیر می‌کشد و فردا پهلوانی تازه روی تشک منتظر است. درد را کم کن و نیرو به دستم بده؛ نمی‌خواهم پیش از گرفتن بند، بازویم وا بدهد.",
+    "summaryFa": "تسکین و نیرو برای کشتی",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "تیر شانه خوابید و توانستم بند حریف را بگیرم.", "unmetFeedbackFa": "درد با نخستین کشش دوباره در شانه پیچید." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نیرو در ساعدم ماند و خاک را به حریف نشان دادم.", "unmetFeedbackFa": "درد کمتر بود، اما دستم برای چرخاندن حریف جان نداشت." }
+    ],
+    "appearance": "man_wrestler"
+  },
+  {
     "id": "c1_calm",
     "nameFa": "بانو گلنار",
     "requestFa": "چند شب است دلم مثل سیر و سرکه می‌جوشد و از هر صدای کوچکی می‌پرم. چیزی می‌خواهم که این آشوب را آرام کند. عطار گفت شاید از حجره‌ات کاری ساخته باشد.",
@@ -15,6 +724,39 @@
       }
     ],
     "appearance": "woman_elder"
+  },
+  {
+    "id": "c31_wake_focus",
+    "nameFa": "ستاره رصد",
+    "requestFa": "ماه تمام است و تا سپیده باید اسطرلاب را بخوانم. چشمم باید بیدار بماند و ذهنم جمع، وگرنه درجه‌ها غلط می‌شوند. سرما هم اگر به دستم بنشیند، حلقه‌ی برنج از دستم می‌لغزد.",
+    "summaryFa": "بیداری و تمرکز شب رصد",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "تا سپیده چشمم روشن ماند.",
+        "unmetFeedbackFa": "نیمه‌شب پلک بر هم رفت و ماه را از دست دادم."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "درجه‌ها درست نشستند و هیچ خطایی نماند.",
+        "unmetFeedbackFa": "حواسم پرت شد و دو درجه را غلط نوشتم."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "cold",
+        "threshold": 1.5,
+        "direction": "at_most",
+        "metFeedbackFa": "دست گرم ماند و اسطرلاب نلغزید.",
+        "unmetFeedbackFa": "ولی سرما انگشتانم را گرفت و حلقه از دستم افتاد."
+      }
+    ],
+    "appearance": "woman_astronomer"
   },
   {
     "id": "c2_calm_nosleep",
@@ -42,21 +784,315 @@
     "appearance": "woman_merchant"
   },
   {
-    "id": "c3_pain",
-    "nameFa": "استاد کاظم",
-    "requestFa": "کمرم از بارهای انبار تیر می‌کشد؛ شب که به خانه می‌رسم کمر خم نمی‌شود. چیزی می‌خواهم که این درد را کم کند. کارم سنگین است و از تو معجزه نمی‌خواهم، فقط امان از این تیر کشیدن.",
-    "summaryFa": "تسکین درد کمر",
+    "id": "c59_strength_warm",
+    "nameFa": "فرهاد پاروزن",
+    "requestFa": "دریای خزر امروز سرد و سنگین است و قایق پر از بار. نیرو به پشت و گرما به دستم بده، اما شور بی‌جا نیاور که ریتم پارو از موج جلو بزند.",
+    "summaryFa": "نیرو و گرما برای پارو",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "پارو آب را شکافت و قایق از موج گذشت.", "unmetFeedbackFa": "آب سنگین‌تر از بازویم بود و قایق ماند." },
+      { "kind": "preferred", "propertyId": "warm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دستم در باد دریا گرم ماند.", "unmetFeedbackFa": "زور بود، اما سرما انگشتانم را از پارو جدا کرد." },
+      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "ضرب پارو با موج یکی ماند.", "unmetFeedbackFa": "هیجان ریتمم را شکست و قایق به پهلو افتاد." }
+    ],
+    "appearance": "man_boatman"
+  },
+  {
+    "id": "c10_pain_awake",
+    "nameFa": "بانو لیلا",
+    "requestFa": "درد امانم را بریده، اما تا سپیده باید بیدار بمانم؛ کسی نیست کار را جمع کند. شب‌ها خوابم نمی‌برد ولی صبح باید سرِ کار هوشیار باشم. اگر سست شوم یا خوابم ببرد، همه‌چیز از دست می‌رود. دردم را بگیر و بیداری را از من نگیر.",
+    "summaryFa": "درد شدید، بیداری ناگزیر",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "pain_relief",
+        "threshold": 2.7,
+        "direction": "at_least",
+        "metFeedbackFa": "دردم خیلی بهتر شد؛ توانستم روی پا بمانم.",
+        "unmetFeedbackFa": "درد همان است؛ با این حال که نمی‌شود تا سپیده ایستاد."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.6,
+        "direction": "at_least",
+        "metFeedbackFa": "چشمم روشن ماند؛ تا سپیده هوشیار بودم.",
+        "unmetFeedbackFa": "درد کم شد اما بیداری نیامد؛ سرم سنگین بود."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "خواب به چشم نیامد؛ کار زمین نماند.",
+        "unmetFeedbackFa": "نیمه‌شب خوابم برد؛ وقتی بیدار شدم دیر شده بود."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "weakness",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "سست نشدم؛ جان در تنم ماند.",
+        "unmetFeedbackFa": "تا صبح انگار جان توی تنم نبود؛ روی پا بند نمی‌شدم."
+      }
+    ],
+    "appearance": "woman_healer"
+  },
+  {
+    "id": "c48_strength_wake",
+    "nameFa": "پانیذ چاپار",
+    "requestFa": "این لوله پیام باید پیش از آفتاب به دژ برسد و زین راه درازی دارد. بازویم را نیرومند و چشمم را بیدار نگه دار؛ یک چرت روی اسب یعنی یک روز دیر رسیدن.",
+    "summaryFa": "نیرو و بیداری برای پیام",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "مهار تا آخر راه در دستم محکم ماند.", "unmetFeedbackFa": "بازویم افتاد و اسب قدمش را کند کرد." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "تا برج دژ چشمم روشن ماند.", "unmetFeedbackFa": "راه در نگاهم تار شد و از منزل جا ماندم." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.3, "direction": "at_most", "metFeedbackFa": "خواب نزدیک زین نشد و پیام به‌وقت رسید.", "unmetFeedbackFa": "روی زین چرت زدم و آفتاب پیش از من رسید." }
+    ],
+    "appearance": "woman_courier"
+  },
+  {
+    "id": "c64_focus_calm",
+    "nameFa": "هوشنگ شکارچی",
+    "requestFa": "رد آهو میان سنگ و خار نازک‌تر از خط موست و دل عجول آن را گم می‌کند. نگاهم را جمع و نفسم را آرام کن؛ شور ناگهانی شکار را از یک فرسنگ می‌پراند.",
+    "summaryFa": "تمرکز و آرامش شکار",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "رد شکسته را میان سنگ‌ها تا آبشخور دنبال کردم.", "unmetFeedbackFa": "نشان پا جلوی چشمم گم شد و راه را باختم." },
+      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نفسم نرم ماند و بوته‌ای تکان نخورد.", "unmetFeedbackFa": "رد را دیدم، اما تندی نفسم شکار را رم داد." },
+      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "شور مهار شد و نیزه در وقت خودش بالا آمد.", "unmetFeedbackFa": "هیجان زود دستم را برد و نیزه به سنگ خورد." }
+    ],
+    "appearance": "man_hunter"
+  },
+  {
+    "id": "c21_wake",
+    "nameFa": "نسرین نانوا",
+    "requestFa": "خمیر باید پیش از سحر ور بیاید و تنور از نیمه‌شب روشن شود؛ اما دو شب است چشمم روی هم نرفته و حالا سر پا خوابم می‌برد. چیزی بده که تا طلوع بیدار بمانم؛ اگر خوابم برد نان محله می‌سوزد.",
+    "summaryFa": "بیداری تا طلوع",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "تا طلوع سرپا ماندم و نان‌ها طلایی از تنور درآمد.",
+        "unmetFeedbackFa": "بیداری‌ای در این شربت نبود؛ کنار تنور چرت زدم."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 0.8,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "خواب حتی نزدیکم نشد.",
+        "unmetFeedbackFa": "خوابم برد و صبح بوی نان سوخته محله را پر کرد."
+      }
+    ],
+    "appearance": "woman_baker"
+  },
+  {
+    "id": "c5_focus",
+    "nameFa": "میرزا یونس",
+    "requestFa": "دفتر حساب‌ها روی هم تلنبار شده و ذهنم مثل گنجشک از این شاخه به آن شاخه می‌پرد. چیزی می‌خواهم که حواسم را جمع کند. غلط‌حساب امشب برایم گران تمام می‌شود.",
+    "summaryFa": "تمرکز برای کار دقیق",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "اعداد سر جایشان نشستند؛ توانستم دفتر را تا ته بروم.",
+        "unmetFeedbackFa": "هنوز حواسم پرت است؛ این معجون ذهن را جمع نکرد."
+      }
+    ],
+    "appearance": "man_elder"
+  },
+  {
+    "id": "c52_warm_calm",
+    "nameFa": "شبنم شمع‌ساز",
+    "requestFa": "موم باید گرم و روان بماند، اما دست من از عجله فتیله را کج می‌گذارد. گرما به تنم و آرامش به دلم بده؛ خواب‌آور نباشد که دیگ موم شوخی ندارد.",
+    "summaryFa": "گرما و آرامش پای موم",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "گرما در دستم ماند و موم یک‌دست روی فتیله نشست.", "unmetFeedbackFa": "دستم سرد ماند و موم پیش از قالب بستن گرفت." },
+      { "kind": "must_have", "propertyId": "calm", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "فتیله‌ها راست و بی‌لرزش ایستادند.", "unmetFeedbackFa": "موم گرم بود، اما عجله فتیله‌ها را کج کرد." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.8, "direction": "at_most", "metFeedbackFa": "چشمم روی دیگ ماند تا آخرین شمع بسته شد.", "unmetFeedbackFa": "کنار موم داغ خوابم گرفت و قالب‌ها سر رفت." }
+    ],
+    "appearance": "woman_candle"
+  },
+  {
+    "id": "c15_focus_nosleep",
+    "nameFa": "میرزا کیان",
+    "requestFa": "امتحان مدرسه‌ی نظامیه نزدیک است و باید سه کتاب را در یک هفته از بر کنم. ذهنی روشن می‌خواهم؛ اما هر معجونی که خواب بیاورد، کتاب را از دستم می‌گیرد.",
+    "summaryFa": "ذهن روشن برای درس",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 2.0,
+        "direction": "at_least",
+        "metFeedbackFa": "کتاب باز شد و ذهنم هر سطر را نگه داشت.",
+        "unmetFeedbackFa": "کلمات از ذهنم می‌ریختند؛ این معجون تمرکزی نداد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "بیدار ماندم و درس را جلو بردم.",
+        "unmetFeedbackFa": "سرم روی کتاب افتاد و تا صبح خوابم برد."
+      }
+    ],
+    "preferredTags": ["clear_mind"],
+    "appearance": "man_scholar"
+  },
+  {
+    "id": "c32_strength_wake",
+    "nameFa": "هما بازدار",
+    "requestFa": "سپیده که بزند باید روی اسب باشم و دستکش شاهین سنگین است. نیرو می‌خواهم و چشمی که بیدار بماند. خواب‌آور نده؛ اگر پلکم بیفتد پرنده می‌پرد.",
+    "summaryFa": "نیرو و بیداری برای شکار سپیده",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "strength",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "بازو تا آخر دشت فرمان برد و شاهین برگشت.",
+        "unmetFeedbackFa": "زورم نرسید و دستکش را پایین آوردم."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "چشمم تا بالا آمدن آفتاب روشن ماند.",
+        "unmetFeedbackFa": "نیمه‌ی راه پلک‌هایم سنگین شد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.3,
+        "direction": "at_most",
+        "metFeedbackFa": "خواب حتی نزدیکم نشد.",
+        "unmetFeedbackFa": "ولی روی زین چرت زدم و پرنده رفت."
+      }
+    ],
+    "appearance": "woman_falconer"
+  },
+  {
+    "id": "c38_focus_calm",
+    "nameFa": "یلدا خوشنویس",
+    "requestFa": "نیمه‌شب باید سرلوح فرمان را به خطی بنویسم که یک دندانه‌اش هم نلرزد. ذهنم را جمع و دلم را آرام کن؛ قلم نی اگر هراس دست را بفهمد، مرکب آبرویم را می‌برد.",
+    "summaryFa": "تمرکز و آرامش برای خوشنویسی",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "هر دندانه سر جای خود نشست و قلم از فرمانم بیرون نرفت.", "unmetFeedbackFa": "حواسم میان سطرها گم شد و قلم راه خودش را رفت." },
+      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نبضم آرام شد و قطره‌ای مرکب نلرزید.", "unmetFeedbackFa": "ذهنم جمع بود، اما لرزش دل به سرِ قلم رسید." },
+      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "شور بی‌جا به دستم نیفتاد و فرمان پاک ماند.", "unmetFeedbackFa": "هیجان دستم را برد و یک کشیده را دو بار نوشتم." }
+    ],
+    "appearance": "woman_calligrapher"
+  },
+  {
+    "id": "c23_pain_awake",
+    "nameFa": "سارا کوزه‌گر",
+    "requestFa": "چرخ از صبح تا شب می‌چرخد و شانه‌ام از گلِ خیس گرفته. دردم را بگیر، اما خوابم نکن؛ کوزه‌ها باید تا غروب از کوره دربیایند. اگر دستم سست شود، لعاب می‌ریزد.",
+    "summaryFa": "تسکین شانه، بی‌خواب و بی‌سستی",
     "requirements": [
       {
         "kind": "must_have",
         "propertyId": "pain_relief",
         "threshold": 2.2,
         "direction": "at_least",
-        "metFeedbackFa": "دردم خیلی بهتر شد؛ کمرم دیگر مثل چوب خشک نیست.",
-        "unmetFeedbackFa": "هنوز همان تیر می‌کشد؛ این شربت به دردم نرسید."
+        "metFeedbackFa": "شانه‌ام وا شد و دوباره پای چرخ نشستم.",
+        "unmetFeedbackFa": "شانه همان سنگ است؛ این معجون به دردم نرسید."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.7,
+        "direction": "at_most",
+        "metFeedbackFa": "خواب به چشم نیامد و کوره تا غروب روشن ماند.",
+        "unmetFeedbackFa": "ولی کنار کوره خوابم برد و کوزه‌ها خام ماندند."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "weakness",
+        "threshold": 1.0,
+        "direction": "at_most",
+        "metFeedbackFa": "دستم هم سست نشد؛ لعاب یک‌دست نشست.",
+        "unmetFeedbackFa": "درد کمتر شد اما دستم یاری نکرد و لعاب ریخت."
       }
     ],
-    "appearance": "man_worker"
+    "appearance": "woman_potter"
+  },
+  {
+    "id": "c58_warm_strength",
+    "nameFa": "سهراب کوه‌رو",
+    "requestFa": "راه قله یخ زده و جان دو مسافر به قدم من بسته است. تنم را گرم و پاهایم را نیرومند کن؛ سستی در آن شیب یعنی لغزیدن همه کاروان.",
+    "summaryFa": "گرما و نیرو برای کوه",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "باد قله از لباسم گذشت، اما از تنم نه.", "unmetFeedbackFa": "سرما تا استخوانم رسید و قدمم کوتاه شد." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "پاهایم تا پناهگاه سنگی محکم ماند.", "unmetFeedbackFa": "گرم شدم، اما زور کشیدن همراهان را نداشتم." },
+      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "کرختی نیامد و همه را سالم بالا بردم.", "unmetFeedbackFa": "سستی زانویم را گرفت و در شیب نشستم." }
+    ],
+    "appearance": "man_mountaineer"
+  },
+  {
+    "id": "c26_strength_warm",
+    "nameFa": "رکسانا کماندار",
+    "requestFa": "فردا در میدان اسب می‌تازم و کمان باید تا آخر ثابت بماند. نیرو می‌خواهم و تنِ گرم؛ اما اگر دلم بی‌قرار شود، تیر به هدف نمی‌خورد.",
+    "summaryFa": "نیرو و گرما، بی‌بی‌قراری",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "strength",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "بازو تا آخر میدان فرمان برد.",
+        "unmetFeedbackFa": "زورم نرسید و کمان را زمین گذاشتم."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "warm",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "تنم هم گرم ماند روی زین.",
+        "unmetFeedbackFa": "نیرو بود اما سرما انگشتانم را گرفت."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "excitement",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "critical": true,
+        "metFeedbackFa": "دل آرام ماند و تیر به هدف نشست.",
+        "unmetFeedbackFa": "دلم بی‌قرار شد و تیرها همه به خطا رفت."
+      }
+    ],
+    "appearance": "woman_rider"
+  },
+  {
+    "id": "c8_restful",
+    "nameFa": "ننه‌زهرا",
+    "requestFa": "شب‌ها خوابم نمی‌برد و وقتی هم می‌خوابم، خوابم آشفته است و با کوچک‌ترین صدا می‌پرم. آرامش می‌خواهم و خوابی که واقعاً راحت باشد. صبح که برمی‌خیزم باید جان داشته باشم، نه اینکه تمام شب را با خیال جنگیده باشم.",
+    "summaryFa": "خوابِ آرام و راحت",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "sleep",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "بالأخره چشمم گرم شد و تا صبح دوام آورد.",
+        "unmetFeedbackFa": "باز تا سحر چشم روی هم نگذاشتم؛ این شربت خواب نیاورد."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "خیال‌هایم آرام گرفتند؛ دیگر از هر سایه‌ای نپریدم.",
+        "unmetFeedbackFa": "خوابم برد اما دلم شور می‌زد؛ خوابِ راحتی نبود."
+      }
+    ],
+    "preferredTags": ["restful"],
+    "appearance": "woman_elder_zahra"
   },
   {
     "id": "c4_pain_nosleep",
@@ -93,46 +1129,197 @@
     "appearance": "man_mason"
   },
   {
-    "id": "c5_focus",
-    "nameFa": "میرزا یونس",
-    "requestFa": "دفتر حساب‌ها روی هم تلنبار شده و ذهنم مثل گنجشک از این شاخه به آن شاخه می‌پرد. چیزی می‌خواهم که حواسم را جمع کند. غلط‌حساب امشب برایم گران تمام می‌شود.",
-    "summaryFa": "تمرکز برای کار دقیق",
+    "id": "c35_focus_calm",
+    "nameFa": "سیمین شیشه",
+    "requestFa": "دهانه‌ی شیشه اگر یک لحظه بلرزد، می‌ترکد. ذهنی جمع می‌خواهم و دلی آرام. اگر بی‌قرار شوم، میله از دستم درمی‌رود.",
+    "summaryFa": "تمرکز و آرامش پای کوره",
     "requirements": [
       {
         "kind": "must_have",
         "propertyId": "focus",
-        "threshold": 1.7,
+        "threshold": 1.6,
         "direction": "at_least",
-        "metFeedbackFa": "اعداد سر جایشان نشستند؛ توانستم دفتر را تا ته بروم.",
-        "unmetFeedbackFa": "هنوز حواسم پرت است؛ این معجون ذهن را جمع نکرد."
-      }
-    ],
-    "appearance": "man_elder"
-  },
-  {
-    "id": "c6_focus_calm",
-    "nameFa": "بانو فریبا",
-    "requestFa": "باید سرِ سرمه‌دان و قلم، خط را راست بکشم. ذهنم باید جمع باشد، اما اگر دلم بپرد و دستم به هیجان بیفتد، طلا روی صفحه می‌چکد. تمرکزی آرام می‌خواهم، نه شور و شوقی که دست را بلرزاند.",
-    "summaryFa": "تمرکز آرام، نه هیجان",
-    "requirements": [
+        "metFeedbackFa": "دهانه راست نشست و شیشه سالم ماند.",
+        "unmetFeedbackFa": "حواسم رفت و شیشه ترک خورد."
+      },
       {
         "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.7,
+        "propertyId": "calm",
+        "threshold": 1.2,
         "direction": "at_least",
-        "metFeedbackFa": "چشمم روی خط ماند و دستم فرمان برد.",
-        "unmetFeedbackFa": "باز حواسم رفت؛ این شربت قلم را آرام نکرد."
+        "metFeedbackFa": "دستم آرام ماند روی میله.",
+        "unmetFeedbackFa": "ذهنم جمع شد اما دل هنوز می‌لرزید."
       },
       {
         "kind": "avoid",
         "propertyId": "excitement",
-        "threshold": 1.0,
+        "threshold": 1.2,
         "direction": "at_most",
-        "metFeedbackFa": "دلم نپرید؛ توانستم آرام کار کنم.",
-        "unmetFeedbackFa": "ذهنم تیز شد اما دستم از هیجان لرزید و خط را خراب کرد."
+        "metFeedbackFa": "بی‌قراری نیامد و کار تمام شد.",
+        "unmetFeedbackFa": "ولی دلم بی‌قرار شد و میله از دستم افتاد."
       }
     ],
-    "appearance": "woman_scribe"
+    "appearance": "woman_glass"
+  },
+  {
+    "id": "c30_joy",
+    "nameFa": "گلرخ",
+    "requestFa": "امشب در عروسی می‌رقصم و تا سحر باید لبخند روی صورتم بماند. شادی می‌خواهم که به پا برسد. خواب‌آور نده؛ وسط رقص نشستن رسوایی است.",
+    "summaryFa": "شادی تا آخر رقص",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "joy",
+        "threshold": 1.8,
+        "direction": "at_least",
+        "metFeedbackFa": "تا سحر رقصیدم و لبخند از صورتم نیفتاد.",
+        "unmetFeedbackFa": "پاهایم رفت اما دلم با آن‌ها نرفت؛ شادی‌ای نبود."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "خواب حتی نزدیکم نشد.",
+        "unmetFeedbackFa": "ولی وسط مجلس پلک‌هایم سنگین شد."
+      },
+      {
+        "kind": "preferred",
+        "propertyId": "excitement",
+        "threshold": 0.3,
+        "direction": "at_least",
+        "metFeedbackFa": "یک شورِ کوچک هم آمد و مجلس گرم‌تر شد.",
+        "unmetFeedbackFa": "شاد بودم، اما آن شورِ رقص نیامد."
+      }
+    ],
+    "appearance": "woman_dancer"
+  },
+  {
+    "id": "c45_focus_cold",
+    "nameFa": "دریا مرواریدفروش",
+    "requestFa": "مروارید خوب زیر نور یک نفس خودش را نشان می‌دهد و گرمای بازار چشم را فریب می‌دهد. سرم را خنک و نگاهم را جمع کن؛ اگر توانستم تا شب بیدار بمانم، رشته را همان امروز می‌بندم.",
+    "summaryFa": "دقت و خنکی برای مروارید",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "مروارید کدر را از میان صد دانه بیرون کشیدم.", "unmetFeedbackFa": "چشمم فریب خورد و دانه کدر میان رشته ماند." },
+      { "kind": "must_have", "propertyId": "cold", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "سرم در گرمای بازار خنک و روشن ماند.", "unmetFeedbackFa": "گرما به شقیقه‌ام زد و جلای دانه‌ها یکی شد." },
+      { "kind": "preferred", "propertyId": "wake", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "تا شب هم بیدار ماندم و رشته کامل شد.", "unmetFeedbackFa": "انتخاب درست بود، اما کار تا فردا ماند." }
+    ],
+    "appearance": "woman_pearl"
+  },
+  {
+    "id": "c67_joy_strength",
+    "nameFa": "جمشید بندباز",
+    "requestFa": "امشب روی بند، شادی باید در قدمم پیدا باشد و نیرو در ساقم بماند. سستی نیاور؛ آن بالا یک لرزش کوچک میان تشویق و فریاد فرق می‌گذارد.",
+    "summaryFa": "شادی و نیرو روی بند",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "joy", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "لبخندم تا آن سوی بند رسید و میدان دست زد.", "unmetFeedbackFa": "قدم برداشتم، اما شادی از نمایشم رفته بود." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "ساقم تا فرود آخر محکم ماند.", "unmetFeedbackFa": "نیمه راه پاهایم خالی کرد و به چوب آویختم." },
+      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "کرختی نیامد و چوب تعادل نلرزید.", "unmetFeedbackFa": "سستی در دستم نشست و چوب یک‌سو افتاد." }
+    ],
+    "appearance": "man_rope"
+  },
+  {
+    "id": "c50_wake_warm",
+    "nameFa": "زرین زعفران‌کار",
+    "requestFa": "گل زعفران پیش از برآمدن آفتاب باید چیده شود و سبدها روی هم مانده‌اند. چشمم را بیدار و دستم را گرم نگه دار؛ اگر نیرویی هم برسد، رشته‌ای زیر پا تلف نمی‌شود.",
+    "summaryFa": "بیداری و گرما برای زعفران",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.3, "direction": "at_least", "metFeedbackFa": "پیش از آفتاب همه ردیف‌ها را دیدم و چیدم.", "unmetFeedbackFa": "پلکم سنگین شد و آفتاب روی گل‌های مانده افتاد." },
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "انگشتانم در سرمای سحر گرم و تند ماند.", "unmetFeedbackFa": "بیدار بودم، اما سرما دستم را از کار انداخت." },
+      { "kind": "preferred", "propertyId": "strength", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "سبدهای پر را هم خودم تا خانه بردم.", "unmetFeedbackFa": "گل‌ها چیده شد، اما سبدها در مزرعه ماند." }
+    ],
+    "appearance": "woman_saffron"
+  },
+  {
+    "id": "c65_warm_strength",
+    "nameFa": "نادر ساربان",
+    "requestFa": "شب کویر سرد است و شترِ بارکش اگر بنشیند، تا صبح برنمی‌خیزد. تنم را گرم و دستم را نیرومند کن؛ سستی میان دو منزل یعنی جا ماندن کاروان.",
+    "summaryFa": "گرما و نیرو برای کاروان",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "سرمای کویر پشت قبایم ماند.", "unmetFeedbackFa": "باد شب تا استخوانم رفت و قدمم کند شد." },
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "بار کج را بالا کشیدم و شتر دوباره راه افتاد.", "unmetFeedbackFa": "گرم شدم، اما زور راست کردن بار را نداشتم." },
+      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "سستی نیامد و کاروان منزل را گم نکرد.", "unmetFeedbackFa": "کرختی به پاهایم افتاد و قافله ایستاد." }
+    ],
+    "appearance": "man_caravan"
+  },
+  {
+    "id": "c69_calm_focus",
+    "nameFa": "ننه روح‌انگیز",
+    "requestFa": "امشب فال‌های زیادی در این کتاب مانده و هر بیت را باید با دل آرام و ذهن جمع خواند. آشوب را از سینه‌ام بردار و حواسم را نگه دار؛ شور بی‌جا معنی حافظ را کج می‌کند.",
+    "summaryFa": "آرامش و تمرکز برای فال",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "calm", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "دلم آرام گرفت و کتاب با من مهربان شد.", "unmetFeedbackFa": "آشوب سینه نگذاشت صدای بیت را بشنوم." },
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "هر اشاره بیت را درست به صاحب فال رساندم.", "unmetFeedbackFa": "معنی میان دو بیت از دستم گریخت." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "تا آخر شب چشمم روی دیوان ماند.", "unmetFeedbackFa": "روی کتاب چرت زدم و فال آخر بی‌جواب ماند." }
+    ],
+    "appearance": "woman_nana_fortune"
+  },
+  {
+    "id": "c12_focus_wake",
+    "nameFa": "بانو پروانه",
+    "requestFa": "نسخه‌ی دیوان را تا سحر باید تمام کنم و هر سطرش اگر غلط شود، از نو. ذهنم را جمع کن و چشمم را بیدار نگه دار. اما گرم و تب‌دار نکن، دستم خیس می‌شود و مرکب پخش.",
+    "summaryFa": "تمرکز و بیداری، بی‌تب",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.7,
+        "direction": "at_least",
+        "metFeedbackFa": "سطرها راست نشستند؛ یک غلط هم نکردم.",
+        "unmetFeedbackFa": "حواسم رفت و دو صفحه را از نو نوشتم."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "wake",
+        "threshold": 1.4,
+        "direction": "at_least",
+        "metFeedbackFa": "تا سحر چشمم روشن ماند.",
+        "unmetFeedbackFa": "نیمه‌شب چشمم گرم شد و قلم از دستم افتاد."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "warm",
+        "threshold": 1.5,
+        "direction": "at_most",
+        "metFeedbackFa": "دستم خنک و خشک ماند؛ مرکب پخش نشد.",
+        "unmetFeedbackFa": "ولی تنم داغ شد و عرق دستم صفحه را خراب کرد."
+      }
+    ],
+    "preferredTags": ["clear_mind"],
+    "appearance": "woman_letters"
+  },
+  {
+    "id": "c19_calm_focus",
+    "nameFa": "بانو ترانه",
+    "requestFa": "فردا باید جلوی بزرگان دربار شعر بخوانم و از حالا دلم می‌لرزد و کلمات از ذهنم می‌پرند. دلم را آرام کن و ذهنم را جمع؛ اما خواب‌آور نه، که وسط مجلس خمیازه بکشم رسوایی است.",
+    "summaryFa": "آرامش و تمرکز برای مجلس",
+    "requirements": [
+      {
+        "kind": "must_have",
+        "propertyId": "calm",
+        "threshold": 1.5,
+        "direction": "at_least",
+        "metFeedbackFa": "دلم آرام گرفت و صدایم نلرزید.",
+        "unmetFeedbackFa": "دلم هنوز می‌لرزد؛ این معجون آرامم نکرد."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "focus",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "بیت‌ها یکی پس از دیگری آمدند؛ مجلس آفرین گفت.",
+        "unmetFeedbackFa": "وسط غزل کلمات گم شدند و سرخ شدم."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.2,
+        "direction": "at_most",
+        "metFeedbackFa": "تا پایان مجلس سرحال ماندم.",
+        "unmetFeedbackFa": "اما پلک‌هایم سنگین شد و یک بیت را با خمیازه خواندم."
+      }
+    ],
+    "appearance": "woman_noble"
   },
   {
     "id": "c7_warm_strong",
@@ -160,30 +1347,61 @@
     "appearance": "man_porter"
   },
   {
-    "id": "c8_restful",
-    "nameFa": "ننه‌زهرا",
-    "requestFa": "شب‌ها خوابم نمی‌برد و وقتی هم می‌خوابم، خوابم آشفته است و با کوچک‌ترین صدا می‌پرم. آرامش می‌خواهم و خوابی که واقعاً راحت باشد. صبح که برمی‌خیزم باید جان داشته باشم، نه اینکه تمام شب را با خیال جنگیده باشم.",
-    "summaryFa": "خوابِ آرام و راحت",
+    "id": "c44_focus_calm",
+    "nameFa": "فروزان صحاف",
+    "requestFa": "شیرازه دیوان که بلغزد، صد برگ یک‌جا آواره می‌شود. ذهنی جمع و دلی آرام می‌خواهم تا سوزن از سوراخ خودش بگذرد و چرم خط نیفتد.",
+    "summaryFa": "تمرکز آرام برای صحافی",
     "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "sleep",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "بالأخره چشمم گرم شد و تا صبح دوام آورد.",
-        "unmetFeedbackFa": "باز تا سحر چشم روی هم نگذاشتم؛ این شربت خواب نیاورد."
-      },
+      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "برگ‌ها هم‌قد نشستند و شیرازه محکم شد.", "unmetFeedbackFa": "یک دسته برگ وارونه رفت و کار از نو ماند." },
+      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دستم بی‌لرزش از چرم و کاغذ گذشت.", "unmetFeedbackFa": "حواسم جمع بود، اما عجله سوزن را کج برد." },
+      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "شتاب به جانم نیفتاد و جلد سالم ماند.", "unmetFeedbackFa": "بی‌قراری آمد و استخوان‌مال روی چرم خط انداخت." }
+    ],
+    "appearance": "woman_bookbinder"
+  },
+  {
+    "id": "c53_strength_warm",
+    "nameFa": "اردشیر پهلوان",
+    "requestFa": "فردا میل‌های سنگین را پیش چشم اهل زورخانه می‌گردانم و هوای سحر سرد است. نیرو به بازو و گرما به شانه‌ام بده، اما شور بی‌مهار نیاور که ضرب مرشد را گم کنم.",
+    "summaryFa": "نیرو و گرما برای زورخانه",
+    "requirements": [
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "میل‌ها سبک شدند و بازو تا ضرب آخر ایستاد.", "unmetFeedbackFa": "میل از نیمه بالاتر نرفت و بازویم خالی کرد." },
+      { "kind": "preferred", "propertyId": "warm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "سرمای سحر از شانه‌ام دور ماند.", "unmetFeedbackFa": "زور آمد، اما سرما مفصل‌هایم را بست." },
+      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دل مهار شد و هر گردش روی ضرب نشست.", "unmetFeedbackFa": "خونم جوشید و یک دور از ضرب مرشد جلو افتادم." }
+    ],
+    "appearance": "man_pahlevan"
+  },
+  {
+    "id": "c28_calm_cold",
+    "nameFa": "پریسا گلاب",
+    "requestFa": "دیگ گلاب از سحر روی آتش است و بویش اگر بسوزد، حاصلِ امسال خراب می‌شود. دلم را آرام کن و سرم را خنک نگه دار که بفهمم عرق کی باید برگردد. خواب به چشمم نیاید.",
+    "summaryFa": "آرامش و خنکی پای دیگ",
+    "requirements": [
       {
         "kind": "must_have",
         "propertyId": "calm",
         "threshold": 1.8,
         "direction": "at_least",
-        "metFeedbackFa": "خیال‌هایم آرام گرفتند؛ دیگر از هر سایه‌ای نپریدم.",
-        "unmetFeedbackFa": "خوابم برد اما دلم شور می‌زد؛ خوابِ راحتی نبود."
+        "metFeedbackFa": "دل آرام شد و دیگ را به‌موقع از آتش کشیدم.",
+        "unmetFeedbackFa": "هنوز دلم می‌جنبید و وقتِ برگشتن عرق را از دست دادم."
+      },
+      {
+        "kind": "must_have",
+        "propertyId": "cold",
+        "threshold": 1.2,
+        "direction": "at_least",
+        "metFeedbackFa": "سرم خنک ماند میان بخار دیگ.",
+        "unmetFeedbackFa": "گرما زد به سرم و بوی سوختگی را دیر فهمیدم."
+      },
+      {
+        "kind": "avoid",
+        "propertyId": "sleep",
+        "threshold": 1.3,
+        "direction": "at_most",
+        "metFeedbackFa": "چشمم روی دیگ ماند.",
+        "unmetFeedbackFa": "ولی کنار دیگ چرت زدم و گلاب سوخت."
       }
     ],
-    "preferredTags": ["restful"],
-    "appearance": "woman_elder_zahra"
+    "appearance": "woman_perfumer"
   },
   {
     "id": "c9_everything",
@@ -243,244 +1461,52 @@
     "appearance": "man_khwaja"
   },
   {
-    "id": "c10_pain_awake",
-    "nameFa": "بانو لیلا",
-    "requestFa": "درد امانم را بریده، اما تا سپیده باید بیدار بمانم؛ کسی نیست کار را جمع کند. شب‌ها خوابم نمی‌برد ولی صبح باید سرِ کار هوشیار باشم. اگر سست شوم یا خوابم ببرد، همه‌چیز از دست می‌رود. دردم را بگیر و بیداری را از من نگیر.",
-    "summaryFa": "درد شدید، بیداری ناگزیر",
+    "id": "c47_pain_calm",
+    "nameFa": "سمیرا ماما",
+    "requestFa": "امشب زائو تا سپیده به دست‌های من نیاز دارد و دردِ کمرم امان بریده است. دردم را کم کن و دلم را آرام نگه دار؛ ترس من اگر به اتاق برسد، کار مادر دشوارتر می‌شود.",
+    "summaryFa": "تسکین و آرامش برای ماما",
     "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "pain_relief",
-        "threshold": 2.7,
-        "direction": "at_least",
-        "metFeedbackFa": "دردم خیلی بهتر شد؛ توانستم روی پا بمانم.",
-        "unmetFeedbackFa": "درد همان است؛ با این حال که نمی‌شود تا سپیده ایستاد."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.6,
-        "direction": "at_least",
-        "metFeedbackFa": "چشمم روشن ماند؛ تا سپیده هوشیار بودم.",
-        "unmetFeedbackFa": "درد کم شد اما بیداری نیامد؛ سرم سنگین بود."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "critical": true,
-        "metFeedbackFa": "خواب به چشم نیامد؛ کار زمین نماند.",
-        "unmetFeedbackFa": "نیمه‌شب خوابم برد؛ وقتی بیدار شدم دیر شده بود."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "weakness",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "critical": true,
-        "metFeedbackFa": "سست نشدم؛ جان در تنم ماند.",
-        "unmetFeedbackFa": "تا صبح انگار جان توی تنم نبود؛ روی پا بند نمی‌شدم."
-      }
+      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "کمرم راست شد و تا سپیده کنار مادر ماندم.", "unmetFeedbackFa": "درد رهایم نکرد و نتوانستم خم شوم." },
+      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نفسم آرام بود و مادر هم از صدایم قوت گرفت.", "unmetFeedbackFa": "درد کمتر شد، اما نگرانی‌ام اتاق را پر کرد." }
     ],
-    "appearance": "woman_healer"
+    "appearance": "woman_midwife"
   },
   {
-    "id": "c11_joy",
-    "nameFa": "بانو مهرناز",
-    "requestFa": "از وقتی حجره‌ی پارچه‌ام را باز کرده‌ام، لبخندم را جا گذاشته‌ام. مشتری که می‌آید، از رویم می‌فهمد که خسته‌ام و می‌رود. چیزی می‌خواهم که دلم را باز کند و رنگ به رویم بیاورد؛ خریدار به روی خوش برمی‌گردد.",
-    "summaryFa": "شادی برای حجره‌دار",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "دلم باز شد؛ امروز از هر مشتری با خنده خداحافظی کردم.",
-        "unmetFeedbackFa": "همان ترش‌رویی خودم؛ این معجون لبخندی نیاورد."
-      }
-    ],
-    "appearance": "woman_cloth"
-  },
-  {
-    "id": "c12_focus_wake",
-    "nameFa": "بانو پروانه",
-    "requestFa": "نسخه‌ی دیوان را تا سحر باید تمام کنم و هر سطرش اگر غلط شود، از نو. ذهنم را جمع کن و چشمم را بیدار نگه دار. اما گرم و تب‌دار نکن، دستم خیس می‌شود و مرکب پخش.",
-    "summaryFa": "تمرکز و بیداری، بی‌تب",
+    "id": "c6_focus_calm",
+    "nameFa": "بانو فریبا",
+    "requestFa": "باید سرِ سرمه‌دان و قلم، خط را راست بکشم. ذهنم باید جمع باشد، اما اگر دلم بپرد و دستم به هیجان بیفتد، طلا روی صفحه می‌چکد. تمرکزی آرام می‌خواهم، نه شور و شوقی که دست را بلرزاند.",
+    "summaryFa": "تمرکز آرام، نه هیجان",
     "requirements": [
       {
         "kind": "must_have",
         "propertyId": "focus",
         "threshold": 1.7,
         "direction": "at_least",
-        "metFeedbackFa": "سطرها راست نشستند؛ یک غلط هم نکردم.",
-        "unmetFeedbackFa": "حواسم رفت و دو صفحه را از نو نوشتم."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.4,
-        "direction": "at_least",
-        "metFeedbackFa": "تا سحر چشمم روشن ماند.",
-        "unmetFeedbackFa": "نیمه‌شب چشمم گرم شد و قلم از دستم افتاد."
+        "metFeedbackFa": "چشمم روی خط ماند و دستم فرمان برد.",
+        "unmetFeedbackFa": "باز حواسم رفت؛ این شربت قلم را آرام نکرد."
       },
       {
         "kind": "avoid",
-        "propertyId": "warm",
-        "threshold": 1.5,
-        "direction": "at_most",
-        "metFeedbackFa": "دستم خنک و خشک ماند؛ مرکب پخش نشد.",
-        "unmetFeedbackFa": "ولی تنم داغ شد و عرق دستم صفحه را خراب کرد."
-      }
-    ],
-    "preferredTags": ["clear_mind"],
-    "appearance": "woman_letters"
-  },
-  {
-    "id": "c13_pain_calm",
-    "nameFa": "بانو گیسو",
-    "requestFa": "از صبح تا شب پشت دار قالی نشسته‌ام و شانه‌ام گره خورده، انگشتانم می‌سوزد. دردم را بگیر، و اگر می‌شود این دلِ بی‌قرار را هم آرام کن؛ گره‌ها با دست لرزان کج می‌شوند.",
-    "summaryFa": "درد شانه و آرامش دست",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "pain_relief",
-        "threshold": 2.0,
-        "direction": "at_least",
-        "metFeedbackFa": "شانه‌ام وا شد؛ انگشتانم دوباره رقصیدند روی دار.",
-        "unmetFeedbackFa": "شانه همان سنگ است که بود؛ به دردم نرسید."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "calm",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "دستم هم آرام گرفت و گره‌ها راست نشستند.",
-        "unmetFeedbackFa": "درد کم شد ولی دستم هنوز می‌لرزید."
-      }
-    ],
-    "appearance": "woman_weaver"
-  },
-  {
-    "id": "c14_warm_calm",
-    "nameFa": "بانو شیرین",
-    "requestFa": "بیمارهای من در سرمای زمستان می‌لرزند و از ترس، خواب به چشم‌شان نمی‌آید. معجونی می‌خواهم که تن را گرم کند و دل را آرام؛ اما نه آن‌قدر خواب‌آور که نتوانند صبح برخیزند.",
-    "summaryFa": "گرمی و آرامش برای بیماران",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "warm",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "لرزشان بند آمد؛ گرما نشست به تن‌شان.",
-        "unmetFeedbackFa": "هنوز می‌لرزند؛ این معجون گرم نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "calm",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "ترس‌شان خوابید و نفس‌شان آرام شد.",
-        "unmetFeedbackFa": "گرم شدند اما دل‌شان همان شور را می‌زد."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.8,
-        "direction": "at_most",
-        "metFeedbackFa": "صبح هم سرِ وقت برخاستند.",
-        "unmetFeedbackFa": "ولی تا ظهر خواب بودند و داروی صبح از دست رفت."
-      }
-    ],
-    "preferredTags": ["warming_comfort"],
-    "appearance": "woman_herbhealer"
-  },
-  {
-    "id": "c15_focus_nosleep",
-    "nameFa": "میرزا کیان",
-    "requestFa": "امتحان مدرسه‌ی نظامیه نزدیک است و باید سه کتاب را در یک هفته از بر کنم. ذهنی روشن می‌خواهم؛ اما هر معجونی که خواب بیاورد، کتاب را از دستم می‌گیرد.",
-    "summaryFa": "ذهن روشن برای درس",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 2.0,
-        "direction": "at_least",
-        "metFeedbackFa": "کتاب باز شد و ذهنم هر سطر را نگه داشت.",
-        "unmetFeedbackFa": "کلمات از ذهنم می‌ریختند؛ این معجون تمرکزی نداد."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
+        "propertyId": "excitement",
         "threshold": 1.0,
         "direction": "at_most",
-        "critical": true,
-        "metFeedbackFa": "بیدار ماندم و درس را جلو بردم.",
-        "unmetFeedbackFa": "سرم روی کتاب افتاد و تا صبح خوابم برد."
+        "metFeedbackFa": "دلم نپرید؛ توانستم آرام کار کنم.",
+        "unmetFeedbackFa": "ذهنم تیز شد اما دستم از هیجان لرزید و خط را خراب کرد."
       }
     ],
-    "preferredTags": ["clear_mind"],
-    "appearance": "man_scholar"
+    "appearance": "woman_scribe"
   },
   {
-    "id": "c16_joy_strength",
-    "nameFa": "نوازنده بردیا",
-    "requestFa": "امشب در جشن عروسیِ بزرگ می‌نوازم و تا صبح باید انگشتانم روی تار برقصند. شادی می‌خواهم که به ساز بریزد و نیرو که دستم نیفتد. سستی و کرختی را از من دور کن.",
-    "summaryFa": "شادی و نیرو برای شب جشن",
+    "id": "c66_strength_wake",
+    "nameFa": "بابک نیزه‌دار",
+    "requestFa": "سپیده میدان، نوک نیزه باید تا پایان تاخت بالا بماند و چشم از صف روبه‌رو برندارد. نیرو به بازو و بیداری به نگاهم بده؛ خواب حتی به اندازه یک پلک هم نه.",
+    "summaryFa": "نیرو و بیداری برای نیزه",
     "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "شادی از انگشتانم به تار ریخت؛ مجلس رقصید.",
-        "unmetFeedbackFa": "ساز خشک و بی‌جان ماند؛ شادی‌ای در این شیشه نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "strength",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "تا سحر نواختم و دستم نیفتاد.",
-        "unmetFeedbackFa": "نیمه‌ی شب دستم سست شد و ساز از کوک رفت."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "weakness",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "metFeedbackFa": "کرختی هم نیامد؛ چه شبی شد!",
-        "unmetFeedbackFa": "اما کرختی در تنم نشست و مضراب از دستم لیز خورد."
-      }
+      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "نیزه تا پایان تاخت راست در دستم ماند.", "unmetFeedbackFa": "بازویم افتاد و نوک نیزه پیش از نشان پایین آمد." },
+      { "kind": "must_have", "propertyId": "wake", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "صف روبه‌رو تا آخر در چشمم روشن بود.", "unmetFeedbackFa": "نگاهم کند شد و فاصله را دیر سنجیدم." },
+      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.3, "direction": "at_most", "metFeedbackFa": "خواب حتی به پلکم نزدیک نشد.", "unmetFeedbackFa": "یک سنگینی کوتاه آمد و نشان از کنارم گذشت." }
     ],
-    "appearance": "man_musician"
-  },
-  {
-    "id": "c17_focus_wake",
-    "nameFa": "مریم شاگرد",
-    "requestFa": "فردا استادم از سه دفتر هندسه می‌پرسد و من هنوز یک دفتر را نخوانده‌ام. ذهنی روشن می‌خواهم که تا سحر روی خط‌ها بماند. خواب‌آور به من نده؛ هر چه بخوانم از سرم می‌رود.",
-    "summaryFa": "ذهن روشن تا سحر",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "خط‌ها یکی‌یکی در ذهنم نشست؛ صبح سربلند جواب دادم.",
-        "unmetFeedbackFa": "ذهنم مثل بادبادک هر طرف می‌رفت؛ تمرکزی در این معجون نبود."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "critical": true,
-        "metFeedbackFa": "تا سحر بیدار ماندم و دفترها را تمام کردم.",
-        "unmetFeedbackFa": "روی دفتر خوابم برد و صبح با جوهر روی گونه بیدار شدم."
-      }
-    ],
-    "preferredTags": ["clear_mind"],
-    "appearance": "woman_student"
+    "appearance": "man_lancer"
   },
   {
     "id": "c18_joy",
@@ -498,1031 +1524,5 @@
       }
     ],
     "appearance": "woman_florist"
-  },
-  {
-    "id": "c19_calm_focus",
-    "nameFa": "بانو ترانه",
-    "requestFa": "فردا باید جلوی بزرگان دربار شعر بخوانم و از حالا دلم می‌لرزد و کلمات از ذهنم می‌پرند. دلم را آرام کن و ذهنم را جمع؛ اما خواب‌آور نه، که وسط مجلس خمیازه بکشم رسوایی است.",
-    "summaryFa": "آرامش و تمرکز برای مجلس",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "calm",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "دلم آرام گرفت و صدایم نلرزید.",
-        "unmetFeedbackFa": "دلم هنوز می‌لرزد؛ این معجون آرامم نکرد."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "بیت‌ها یکی پس از دیگری آمدند؛ مجلس آفرین گفت.",
-        "unmetFeedbackFa": "وسط غزل کلمات گم شدند و سرخ شدم."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "metFeedbackFa": "تا پایان مجلس سرحال ماندم.",
-        "unmetFeedbackFa": "اما پلک‌هایم سنگین شد و یک بیت را با خمیازه خواندم."
-      }
-    ],
-    "appearance": "woman_noble"
-  },
-  {
-    "id": "c20_warm_strength",
-    "nameFa": "یاسمن رهگذر",
-    "requestFa": "فردا از گردنه‌ی برفی می‌گذرم و کاروان منتظر هیچ‌کس نمی‌ماند. تنم را گرم کن و پاهایم را محکم؛ سستی در آن سرما یعنی جا ماندن از قافله.",
-    "summaryFa": "گرمی و نیرو برای گردنه",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "warm",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "گرمی تا نوک انگشتانم رفت؛ برف را حس نکردم.",
-        "unmetFeedbackFa": "سرما تا مغز استخوانم رفت؛ گرمی‌ای در این شیشه نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "strength",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "پاهایم تا آن سوی گردنه محکم ماند.",
-        "unmetFeedbackFa": "نیمه‌ی راه پاهایم سست شد و قافله جلو رفت."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "weakness",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "metFeedbackFa": "کرختی هم نیامد؛ اول از همه رسیدم.",
-        "unmetFeedbackFa": "اما کرختی در تنم نشست و روی برف نشستم."
-      }
-    ],
-    "appearance": "woman_traveler"
-  },
-  {
-    "id": "c21_wake",
-    "nameFa": "نسرین نانوا",
-    "requestFa": "خمیر باید پیش از سحر ور بیاید و تنور از نیمه‌شب روشن شود؛ اما دو شب است چشمم روی هم نرفته و حالا سر پا خوابم می‌برد. چیزی بده که تا طلوع بیدار بمانم؛ اگر خوابم برد نان محله می‌سوزد.",
-    "summaryFa": "بیداری تا طلوع",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 2.0,
-        "direction": "at_least",
-        "metFeedbackFa": "تا طلوع سرپا ماندم و نان‌ها طلایی از تنور درآمد.",
-        "unmetFeedbackFa": "بیداری‌ای در این شربت نبود؛ کنار تنور چرت زدم."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 0.8,
-        "direction": "at_most",
-        "critical": true,
-        "metFeedbackFa": "خواب حتی نزدیکم نشد.",
-        "unmetFeedbackFa": "خوابم برد و صبح بوی نان سوخته محله را پر کرد."
-      }
-    ],
-    "appearance": "woman_baker"
-  },
-  {
-    "id": "c22_pain_focus",
-    "nameFa": "سامان کاتب",
-    "requestFa": "از صبح تا شب برای استادم نسخه می‌نویسم و انگشتانم از قلم گرفته و می‌سوزد. دردش را بگیر و ذهنم را هم کمی جمع کن که سطر جا نیندازم؛ استاد هر سطر افتاده را از مزدم کم می‌کند.",
-    "summaryFa": "تسکین دست و ذهن جمع",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "pain_relief",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "دستم باز شد و قلم دوباره روان رفت.",
-        "unmetFeedbackFa": "انگشتانم هنوز گرفته است؛ این معجون به دردم نرسید."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "یک سطر هم جا نینداختم؛ استاد مزدم را کامل داد.",
-        "unmetFeedbackFa": "دو سطر جا انداختم و استاد مزدم را کم کرد."
-      }
-    ],
-    "appearance": "man_apprentice"
-  },
-  {
-    "id": "c23_pain_awake",
-    "nameFa": "سارا کوزه‌گر",
-    "requestFa": "چرخ از صبح تا شب می‌چرخد و شانه‌ام از گلِ خیس گرفته. دردم را بگیر، اما خوابم نکن؛ کوزه‌ها باید تا غروب از کوره دربیایند. اگر دستم سست شود، لعاب می‌ریزد.",
-    "summaryFa": "تسکین شانه، بی‌خواب و بی‌سستی",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "pain_relief",
-        "threshold": 2.2,
-        "direction": "at_least",
-        "metFeedbackFa": "شانه‌ام وا شد و دوباره پای چرخ نشستم.",
-        "unmetFeedbackFa": "شانه همان سنگ است؛ این معجون به دردم نرسید."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.7,
-        "direction": "at_most",
-        "metFeedbackFa": "خواب به چشم نیامد و کوره تا غروب روشن ماند.",
-        "unmetFeedbackFa": "ولی کنار کوره خوابم برد و کوزه‌ها خام ماندند."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "weakness",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "metFeedbackFa": "دستم هم سست نشد؛ لعاب یک‌دست نشست.",
-        "unmetFeedbackFa": "درد کمتر شد اما دستم یاری نکرد و لعاب ریخت."
-      }
-    ],
-    "appearance": "woman_potter"
-  },
-  {
-    "id": "c24_joy_focus",
-    "nameFa": "نیلا نگارگر",
-    "requestFa": "امروز باید یک مجلس را با لاجورد و طلا تمام کنم. دلم باید باز باشد که رنگ زنده بنشیند، و چشمم جمع که خط طلا کج نرود. اگر هیجان به دستم بیفتد، قلم‌مو می‌لرزد.",
-    "summaryFa": "شادی و تمرکز، بی‌لرزش دست",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "رنگ جان گرفت؛ خودم هم از مجلس خوشم آمد.",
-        "unmetFeedbackFa": "مجلس سرد و بی‌جان ماند؛ شادی‌ای در این شیشه نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "خط طلا تا آخر راست نشست.",
-        "unmetFeedbackFa": "حواسم رفت و طلا از خط بیرون زد."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "excitement",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "metFeedbackFa": "دستم هم نلرزید.",
-        "unmetFeedbackFa": "ذهنم تیز شد اما دستم از هیجان لرزید."
-      }
-    ],
-    "appearance": "woman_painter"
-  },
-  {
-    "id": "c25_joy_wake",
-    "nameFa": "آوا خنیا",
-    "requestFa": "امشب در قهوه‌خانه می‌خوانم و تا آخر مجلس باید صدا داشته باشم. شادی می‌خواهم که به صدا برسد و بیداری که پلکم نیفتد. سرما هم به گلویم نخورد.",
-    "summaryFa": "شادی و بیداری برای آواز",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "صدا باز شد و مجلس با من خواند.",
-        "unmetFeedbackFa": "صدا خشک ماند؛ شادی‌ای در این معجون نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.4,
-        "direction": "at_least",
-        "metFeedbackFa": "تا آخر مجلس چشمم روشن ماند.",
-        "unmetFeedbackFa": "نیمه‌ی مجلس پلک‌هایم سنگین شد."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "cold",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "metFeedbackFa": "گلو گرم ماند و صدا نبرید.",
-        "unmetFeedbackFa": "ولی سرما نشست به گلو و وسط آواز سرفه کردم."
-      }
-    ],
-    "appearance": "woman_singer"
-  },
-  {
-    "id": "c26_strength_warm",
-    "nameFa": "رکسانا کماندار",
-    "requestFa": "فردا در میدان اسب می‌تازم و کمان باید تا آخر ثابت بماند. نیرو می‌خواهم و تنِ گرم؛ اما اگر دلم بی‌قرار شود، تیر به هدف نمی‌خورد.",
-    "summaryFa": "نیرو و گرما، بی‌بی‌قراری",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "strength",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "بازو تا آخر میدان فرمان برد.",
-        "unmetFeedbackFa": "زورم نرسید و کمان را زمین گذاشتم."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "warm",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "تنم هم گرم ماند روی زین.",
-        "unmetFeedbackFa": "نیرو بود اما سرما انگشتانم را گرفت."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "excitement",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "critical": true,
-        "metFeedbackFa": "دل آرام ماند و تیر به هدف نشست.",
-        "unmetFeedbackFa": "دلم بی‌قرار شد و تیرها همه به خطا رفت."
-      }
-    ],
-    "appearance": "woman_rider"
-  },
-  {
-    "id": "c27_joy_calm",
-    "nameFa": "مهتاب",
-    "requestFa": "فردا عقد است و از حالا دلم بالا و پایین می‌پرد. می‌خواهم شاد باشم و آرام، که جلوی آینه دستم نلرزد. فقط خواب‌آلودم نکن؛ حنا هنوز خشک نشده.",
-    "summaryFa": "شادی و آرامش شب عقد",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "لبخند خودش آمد؛ آینه را که دیدم دلم باز شد.",
-        "unmetFeedbackFa": "همان دلشوره ماند؛ شادی‌ای در این شیشه نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "calm",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "دستم جلوی آینه آرام گرفت.",
-        "unmetFeedbackFa": "شاد شدم اما دل هنوز می‌لرزید."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "metFeedbackFa": "تا آخر شب بیدار ماندم و حنا خشک شد.",
-        "unmetFeedbackFa": "ولی روی پشتی خوابم برد و حنا پخش شد."
-      }
-    ],
-    "appearance": "woman_bride"
-  },
-  {
-    "id": "c28_calm_cold",
-    "nameFa": "پریسا گلاب",
-    "requestFa": "دیگ گلاب از سحر روی آتش است و بویش اگر بسوزد، حاصلِ امسال خراب می‌شود. دلم را آرام کن و سرم را خنک نگه دار که بفهمم عرق کی باید برگردد. خواب به چشمم نیاید.",
-    "summaryFa": "آرامش و خنکی پای دیگ",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "calm",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "دل آرام شد و دیگ را به‌موقع از آتش کشیدم.",
-        "unmetFeedbackFa": "هنوز دلم می‌جنبید و وقتِ برگشتن عرق را از دست دادم."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "cold",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "سرم خنک ماند میان بخار دیگ.",
-        "unmetFeedbackFa": "گرما زد به سرم و بوی سوختگی را دیر فهمیدم."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.3,
-        "direction": "at_most",
-        "metFeedbackFa": "چشمم روی دیگ ماند.",
-        "unmetFeedbackFa": "ولی کنار دیگ چرت زدم و گلاب سوخت."
-      }
-    ],
-    "appearance": "woman_perfumer"
-  },
-  {
-    "id": "c29_focus_cold",
-    "nameFa": "شهرزاد زرگر",
-    "requestFa": "نگین فیروزه اگر یک خط کج بنشیند، حلقه را پس می‌دهند. ذهنی سرد و جمع می‌خواهم؛ اگر تا شب هم بیدار بمانم بهتر، کار حجره عقب است.",
-    "summaryFa": "ذهن جمع و سرِ خنک",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.6,
-        "direction": "at_least",
-        "metFeedbackFa": "نگین درست وسط نشست و حلقه را پذیرفتند.",
-        "unmetFeedbackFa": "خط کج شد و حلقه برگشت."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "cold",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "سرم خنک ماند و دستم عرق نکرد.",
-        "unmetFeedbackFa": "گرما به شقیقه‌ام زد و ذره‌بین را تار دیدم."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "wake",
-        "threshold": 1.0,
-        "direction": "at_least",
-        "metFeedbackFa": "تا شب هم بیدار ماندم و سفارش عقب‌مانده تمام شد.",
-        "unmetFeedbackFa": "کار درست شد اما نیمه‌شب چشمم گرم شد."
-      }
-    ],
-    "appearance": "woman_jeweler"
-  },
-  {
-    "id": "c30_joy",
-    "nameFa": "گلرخ",
-    "requestFa": "امشب در عروسی می‌رقصم و تا سحر باید لبخند روی صورتم بماند. شادی می‌خواهم که به پا برسد. خواب‌آور نده؛ وسط رقص نشستن رسوایی است.",
-    "summaryFa": "شادی تا آخر رقص",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "تا سحر رقصیدم و لبخند از صورتم نیفتاد.",
-        "unmetFeedbackFa": "پاهایم رفت اما دلم با آن‌ها نرفت؛ شادی‌ای نبود."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "metFeedbackFa": "خواب حتی نزدیکم نشد.",
-        "unmetFeedbackFa": "ولی وسط مجلس پلک‌هایم سنگین شد."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "excitement",
-        "threshold": 0.3,
-        "direction": "at_least",
-        "metFeedbackFa": "یک شورِ کوچک هم آمد و مجلس گرم‌تر شد.",
-        "unmetFeedbackFa": "شاد بودم، اما آن شورِ رقص نیامد."
-      }
-    ],
-    "appearance": "woman_dancer"
-  },
-  {
-    "id": "c31_wake_focus",
-    "nameFa": "ستاره رصد",
-    "requestFa": "ماه تمام است و تا سپیده باید اسطرلاب را بخوانم. چشمم باید بیدار بماند و ذهنم جمع، وگرنه درجه‌ها غلط می‌شوند. سرما هم اگر به دستم بنشیند، حلقه‌ی برنج از دستم می‌لغزد.",
-    "summaryFa": "بیداری و تمرکز شب رصد",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "تا سپیده چشمم روشن ماند.",
-        "unmetFeedbackFa": "نیمه‌شب پلک بر هم رفت و ماه را از دست دادم."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "درجه‌ها درست نشستند و هیچ خطایی نماند.",
-        "unmetFeedbackFa": "حواسم پرت شد و دو درجه را غلط نوشتم."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "cold",
-        "threshold": 1.5,
-        "direction": "at_most",
-        "metFeedbackFa": "دست گرم ماند و اسطرلاب نلغزید.",
-        "unmetFeedbackFa": "ولی سرما انگشتانم را گرفت و حلقه از دستم افتاد."
-      }
-    ],
-    "appearance": "woman_astronomer"
-  },
-  {
-    "id": "c32_strength_wake",
-    "nameFa": "هما بازدار",
-    "requestFa": "سپیده که بزند باید روی اسب باشم و دستکش شاهین سنگین است. نیرو می‌خواهم و چشمی که بیدار بماند. خواب‌آور نده؛ اگر پلکم بیفتد پرنده می‌پرد.",
-    "summaryFa": "نیرو و بیداری برای شکار سپیده",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "strength",
-        "threshold": 1.8,
-        "direction": "at_least",
-        "metFeedbackFa": "بازو تا آخر دشت فرمان برد و شاهین برگشت.",
-        "unmetFeedbackFa": "زورم نرسید و دستکش را پایین آوردم."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "چشمم تا بالا آمدن آفتاب روشن ماند.",
-        "unmetFeedbackFa": "نیمه‌ی راه پلک‌هایم سنگین شد."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.3,
-        "direction": "at_most",
-        "metFeedbackFa": "خواب حتی نزدیکم نشد.",
-        "unmetFeedbackFa": "ولی روی زین چرت زدم و پرنده رفت."
-      }
-    ],
-    "appearance": "woman_falconer"
-  },
-  {
-    "id": "c33_joy_warm",
-    "nameFa": "رؤیا",
-    "requestFa": "امشب در مجلس شعر می‌خوانم. دلم باید باز باشد که بیت جان بگیرد، و تنم گرم که صدا نلرزد. سرما اگر به گلویم بنشیند، ورق را می‌بندم.",
-    "summaryFa": "شادی و گرما برای مجلس شعر",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "joy",
-        "threshold": 1.5,
-        "direction": "at_least",
-        "metFeedbackFa": "صدا گرم شد و مجلس با بیت آخر نفس نگه داشت.",
-        "unmetFeedbackFa": "شعر خشک ماند؛ شادی‌ای در این شیشه نبود."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "warm",
-        "threshold": 1.3,
-        "direction": "at_least",
-        "metFeedbackFa": "تنم گرم ماند تا آخر مجلس.",
-        "unmetFeedbackFa": "شادی بود اما سرما به شانه‌ام نشست."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "cold",
-        "threshold": 1.0,
-        "direction": "at_most",
-        "metFeedbackFa": "گلو سرد نشد و بیت نبرید.",
-        "unmetFeedbackFa": "ولی سرما نشست به گلو و وسط بیت سرفه کردم."
-      }
-    ],
-    "appearance": "woman_poet"
-  },
-  {
-    "id": "c34_pain_cold",
-    "nameFa": "نرگس رنگ‌رز",
-    "requestFa": "انگشتانم از خمِ رنگ تاول زده و دیگ هنوز جوش است. درد را بگیر و سرم را خنک کن که بوی سوختگی را دیر نفهمم. فقط خوابم نکن؛ رنگ اگر ببندد، طاقه خراب می‌شود.",
-    "summaryFa": "تسکین دست و سرِ خنک",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "pain_relief",
-        "threshold": 1.6,
-        "direction": "at_least",
-        "metFeedbackFa": "دست وا شد و دوباره نخ را گرفتم.",
-        "unmetFeedbackFa": "انگشتان همان آتش است؛ این معجون به دردم نرسید."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "cold",
-        "threshold": 1.0,
-        "direction": "at_least",
-        "metFeedbackFa": "سرم میان بخار دیگ خنک ماند.",
-        "unmetFeedbackFa": "درد کمتر شد اما گرما زد به شقیقه‌ام."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.6,
-        "direction": "at_most",
-        "metFeedbackFa": "چشمم روی دیگ ماند و رنگ نبست.",
-        "unmetFeedbackFa": "ولی کنار دیگ خوابم برد و طاقه خراب شد."
-      }
-    ],
-    "appearance": "woman_dyer"
-  },
-  {
-    "id": "c35_focus_calm",
-    "nameFa": "سیمین شیشه",
-    "requestFa": "دهانه‌ی شیشه اگر یک لحظه بلرزد، می‌ترکد. ذهنی جمع می‌خواهم و دلی آرام. اگر بی‌قرار شوم، میله از دستم درمی‌رود.",
-    "summaryFa": "تمرکز و آرامش پای کوره",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.6,
-        "direction": "at_least",
-        "metFeedbackFa": "دهانه راست نشست و شیشه سالم ماند.",
-        "unmetFeedbackFa": "حواسم رفت و شیشه ترک خورد."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "calm",
-        "threshold": 1.2,
-        "direction": "at_least",
-        "metFeedbackFa": "دستم آرام ماند روی میله.",
-        "unmetFeedbackFa": "ذهنم جمع شد اما دل هنوز می‌لرزید."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "excitement",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "metFeedbackFa": "بی‌قراری نیامد و کار تمام شد.",
-        "unmetFeedbackFa": "ولی دلم بی‌قرار شد و میله از دستم افتاد."
-      }
-    ],
-    "appearance": "woman_glass"
-  },
-  {
-    "id": "c36_wake_warm",
-    "nameFa": "دلارام",
-    "requestFa": "بازار از سحر باز می‌شود و کیسه‌های ادویه سنگین‌اند. چشمم باید بیدار باشد و تنم گرم، وگرنه زعفران را با گلرنگ عوض می‌کنند. اگر زور هم بیاید که بهتر.",
-    "summaryFa": "بیداری و گرما برای بازار",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.3,
-        "direction": "at_least",
-        "metFeedbackFa": "تا ظهر چشمم روشن ماند و هیچ کیسه‌ای عوض نشد.",
-        "unmetFeedbackFa": "نیمه‌ی بازار پلک بر هم رفت."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "warm",
-        "threshold": 1.4,
-        "direction": "at_least",
-        "metFeedbackFa": "دست‌هایم میان بوی ادویه گرم ماند.",
-        "unmetFeedbackFa": "بیدار بودم اما سرما به انگشتانم نشست."
-      },
-      {
-        "kind": "preferred",
-        "propertyId": "strength",
-        "threshold": 1.0,
-        "direction": "at_least",
-        "metFeedbackFa": "کیسه‌ها را هم خودم تا حجره بردم.",
-        "unmetFeedbackFa": "بازار گذشت اما برای بردن بار زورم نرسید."
-      }
-    ],
-    "appearance": "woman_spice"
-  },
-  {
-    "id": "c37_focus_wake",
-    "nameFa": "آزاده",
-    "requestFa": "بازی تا نصف شب طول می‌کشد و یک سهل‌انگاری مهره را می‌بازم. ذهنم باید جمع باشد و چشمم بیدار. خواب اگر بیاید، اسب را خودم تقدیم حریف کرده‌ام.",
-    "summaryFa": "تمرکز و بیداری پای شطرنج",
-    "requirements": [
-      {
-        "kind": "must_have",
-        "propertyId": "focus",
-        "threshold": 1.6,
-        "direction": "at_least",
-        "metFeedbackFa": "تا آخر بازی هیچ مهره‌ای را ندیدم که نبازم.",
-        "unmetFeedbackFa": "حواسم پرت شد و اسب رفت."
-      },
-      {
-        "kind": "must_have",
-        "propertyId": "wake",
-        "threshold": 1.4,
-        "direction": "at_least",
-        "metFeedbackFa": "تا نصف شب چشمم روشن ماند.",
-        "unmetFeedbackFa": "نیمه‌ی بازی پلک‌هایم سنگین شد."
-      },
-      {
-        "kind": "avoid",
-        "propertyId": "sleep",
-        "threshold": 1.2,
-        "direction": "at_most",
-        "metFeedbackFa": "خواب نزدیک صفحه نیامد.",
-        "unmetFeedbackFa": "ولی سرِ صفحه چرت زدم و بازی را واگذار کردم."
-      }
-    ],
-    "appearance": "woman_chess"
-  },
-  {
-    "id": "c38_focus_calm",
-    "nameFa": "یلدا خوشنویس",
-    "requestFa": "نیمه‌شب باید سرلوح فرمان را به خطی بنویسم که یک دندانه‌اش هم نلرزد. ذهنم را جمع و دلم را آرام کن؛ قلم نی اگر هراس دست را بفهمد، مرکب آبرویم را می‌برد.",
-    "summaryFa": "تمرکز و آرامش برای خوشنویسی",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "هر دندانه سر جای خود نشست و قلم از فرمانم بیرون نرفت.", "unmetFeedbackFa": "حواسم میان سطرها گم شد و قلم راه خودش را رفت." },
-      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نبضم آرام شد و قطره‌ای مرکب نلرزید.", "unmetFeedbackFa": "ذهنم جمع بود، اما لرزش دل به سرِ قلم رسید." },
-      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "شور بی‌جا به دستم نیفتاد و فرمان پاک ماند.", "unmetFeedbackFa": "هیجان دستم را برد و یک کشیده را دو بار نوشتم." }
-    ],
-    "appearance": "woman_calligrapher"
-  },
-  {
-    "id": "c39_joy_focus",
-    "nameFa": "میترا کاشی‌گر",
-    "requestFa": "امروز باید ستاره‌های فیروزه‌ای ایوان را جفت کنم؛ رنگ بی‌دل می‌میرد و بندِ کج تا صد سال پیداست. شادی به دلم و تمرکز به چشمم بده، اما دستم را از شور نلرزان.",
-    "summaryFa": "شادی و دقت برای کاشی",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "فیروزه زیر دستم زنده شد و ایوان لبخند زد.", "unmetFeedbackFa": "رنگ‌ها سرد و مرده ماندند؛ دلم با کاشی همراه نشد." },
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "هر ستاره درست در بند همسایه نشست.", "unmetFeedbackFa": "یک بند کج شد و نقش تا بالای ایوان لغزید." },
-      { "kind": "preferred", "propertyId": "excitement", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "دستم هم آرام ماند و لعاب نشکست.", "unmetFeedbackFa": "ذهنم روشن شد، ولی شوق زیاد کاشی را از دستم انداخت." }
-    ],
-    "appearance": "woman_tilemaker"
-  },
-  {
-    "id": "c40_pain_calm",
-    "nameFa": "بهار قالی‌باف",
-    "requestFa": "از سپیده پشت دار نشسته‌ام و شانه‌ام مثل گره کور بسته است. درد را نرم کن و دستم را آرام؛ یک لرزش کافی است تا ترنج قالی کج از آب درآید.",
-    "summaryFa": "تسکین شانه و دست آرام",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "گره شانه‌ام باز شد و دستم دوباره به پود رسید.", "unmetFeedbackFa": "شانه‌ام هنوز مثل چوب دار سفت است." },
-      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "انگشتانم آرام گرفت و ترنج راست نشست.", "unmetFeedbackFa": "درد کمتر شد، اما دست بی‌قرار گره را کج زد." }
-    ],
-    "appearance": "woman_carpet"
-  },
-  {
-    "id": "c41_joy_wake",
-    "nameFa": "لادن چای‌دار",
-    "requestFa": "قهوه‌خانه تا سحر پر از مسافر است و استکان باید با روی خوش به دستشان برسد. دلم را باز و چشمم را روشن کن؛ سرما هم به دستم ننشیند که چای از سینی بریزد.",
-    "summaryFa": "شادی و بیداری قهوه‌خانه",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "با خنده چای ریختم و خستگی از مجلس رفت.", "unmetFeedbackFa": "استکان‌ها رسیدند، اما روی ترش من مهمان‌ها را خاموش کرد." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "تا سحر چشمم روشن ماند و سماور بی‌صاحب نشد.", "unmetFeedbackFa": "نیمه‌شب پلکم افتاد و سماور بی‌آب ماند." },
-      { "kind": "avoid", "propertyId": "cold", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دستم گرم ماند و استکانی نلرزید.", "unmetFeedbackFa": "سرما انگشتانم را گرفت و چای روی سینی ریخت." }
-    ],
-    "appearance": "woman_tea"
-  },
-  {
-    "id": "c42_joy_focus",
-    "nameFa": "پگاه نقال",
-    "requestFa": "امشب باید قصه رستم را چنان بگویم که کودک و پیر نفس نگه دارند. دلم را شاد و ذهنم را جمع کن؛ اگر بیت یا نامی از یادم برود، پهلوان وسط میدان تنها می‌ماند.",
-    "summaryFa": "شادی و تمرکز برای قصه",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "شور قصه به صدایم آمد و مجلس جان گرفت.", "unmetFeedbackFa": "قصه از دهانم سرد بیرون آمد و کسی چشم از زمین برنداشت." },
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "هر نام و هر بیت به وقت خودش بر زبانم نشست.", "unmetFeedbackFa": "میان نبرد نام پهلوان از یادم پرید." },
-      { "kind": "preferred", "propertyId": "excitement", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "هیجان مهار شد و رشته قصه از دستم نرفت.", "unmetFeedbackFa": "شورم بالا گرفت و دو پرده قصه را جابه‌جا گفتم." }
-    ],
-    "appearance": "woman_storyteller"
-  },
-  {
-    "id": "c43_joy_calm",
-    "nameFa": "هستی ابریشم‌فروش",
-    "requestFa": "فردا تاجران برای دیدن ابریشم‌های نو می‌آیند و دل من از حسابشان می‌لرزد. شادی می‌خواهم که رنگ‌ها را با لبخند نشان دهم و آرامشی که دستم روی پارچه نلرزد؛ خواب به چشمم نیاور.",
-    "summaryFa": "شادی آرام برای بازار ابریشم",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "رنگ ابریشم با لبخندم درخشید و حجره گرم شد.", "unmetFeedbackFa": "پارچه درخشید، اما دل گرفته‌ام مشتری را پس زد." },
-      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دستم آرام ماند و تا آخر چانه زدم.", "unmetFeedbackFa": "شاد شدم، ولی دلشوره حساب از سرم نیفتاد." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "پلکم سنگین نشد و همه طاقه‌ها را نشان دادم.", "unmetFeedbackFa": "میان معامله خمیازه کشیدم و تاجر راهش را گرفت." }
-    ],
-    "appearance": "woman_silk"
-  },
-  {
-    "id": "c44_focus_calm",
-    "nameFa": "فروزان صحاف",
-    "requestFa": "شیرازه دیوان که بلغزد، صد برگ یک‌جا آواره می‌شود. ذهنی جمع و دلی آرام می‌خواهم تا سوزن از سوراخ خودش بگذرد و چرم خط نیفتد.",
-    "summaryFa": "تمرکز آرام برای صحافی",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "برگ‌ها هم‌قد نشستند و شیرازه محکم شد.", "unmetFeedbackFa": "یک دسته برگ وارونه رفت و کار از نو ماند." },
-      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دستم بی‌لرزش از چرم و کاغذ گذشت.", "unmetFeedbackFa": "حواسم جمع بود، اما عجله سوزن را کج برد." },
-      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "شتاب به جانم نیفتاد و جلد سالم ماند.", "unmetFeedbackFa": "بی‌قراری آمد و استخوان‌مال روی چرم خط انداخت." }
-    ],
-    "appearance": "woman_bookbinder"
-  },
-  {
-    "id": "c45_focus_cold",
-    "nameFa": "دریا مرواریدفروش",
-    "requestFa": "مروارید خوب زیر نور یک نفس خودش را نشان می‌دهد و گرمای بازار چشم را فریب می‌دهد. سرم را خنک و نگاهم را جمع کن؛ اگر توانستم تا شب بیدار بمانم، رشته را همان امروز می‌بندم.",
-    "summaryFa": "دقت و خنکی برای مروارید",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "مروارید کدر را از میان صد دانه بیرون کشیدم.", "unmetFeedbackFa": "چشمم فریب خورد و دانه کدر میان رشته ماند." },
-      { "kind": "must_have", "propertyId": "cold", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "سرم در گرمای بازار خنک و روشن ماند.", "unmetFeedbackFa": "گرما به شقیقه‌ام زد و جلای دانه‌ها یکی شد." },
-      { "kind": "preferred", "propertyId": "wake", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "تا شب هم بیدار ماندم و رشته کامل شد.", "unmetFeedbackFa": "انتخاب درست بود، اما کار تا فردا ماند." }
-    ],
-    "appearance": "woman_pearl"
-  },
-  {
-    "id": "c46_strength_warm",
-    "nameFa": "آتوسا کوچ‌رو",
-    "requestFa": "صبح ایل از گردنه می‌گذرد و خورجین و چادر روی دست من است. نیرو به پاهایم و گرما به تنم بده، اما دل را چنان بی‌قرار نکن که راه باریک را خطا بروم.",
-    "summaryFa": "نیرو و گرما برای کوچ",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "خورجین سبک شد و قدمم تا قله کم نیاورد.", "unmetFeedbackFa": "پاهایم زیر بار ماند و ایل از من جلو زد." },
-      { "kind": "preferred", "propertyId": "warm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "باد گردنه از قبایم نگذشت.", "unmetFeedbackFa": "زور داشتم، اما سرما انگشتانم را بست." },
-      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دل آرام ماند و پیچ راه را درست گرفتم.", "unmetFeedbackFa": "بی‌قراری چشمم را بست و از پاکوب بیرون رفتم." }
-    ],
-    "appearance": "woman_nomad"
-  },
-  {
-    "id": "c47_pain_calm",
-    "nameFa": "سمیرا ماما",
-    "requestFa": "امشب زائو تا سپیده به دست‌های من نیاز دارد و دردِ کمرم امان بریده است. دردم را کم کن و دلم را آرام نگه دار؛ ترس من اگر به اتاق برسد، کار مادر دشوارتر می‌شود.",
-    "summaryFa": "تسکین و آرامش برای ماما",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "کمرم راست شد و تا سپیده کنار مادر ماندم.", "unmetFeedbackFa": "درد رهایم نکرد و نتوانستم خم شوم." },
-      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نفسم آرام بود و مادر هم از صدایم قوت گرفت.", "unmetFeedbackFa": "درد کمتر شد، اما نگرانی‌ام اتاق را پر کرد." }
-    ],
-    "appearance": "woman_midwife"
-  },
-  {
-    "id": "c48_strength_wake",
-    "nameFa": "پانیذ چاپار",
-    "requestFa": "این لوله پیام باید پیش از آفتاب به دژ برسد و زین راه درازی دارد. بازویم را نیرومند و چشمم را بیدار نگه دار؛ یک چرت روی اسب یعنی یک روز دیر رسیدن.",
-    "summaryFa": "نیرو و بیداری برای پیام",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "مهار تا آخر راه در دستم محکم ماند.", "unmetFeedbackFa": "بازویم افتاد و اسب قدمش را کند کرد." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "تا برج دژ چشمم روشن ماند.", "unmetFeedbackFa": "راه در نگاهم تار شد و از منزل جا ماندم." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.3, "direction": "at_most", "metFeedbackFa": "خواب نزدیک زین نشد و پیام به‌وقت رسید.", "unmetFeedbackFa": "روی زین چرت زدم و آفتاب پیش از من رسید." }
-    ],
-    "appearance": "woman_courier"
-  },
-  {
-    "id": "c49_joy_wake",
-    "nameFa": "سروناز سنتورنواز",
-    "requestFa": "مجلس امشب تا دیرگاه کش می‌آید و مضراب باید روی سیم برقصد. شادی به دلم و بیداری به چشمم بده، ولی سرما به انگشتانم نرسد که نغمه خفه می‌شود.",
-    "summaryFa": "شادی و بیداری برای سنتور",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "شادی از مضراب گذشت و مجلس با ساز نفس کشید.", "unmetFeedbackFa": "سیم صدا داد، اما نغمه بی‌جان ماند." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "تا ضرب آخر چشمم روشن و دستم میزان بود.", "unmetFeedbackFa": "پلکم افتاد و یک گوشه را از ضرب انداختم." },
-      { "kind": "avoid", "propertyId": "cold", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "انگشتانم گرم ماند و سیم‌ها روشن خواندند.", "unmetFeedbackFa": "سرما دستم را گرفت و مضراب روی سیم مرد." }
-    ],
-    "appearance": "woman_santur"
-  },
-  {
-    "id": "c50_wake_warm",
-    "nameFa": "زرین زعفران‌کار",
-    "requestFa": "گل زعفران پیش از برآمدن آفتاب باید چیده شود و سبدها روی هم مانده‌اند. چشمم را بیدار و دستم را گرم نگه دار؛ اگر نیرویی هم برسد، رشته‌ای زیر پا تلف نمی‌شود.",
-    "summaryFa": "بیداری و گرما برای زعفران",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.3, "direction": "at_least", "metFeedbackFa": "پیش از آفتاب همه ردیف‌ها را دیدم و چیدم.", "unmetFeedbackFa": "پلکم سنگین شد و آفتاب روی گل‌های مانده افتاد." },
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "انگشتانم در سرمای سحر گرم و تند ماند.", "unmetFeedbackFa": "بیدار بودم، اما سرما دستم را از کار انداخت." },
-      { "kind": "preferred", "propertyId": "strength", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "سبدهای پر را هم خودم تا خانه بردم.", "unmetFeedbackFa": "گل‌ها چیده شد، اما سبدها در مزرعه ماند." }
-    ],
-    "appearance": "woman_saffron"
-  },
-  {
-    "id": "c51_focus_cold",
-    "nameFa": "یکتا نقشه‌کش",
-    "requestFa": "راهِ کاروان را روی کاغذی می‌کشم که یک خطای انگشتش یک روز بیابان است. ذهنم را جمع و سرم را خنک کن؛ اگر تا شب بیدار بمانم، گردنه آخر را هم علامت می‌زنم.",
-    "summaryFa": "تمرکز و خنکی برای نقشه",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "هر رود و گردنه در جای خودش روی کاغذ نشست.", "unmetFeedbackFa": "حواسم لغزید و راه آب را به دل کویر بردم." },
-      { "kind": "must_have", "propertyId": "cold", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "سرم خنک ماند و اندازه‌ها با هم خواند.", "unmetFeedbackFa": "گرما چشمم را تار کرد و مقیاس از دست رفت." },
-      { "kind": "preferred", "propertyId": "wake", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "تا شب بیدار ماندم و نقشه مهر خورد.", "unmetFeedbackFa": "راه درست شد، اما گردنه آخر برای فردا ماند." }
-    ],
-    "appearance": "woman_mapmaker"
-  },
-  {
-    "id": "c52_warm_calm",
-    "nameFa": "شبنم شمع‌ساز",
-    "requestFa": "موم باید گرم و روان بماند، اما دست من از عجله فتیله را کج می‌گذارد. گرما به تنم و آرامش به دلم بده؛ خواب‌آور نباشد که دیگ موم شوخی ندارد.",
-    "summaryFa": "گرما و آرامش پای موم",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "گرما در دستم ماند و موم یک‌دست روی فتیله نشست.", "unmetFeedbackFa": "دستم سرد ماند و موم پیش از قالب بستن گرفت." },
-      { "kind": "must_have", "propertyId": "calm", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "فتیله‌ها راست و بی‌لرزش ایستادند.", "unmetFeedbackFa": "موم گرم بود، اما عجله فتیله‌ها را کج کرد." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.8, "direction": "at_most", "metFeedbackFa": "چشمم روی دیگ ماند تا آخرین شمع بسته شد.", "unmetFeedbackFa": "کنار موم داغ خوابم گرفت و قالب‌ها سر رفت." }
-    ],
-    "appearance": "woman_candle"
-  },
-  {
-    "id": "c53_strength_warm",
-    "nameFa": "اردشیر پهلوان",
-    "requestFa": "فردا میل‌های سنگین را پیش چشم اهل زورخانه می‌گردانم و هوای سحر سرد است. نیرو به بازو و گرما به شانه‌ام بده، اما شور بی‌مهار نیاور که ضرب مرشد را گم کنم.",
-    "summaryFa": "نیرو و گرما برای زورخانه",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "میل‌ها سبک شدند و بازو تا ضرب آخر ایستاد.", "unmetFeedbackFa": "میل از نیمه بالاتر نرفت و بازویم خالی کرد." },
-      { "kind": "preferred", "propertyId": "warm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "سرمای سحر از شانه‌ام دور ماند.", "unmetFeedbackFa": "زور آمد، اما سرما مفصل‌هایم را بست." },
-      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دل مهار شد و هر گردش روی ضرب نشست.", "unmetFeedbackFa": "خونم جوشید و یک دور از ضرب مرشد جلو افتادم." }
-    ],
-    "appearance": "man_pahlevan"
-  },
-  {
-    "id": "c54_pain_strength",
-    "nameFa": "کاوه کشتی‌گیر",
-    "requestFa": "زخم دیروز هنوز در شانه‌ام تیر می‌کشد و فردا پهلوانی تازه روی تشک منتظر است. درد را کم کن و نیرو به دستم بده؛ نمی‌خواهم پیش از گرفتن بند، بازویم وا بدهد.",
-    "summaryFa": "تسکین و نیرو برای کشتی",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "تیر شانه خوابید و توانستم بند حریف را بگیرم.", "unmetFeedbackFa": "درد با نخستین کشش دوباره در شانه پیچید." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نیرو در ساعدم ماند و خاک را به حریف نشان دادم.", "unmetFeedbackFa": "درد کمتر بود، اما دستم برای چرخاندن حریف جان نداشت." }
-    ],
-    "appearance": "man_wrestler"
-  },
-  {
-    "id": "c55_strength_wake",
-    "nameFa": "ایاز سوار",
-    "requestFa": "تا سپیده باید مرز را سواره بگردم و تازیانه از دست خسته می‌افتد. بازویم را نیرومند و چشمم را بیدار کن؛ خواب روی زین دشمنِ بی‌صداست.",
-    "summaryFa": "نیرو و بیداری برای سواری",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "مهار تا آخر گشت در مشتم محکم ماند.", "unmetFeedbackFa": "بازویم افتاد و اسب راه خودش را گرفت." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "تا روشن شدن دشت چشم از مرز برنداشتم.", "unmetFeedbackFa": "چشمم تار شد و نشان دور را ندیدم." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.3, "direction": "at_most", "metFeedbackFa": "خواب به زین نزدیک نشد.", "unmetFeedbackFa": "یک دم روی زین چرت زدم و راه از دست رفت." }
-    ],
-    "appearance": "man_horseman"
-  },
-  {
-    "id": "c56_focus_wake",
-    "nameFa": "کیوان کماندار",
-    "requestFa": "فردا سه تیر برای سه نشان دارم و باد فرصت دوباره نمی‌دهد. نگاهم را جمع و چشمم را بیدار نگه دار؛ گرمای زیاد کف دستم را خیس می‌کند و زه می‌لغزد.",
-    "summaryFa": "تمرکز و بیداری برای تیر",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.7, "direction": "at_least", "metFeedbackFa": "هر سه نشان در چشمم یکی شد و تیرها نشستند.", "unmetFeedbackFa": "نشان در نگاهم دوید و تیر به خاک خورد." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "تا نوبت آخر چشمم تیز و روشن ماند.", "unmetFeedbackFa": "پلکم سنگین شد و باد را دیر دیدم." },
-      { "kind": "avoid", "propertyId": "warm", "threshold": 1.5, "direction": "at_most", "metFeedbackFa": "کف دستم خشک ماند و زه نلغزید.", "unmetFeedbackFa": "گرما دستم را خیس کرد و زه از انگشت پرید." }
-    ],
-    "appearance": "man_archer"
-  },
-  {
-    "id": "c57_pain_awake",
-    "nameFa": "جابر غواص",
-    "requestFa": "گوشم از شیرجه دیروز درد می‌کند، اما جزر صبح برای صدف منتظر نمی‌ماند. درد را بگیر و چشمم را بیدار نگه دار؛ خواب و سستی زیر آب جای بخشش ندارند.",
-    "summaryFa": "تسکین و بیداری برای غواصی",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.2, "direction": "at_least", "metFeedbackFa": "فشار گوشم خوابید و تا بستر دریا پایین رفتم.", "unmetFeedbackFa": "درد با نخستین شیرجه در سرم پیچید." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.7, "direction": "at_most", "metFeedbackFa": "چشمم باز ماند و ریسمان را گم نکردم.", "unmetFeedbackFa": "سنگینی خواب زیر آب نفسم را آشفته کرد." },
-      { "kind": "preferred", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "تنم هم سست نشد و صدف را بالا آوردم.", "unmetFeedbackFa": "درد کمتر شد، اما زور بالا کشیدن نداشتم." }
-    ],
-    "appearance": "man_diver"
-  },
-  {
-    "id": "c58_warm_strength",
-    "nameFa": "سهراب کوه‌رو",
-    "requestFa": "راه قله یخ زده و جان دو مسافر به قدم من بسته است. تنم را گرم و پاهایم را نیرومند کن؛ سستی در آن شیب یعنی لغزیدن همه کاروان.",
-    "summaryFa": "گرما و نیرو برای کوه",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "باد قله از لباسم گذشت، اما از تنم نه.", "unmetFeedbackFa": "سرما تا استخوانم رسید و قدمم کوتاه شد." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "پاهایم تا پناهگاه سنگی محکم ماند.", "unmetFeedbackFa": "گرم شدم، اما زور کشیدن همراهان را نداشتم." },
-      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "کرختی نیامد و همه را سالم بالا بردم.", "unmetFeedbackFa": "سستی زانویم را گرفت و در شیب نشستم." }
-    ],
-    "appearance": "man_mountaineer"
-  },
-  {
-    "id": "c59_strength_warm",
-    "nameFa": "فرهاد پاروزن",
-    "requestFa": "دریای خزر امروز سرد و سنگین است و قایق پر از بار. نیرو به پشت و گرما به دستم بده، اما شور بی‌جا نیاور که ریتم پارو از موج جلو بزند.",
-    "summaryFa": "نیرو و گرما برای پارو",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "پارو آب را شکافت و قایق از موج گذشت.", "unmetFeedbackFa": "آب سنگین‌تر از بازویم بود و قایق ماند." },
-      { "kind": "preferred", "propertyId": "warm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دستم در باد دریا گرم ماند.", "unmetFeedbackFa": "زور بود، اما سرما انگشتانم را از پارو جدا کرد." },
-      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "ضرب پارو با موج یکی ماند.", "unmetFeedbackFa": "هیجان ریتمم را شکست و قایق به پهلو افتاد." }
-    ],
-    "appearance": "man_boatman"
-  },
-  {
-    "id": "c60_joy_wake",
-    "nameFa": "دارا چوگان‌باز",
-    "requestFa": "میدان چوگان تا غروب غوغا دارد و اسب دلِ سوار گرفته را می‌فهمد. شادی به سینه و بیداری به چشمم بده؛ سرما هم به دست چوب‌گیرم ننشیند.",
-    "summaryFa": "شادی و بیداری چوگان",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "دل اسب و سوار با هم باز شد و میدان جان گرفت.", "unmetFeedbackFa": "تاختم، اما دلم از بازی عقب ماند." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "توپ را تا آخرین تاخت از چشم نینداختم.", "unmetFeedbackFa": "یک دم چشمم کند شد و توپ از کنارم گذشت." },
-      { "kind": "avoid", "propertyId": "cold", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "دستم گرم ماند و چوب نلغزید.", "unmetFeedbackFa": "سرما پنجه‌ام را بست و چوب از دست رفت." }
-    ],
-    "appearance": "man_polo"
-  },
-  {
-    "id": "c61_pain_strength",
-    "nameFa": "ایرج آهنگر",
-    "requestFa": "چکش از صبح روی سندان است و ساعدم از درد می‌سوزد، ولی تیغه هنوز سرخ است. درد را کم و نیرو را برگردان؛ آهن داغ منتظر دست خسته نمی‌ماند.",
-    "summaryFa": "تسکین و نیرو برای آهنگری",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "سوزش ساعدم خوابید و چکش دوباره راست فرود آمد.", "unmetFeedbackFa": "هر ضربه درد را تا شانه‌ام برد." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "تیغه زیر ضربم رام شد و لبه گرفت.", "unmetFeedbackFa": "درد کمتر بود، اما چکش روی آهن جان نداشت." }
-    ],
-    "appearance": "man_smith"
-  },
-  {
-    "id": "c62_wake_strength",
-    "nameFa": "بهزاد دونده",
-    "requestFa": "فرمان باید پیش از بسته شدن دروازه از این شهر به آن شهر برسد. چشمم را روشن و پاهایم را نیرومند کن؛ اگر سستی به زانویم بیفتد، مهر فرمان بی‌ارزش می‌شود.",
-    "summaryFa": "بیداری و نیرو برای چاپار",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.3, "direction": "at_least", "metFeedbackFa": "راه تا دروازه در چشمم روشن ماند.", "unmetFeedbackFa": "چشمم سنگین شد و پیچ آخر را دیر دیدم." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "پاهایم تا کوبه دروازه کم نیاورد.", "unmetFeedbackFa": "بیدار ماندم، اما زانویم پیش از شهر خالی کرد." },
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "نفس گرم ماند و باد راه سینه‌ام را نبست.", "unmetFeedbackFa": "سرما نفسم را برید و قدمم کوتاه شد." }
-    ],
-    "appearance": "man_runner"
-  },
-  {
-    "id": "c63_focus_strength",
-    "nameFa": "سام شمشیرباز",
-    "requestFa": "در میدان، یک چشم بر لبه شمشیر است و یک چشم بر شانه حریف. ذهنم را جمع و بازویم را نیرومند کن؛ ضربه بی‌فکر از شکست بدتر است.",
-    "summaryFa": "تمرکز و نیرو برای شمشیر",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "حرکت شانه حریف را پیش از تیغه‌اش خواندم.", "unmetFeedbackFa": "نگاهم از تیغه جا ماند و راه ضربه را ندیدم." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "بازو تا آخرین بند شمشیر فرمان برد.", "unmetFeedbackFa": "فکر حاضر بود، اما تیغه در دستم سنگین شد." }
-    ],
-    "appearance": "man_swordsman"
-  },
-  {
-    "id": "c64_focus_calm",
-    "nameFa": "هوشنگ شکارچی",
-    "requestFa": "رد آهو میان سنگ و خار نازک‌تر از خط موست و دل عجول آن را گم می‌کند. نگاهم را جمع و نفسم را آرام کن؛ شور ناگهانی شکار را از یک فرسنگ می‌پراند.",
-    "summaryFa": "تمرکز و آرامش شکار",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.6, "direction": "at_least", "metFeedbackFa": "رد شکسته را میان سنگ‌ها تا آبشخور دنبال کردم.", "unmetFeedbackFa": "نشان پا جلوی چشمم گم شد و راه را باختم." },
-      { "kind": "must_have", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "نفسم نرم ماند و بوته‌ای تکان نخورد.", "unmetFeedbackFa": "رد را دیدم، اما تندی نفسم شکار را رم داد." },
-      { "kind": "avoid", "propertyId": "excitement", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "شور مهار شد و نیزه در وقت خودش بالا آمد.", "unmetFeedbackFa": "هیجان زود دستم را برد و نیزه به سنگ خورد." }
-    ],
-    "appearance": "man_hunter"
-  },
-  {
-    "id": "c65_warm_strength",
-    "nameFa": "نادر ساربان",
-    "requestFa": "شب کویر سرد است و شترِ بارکش اگر بنشیند، تا صبح برنمی‌خیزد. تنم را گرم و دستم را نیرومند کن؛ سستی میان دو منزل یعنی جا ماندن کاروان.",
-    "summaryFa": "گرما و نیرو برای کاروان",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "سرمای کویر پشت قبایم ماند.", "unmetFeedbackFa": "باد شب تا استخوانم رفت و قدمم کند شد." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "بار کج را بالا کشیدم و شتر دوباره راه افتاد.", "unmetFeedbackFa": "گرم شدم، اما زور راست کردن بار را نداشتم." },
-      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "سستی نیامد و کاروان منزل را گم نکرد.", "unmetFeedbackFa": "کرختی به پاهایم افتاد و قافله ایستاد." }
-    ],
-    "appearance": "man_caravan"
-  },
-  {
-    "id": "c66_strength_wake",
-    "nameFa": "بابک نیزه‌دار",
-    "requestFa": "سپیده میدان، نوک نیزه باید تا پایان تاخت بالا بماند و چشم از صف روبه‌رو برندارد. نیرو به بازو و بیداری به نگاهم بده؛ خواب حتی به اندازه یک پلک هم نه.",
-    "summaryFa": "نیرو و بیداری برای نیزه",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "نیزه تا پایان تاخت راست در دستم ماند.", "unmetFeedbackFa": "بازویم افتاد و نوک نیزه پیش از نشان پایین آمد." },
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "صف روبه‌رو تا آخر در چشمم روشن بود.", "unmetFeedbackFa": "نگاهم کند شد و فاصله را دیر سنجیدم." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.3, "direction": "at_most", "metFeedbackFa": "خواب حتی به پلکم نزدیک نشد.", "unmetFeedbackFa": "یک سنگینی کوتاه آمد و نشان از کنارم گذشت." }
-    ],
-    "appearance": "man_lancer"
-  },
-  {
-    "id": "c67_joy_strength",
-    "nameFa": "جمشید بندباز",
-    "requestFa": "امشب روی بند، شادی باید در قدمم پیدا باشد و نیرو در ساقم بماند. سستی نیاور؛ آن بالا یک لرزش کوچک میان تشویق و فریاد فرق می‌گذارد.",
-    "summaryFa": "شادی و نیرو روی بند",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "joy", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "لبخندم تا آن سوی بند رسید و میدان دست زد.", "unmetFeedbackFa": "قدم برداشتم، اما شادی از نمایشم رفته بود." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "ساقم تا فرود آخر محکم ماند.", "unmetFeedbackFa": "نیمه راه پاهایم خالی کرد و به چوب آویختم." },
-      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "کرختی نیامد و چوب تعادل نلرزید.", "unmetFeedbackFa": "سستی در دستم نشست و چوب یک‌سو افتاد." }
-    ],
-    "appearance": "man_rope"
-  },
-  {
-    "id": "c68_calm_pain",
-    "nameFa": "ننه خاور",
-    "requestFa": "از بس دوک را چرخانده‌ام، بند انگشتانم می‌سوزد و رشته با دست بی‌قرار پاره می‌شود. درد را کم کن و دلم را آرام؛ پشم با عجله نخ نمی‌شود، جانم.",
-    "summaryFa": "تسکین و آرامش پای دوک",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "سوزش انگشتانم خوابید و دوک دوباره چرخید.", "unmetFeedbackFa": "دستم هنوز آتش می‌گیرد و نخ از میان انگشتم می‌افتد." },
-      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "دل هم آرام شد و رشته یک‌دست درآمد.", "unmetFeedbackFa": "درد کمتر شد، ولی بی‌قراری نخ را پاره کرد." }
-    ],
-    "appearance": "woman_nana_spinner"
-  },
-  {
-    "id": "c69_calm_focus",
-    "nameFa": "ننه روح‌انگیز",
-    "requestFa": "امشب فال‌های زیادی در این کتاب مانده و هر بیت را باید با دل آرام و ذهن جمع خواند. آشوب را از سینه‌ام بردار و حواسم را نگه دار؛ شور بی‌جا معنی حافظ را کج می‌کند.",
-    "summaryFa": "آرامش و تمرکز برای فال",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "calm", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "دلم آرام گرفت و کتاب با من مهربان شد.", "unmetFeedbackFa": "آشوب سینه نگذاشت صدای بیت را بشنوم." },
-      { "kind": "must_have", "propertyId": "focus", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "هر اشاره بیت را درست به صاحب فال رساندم.", "unmetFeedbackFa": "معنی میان دو بیت از دستم گریخت." },
-      { "kind": "avoid", "propertyId": "sleep", "threshold": 1.2, "direction": "at_most", "metFeedbackFa": "تا آخر شب چشمم روی دیوان ماند.", "unmetFeedbackFa": "روی کتاب چرت زدم و فال آخر بی‌جواب ماند." }
-    ],
-    "appearance": "woman_nana_fortune"
-  },
-  {
-    "id": "c70_warm_wake",
-    "nameFa": "ننه کوکب",
-    "requestFa": "تنور پیش از سحر روشن می‌شود و خمیرها یکی‌یکی چشم باز می‌کنند. چشمم را بیدار و دستم را گرم نگه دار؛ اگر نیرویی هم باشد، طبق نان روی زمین نمی‌ماند.",
-    "summaryFa": "بیداری و گرما برای تنور",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "wake", "threshold": 1.3, "direction": "at_least", "metFeedbackFa": "تا طلوع یک خمیر هم از چشمم دور نماند.", "unmetFeedbackFa": "کنار تنور چرت زدم و یک طبق بیش از حد ورآمد." },
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.4, "direction": "at_least", "metFeedbackFa": "گرما در دستم ماند و چانه‌ها خوب شکل گرفت.", "unmetFeedbackFa": "چشمم باز بود، ولی دست سرد خمیر را خراب کرد." },
-      { "kind": "preferred", "propertyId": "strength", "threshold": 1.0, "direction": "at_least", "metFeedbackFa": "طبق‌های نان را هم خودم تا دکان بردم.", "unmetFeedbackFa": "نان پخت، اما زور بردن طبق‌ها را نداشتم." }
-    ],
-    "appearance": "woman_nana_baker"
-  },
-  {
-    "id": "c71_pain_calm",
-    "nameFa": "ننه شوکت",
-    "requestFa": "زانوانم از دامنه سنگی درد گرفته و هنوز یک دسته آویشن بالای تپه مانده است. درد را کم کن و نفسم را آرام؛ گیاه رم نمی‌کند، اما دست عجول ریشه‌اش را می‌شکند.",
-    "summaryFa": "تسکین و آرامش گیاه‌چینی",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "pain_relief", "threshold": 2.0, "direction": "at_least", "metFeedbackFa": "زانوانم باز شد و تا بوته آخر بالا رفتم.", "unmetFeedbackFa": "هر سنگ درد را دوباره در زانویم بیدار کرد." },
-      { "kind": "preferred", "propertyId": "calm", "threshold": 1.2, "direction": "at_least", "metFeedbackFa": "با حوصله چیدم و ریشه‌ای آسیب ندید.", "unmetFeedbackFa": "درد کمتر شد، اما عجله ساقه‌های جوان را شکست." }
-    ],
-    "appearance": "woman_nana_herbs"
-  },
-  {
-    "id": "c72_warm_strength",
-    "nameFa": "ننه گوهر",
-    "requestFa": "امشب چادر ایل را باد می‌کشد و باید طناب‌ها را تا سپیده نگه داریم. تنم را گرم و دستم را نیرومند کن؛ سستی نیاور که یک گره شل همه خانه را می‌برد.",
-    "summaryFa": "گرما و نیرو برای چادر ایل",
-    "requirements": [
-      { "kind": "must_have", "propertyId": "warm", "threshold": 1.8, "direction": "at_least", "metFeedbackFa": "باد سرد پشت چادرم ماند و به تنم نرسید.", "unmetFeedbackFa": "سرما دست و پایم را بست و طناب از مشتم رفت." },
-      { "kind": "must_have", "propertyId": "strength", "threshold": 1.5, "direction": "at_least", "metFeedbackFa": "گره‌ها را محکم کشیدم و چادر تا صبح ایستاد.", "unmetFeedbackFa": "گرم شدم، اما زور کشیدن طناب را نداشتم." },
-      { "kind": "avoid", "propertyId": "weakness", "threshold": 1.0, "direction": "at_most", "metFeedbackFa": "سستی نیامد و هیچ میخی از خاک بیرون نزد.", "unmetFeedbackFa": "کرختی به بازویم افتاد و یک سوی چادر خوابید." }
-    ],
-    "appearance": "woman_nana_nomad"
   }
 ]
