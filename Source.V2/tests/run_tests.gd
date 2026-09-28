@@ -463,12 +463,12 @@ func _layout() -> void:
 	check(cabinet.size == Vector2(270, 950), "cabinet zone got %s" % cabinet.size)
 	root.add_child(pestle)
 	check(pestle.size == Vector2(100, 80), "pestle stays laid out in the tree got %s" % pestle.size)
-	pestle.queue_free()
-	mortar.queue_free()
-	parchment.queue_free()
-	plaque.queue_free()
-	cabinet.queue_free()
-	stage.queue_free()
+	pestle.free()
+	mortar.free()
+	parchment.free()
+	plaque.free()
+	cabinet.free()
+	stage.free()
 
 
 func _customer(defs: Dictionary, id: String) -> Dictionary:

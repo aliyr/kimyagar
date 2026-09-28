@@ -14,13 +14,13 @@ static func fill(node: Control) -> void:
 	# Logical stage, top-left anchors. Stretched anchors (left != right) make
 	# Godot throw away a size set in _ready, which is the "non-equal opposite
 	# anchors" warning and the reason a full-screen layer can collapse.
-	node.set_anchors_preset(PRESET_TOP_LEFT)
+	node.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	node.position = Vector2.ZERO
 	node.size = STAGE
 
 
 static func place(node: Control, rect: Rect2) -> void:
-	node.set_anchors_preset(PRESET_TOP_LEFT)
+	node.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	node.position = rect.position
 	node.size = rect.size
 

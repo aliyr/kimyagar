@@ -49,6 +49,7 @@ func _ready() -> void:
 	else:
 		Sfx.start_ambience()
 	_booted = true
+	print("viewport ", get_viewport().get_visible_rect().size, " window ", DisplayServer.window_get_size())
 
 
 func _parse_args() -> void:
