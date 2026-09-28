@@ -324,6 +324,27 @@ func _tilt() -> void:
 	near(w.x, 100.0 - 0.5 * 2.0, "work x")
 	near(w.y, 80.0 - (-0.25) * 2.0, "work y")
 	near(TiltMath.angle_delta(10.0, 350.0, 360.0), 20.0, "wrap")
+	var layer_pose := {"px": 0.4, "py": -0.25}
+	var projected := TiltMath.project_mid(layer_pose, 880.0, 420.0)
+	var roundtrip := TiltMath.unproject_layer(layer_pose, projected.x, projected.y, 36.0, "full")
+	near(roundtrip.x, 880.0, "layer x", 0.05)
+	near(roundtrip.y, 420.0, "layer y", 0.05)
+	var same := TiltMath.unproject_mid(layer_pose, 1000.0, 400.0)
+	var via := TiltMath.unproject_layer(layer_pose, 1000.0, 400.0, 36.0, "full")
+	near(via.x, same.x, "mid alias x", 0.0001)
+	near(via.y, same.y, "mid alias y", 0.0001)
+	var flat_hit := TiltMath.unproject_layer({"px": 0.0, "py": 0.0}, 960.0 + 106.0, 540.0, 0.0, "flat")
+	near(flat_hit.x, 1060.0, "flat scale", 0.02)
+	var off_hit := TiltMath.unproject_layer({"px": 0.5, "py": 0.5}, 100.0, 80.0, 36.0, "off")
+	near(off_hit.x, 100.0, "off x")
+	var rest := DiscardMotion.pot_pose(0.0)
+	near(float(rest["x"]), 847.0, "pot rest x")
+	near(float(rest["scale"]), 1.0, "pot rest scale")
+	check(DiscardMotion.splat_alpha(0.1) == 0.0, "splat early")
+	check(is_equal_approx(DiscardMotion.splat_alpha(0.4), 1.0), "splat hold")
+	var scene := DiscardMotion.build_scene(17)
+	check((scene["gobs"] as Array).size() == 16, "gobs")
+	check((scene["blobs"] as Array).size() > 3, "blobs")
 
 
 func _quality() -> void:

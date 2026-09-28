@@ -24,10 +24,13 @@ var _roar: Dictionary
 var _murmur: Dictionary
 var _wind: Dictionary
 var _later: Array = []
+var _noise: PackedFloat32Array = PackedFloat32Array()
+var _audio_n := 0
 
 
 func _ready() -> void:
 	_rng.randomize()
+	_build_noise()
 	if DisplayServer.get_name() == "headless":
 		return
 	var gen := AudioStreamGenerator.new()
@@ -42,6 +45,14 @@ func _ready() -> void:
 	_roar = _loop_voice(300.0, 0.6, 0.0)
 	_murmur = _loop_voice(420.0, 0.7, 0.0)
 	_wind = _band_voice(760.0, 0.9, 0.0)
+	_rumble["lfo_hz"] = 2.3
+	_rumble["lfo_depth"] = 45.0
+	_roar["lfo_hz"] = 0.45
+	_roar["lfo_depth"] = 120.0
+	_murmur["lfo_hz"] = 0.19
+	_murmur["lfo_depth"] = 90.0
+	_wind["lfo_hz"] = 0.09
+	_wind["lfo_depth"] = 260.0
 	_chime_wait = 2.5 + _rng.randf() * 4.0
 	_voices.append(_rumble)
 	_voices.append(_roar)
@@ -98,7 +109,8 @@ func _loop_voice(freq: float, q: float, gain: float) -> Dictionary:
 		"kind": "noise", "loop": true, "age": 0.0, "dur": 1e9,
 		"gain": gain, "gain0": gain, "freq": freq, "freq0": freq, "freq1": freq,
 		"q": q, "filter": "lowpass" if freq < 500.0 else "bandpass",
-		"rate": 0.9 + _rng.randf() * 0.2, "z1": 0.0, "z2": 0.0,
+		"rate": 0.9 + _rng.randf() * 0.2, "cursor": _rng.randf() * 4000.0, "z1": 0.0, "z2": 0.0,
+		"lfo_hz": 0.0, "lfo_depth": 0.0,
 		"b0": 0.0, "b1": 0.0, "b2": 0.0, "a1": 0.0, "a2": 0.0, "ready": false,
 		"osc": "sine", "phase": 0.0, "f0": freq, "f1": freq, "target": gain,
 	}
@@ -193,19 +205,33 @@ func _ambience_mod() -> void:
 	var amb := _ambience and _unlocked and Settings.sfx_enabled
 	var base_m := 0.16 if amb else 0.0
 	_murmur["target"] = base_m + (0.05 * sin(_time * TAU * 0.11) + 0.04 * sin(_time * TAU * 0.047)) * (1.0 if amb else 0.0)
-	_murmur["freq"] = 420.0 + 90.0 * sin(_time * TAU * 0.19)
-	_murmur["ready"] = false
 	var base_w := 0.06 if amb else 0.0
 	_wind["target"] = base_w + (0.05 * sin(_time * TAU * 0.07) + 0.03 * sin(_time * TAU * 0.031)) * (1.0 if amb else 0.0)
-	_wind["freq"] = 760.0 + 260.0 * sin(_time * TAU * 0.09)
-	_wind["ready"] = false
-	_rumble["freq"] = 150.0 + 45.0 * sin(_time * TAU * 2.3)
-	_rumble["ready"] = false
-	_roar["freq"] = 300.0 + 120.0 * sin(_time * TAU * 0.45)
-	_roar["ready"] = false
+
+
+func _build_noise() -> void:
+	var n := int(RATE * 1.5)
+	_noise.resize(n)
+	for i in n:
+		_noise[i] = _rng.randf() * 2.0 - 1.0
+
+
+func _noise_at(v: Dictionary) -> float:
+	if _noise.is_empty():
+		return _rng.randf() * 2.0 - 1.0
+	var rate := float(v.get("rate", 1.0))
+	var cursor := float(v.get("cursor", 0.0))
+	var n := _noise.size()
+	var i0 := int(floor(cursor)) % n
+	var i1 := (i0 + 1) % n
+	var frac: float = cursor - floor(cursor)
+	v["cursor"] = fposmod(cursor + rate, float(n))
+	return lerpf(_noise[i0], _noise[i1], frac)
 
 
 func _sample(v: Dictionary) -> float:
+	_audio_n += 1
+	var sample_t := float(_audio_n) / float(RATE)
 	var env := _env(v)
 	var x := 0.0
 	if v["kind"] == "noise":
@@ -214,11 +240,12 @@ func _sample(v: Dictionary) -> float:
 			var nf1 := float(v["freq1"])
 			if nf0 != nf1 and float(v["age"]) >= 0.0:
 				var nu := clampf(float(v["age"]) / maxf(float(v["dur"]), 0.0001), 0.0, 1.0)
-				var nf := nf0 * pow(nf1 / maxf(nf0, 1.0), nu)
-				if absf(nf - float(v["freq"])) > 1.0:
-					v["freq"] = nf
-					v["ready"] = false
-		x = _rng.randf() * 2.0 - 1.0
+				v["freq"] = nf0 * pow(nf1 / maxf(nf0, 1.0), nu)
+				_design(v)
+		elif float(v.get("lfo_hz", 0.0)) > 0.0:
+			v["freq"] = float(v["freq0"]) + float(v["lfo_depth"]) * sin(sample_t * TAU * float(v["lfo_hz"]))
+			_design(v)
+		x = _noise_at(v)
 	else:
 		var f0 := float(v["f0"])
 		var f1 := float(v["f1"])
@@ -238,9 +265,8 @@ func _sample(v: Dictionary) -> float:
 				fcut = 1400.0 * pow(2600.0 / 1400.0, age / cut_t)
 			else:
 				fcut = 2600.0 * pow(900.0 / 2600.0, clampf((age - cut_t) / maxf(dur - cut_t, 0.001), 0.0, 1.0))
-			if absf(float(v["freq"]) - fcut) > 8.0:
-				v["freq"] = fcut
-				v["ready"] = false
+			v["freq"] = fcut
+			v["ready"] = false
 		else:
 			var u := clampf(age / dur, 0.0, 1.0)
 			freq = f0 * pow(f1 / maxf(f0, 1.0), u) if f1 != f0 else f0
@@ -324,6 +350,7 @@ func _voice(opts: Dictionary) -> void:
 		"q": float(opts.get("q", 0.8)),
 		"filter": opts.get("filter", "lowpass"),
 		"rate": float(opts.get("rate", 1.0)),
+		"cursor": _rng.randf() * 4000.0,
 		"phase": 0.0,
 		"z1": 0.0, "z2": 0.0,
 		"b0": 1.0, "b1": 0.0, "b2": 0.0, "a1": 0.0, "a2": 0.0,

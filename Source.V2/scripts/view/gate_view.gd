@@ -49,6 +49,12 @@ var _quote_root: Control
 var _veil: ColorRect
 var _panel_layer: Control
 var _dusk_hint := 1.0
+var _rig_hits: Array = []
+var _hit_px := 0.0
+var _hit_py := 0.0
+var _hit_mode := "off"
+var _sky_fx: Control
+var _dust_fx: Control
 
 
 func _ready() -> void:
@@ -109,6 +115,8 @@ func _build() -> void:
 	sky_layer.position = Vector2(-24, -24)
 	sky_layer.size = Vector2(1968, 470)
 	_sky_layer.add_child(sky_layer)
+	_sky_fx = _fx_host(_draw_fireflies)
+	_sky_layer.add_child(_sky_fx)
 	_sky = ColorRect.new()
 	_sky.mouse_filter = MOUSE_FILTER_IGNORE
 	_sky.set_anchors_preset(PRESET_FULL_RECT)
@@ -186,6 +194,8 @@ func _build() -> void:
 	logo.add_theme_constant_override("shadow_offset_y", 3)
 	_sign.add_child(logo)
 	_sign.add_child(UiKit.label(Content.UI["gateSubtitle"], Rect2(20, 214, 520, 36), 20, Color(0.91, 0.85, 0.71, 0.9)))
+	_dust_fx = _fx_host(_draw_dust)
+	_front_layer.add_child(_dust_fx)
 
 	_passer = UiKit.sprite("gate/customer_shadow.png", Rect2(1500, 230, 280, 780), "contain")
 	_passer.modulate = Color(0.22, 0.22, 0.22, 0)
@@ -198,25 +208,18 @@ func _build() -> void:
 	_mid_layer.add_child(_cat_sleep)
 	_mid_layer.add_child(_cat_awake)
 	var cat_hit := UiKit.hit(Rect2(700, 922, 200, 110))
-	cat_hit.pressed.connect(_poke_cat)
-	add_child(cat_hit)
+	cat_hit.mouse_filter = MOUSE_FILTER_IGNORE
+	_rig_hits.append({"rect": Rect2(700, 922, 200, 110), "depth": 36.0, "cb": _poke_cat})
 
 	_knocker = UiKit.sprite("intro/knocker.png", Rect2(908, 640, 94, 131), "contain")
 	_knocker.pivot_offset = Vector2(47, 18)
 	_mid_layer.add_child(_knocker)
-	var knock_hit := UiKit.hit(Rect2(908, 620, 110, 160))
-	knock_hit.pressed.connect(begin_enter)
-	add_child(knock_hit)
+	_rig_hits.append({"rect": Rect2(908, 620, 110, 160), "depth": 36.0, "cb": begin_enter})
 
 	var settings := UiKit.sprite("intro/lantern.png", Rect2(1764, 328, 80, 208), "contain")
 	_mid_layer.add_child(settings)
-	add_child(UiKit.label(Content.UI["settings"], Rect2(1724, 530, 160, 28), 17, Color(0.91, 0.85, 0.71, 0.86)))
-	var set_hit := UiKit.hit(Rect2(1764, 328, 80, 230))
-	set_hit.pressed.connect(func() -> void:
-		Sfx.unlock()
-		open_settings.emit()
-	)
-	add_child(set_hit)
+	_mid_layer.add_child(UiKit.label(Content.UI["settings"], Rect2(1724, 530, 160, 28), 17, Color(0.91, 0.85, 0.71, 0.86)))
+	_rig_hits.append({"rect": Rect2(1764, 328, 80, 230), "depth": 36.0, "cb": _open_settings})
 
 	_wrap_rig()
 	_build_pin()
@@ -525,6 +528,99 @@ func advance(dt: float, tilt: TiltDriver) -> void:
 				Sfx.chain_creak()
 
 
+func _gui_input(ev: InputEvent) -> void:
+	if not (ev is InputEventMouseButton) or not ev.pressed or ev.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if panel != "":
+		return
+	var local: Vector2 = ev.position
+	var pose := {"px": _hit_px, "py": _hit_py}
+	for hit in _rig_hits:
+		var p: Vector2 = TiltMath.unproject_layer(pose, local.x, local.y, float(hit["depth"]), _hit_mode)
+		var rect: Rect2 = hit["rect"]
+		if rect.has_point(p):
+			(hit["cb"] as Callable).call()
+			accept_event()
+			return
+
+
+func _open_settings() -> void:
+	Sfx.unlock()
+	open_settings.emit()
+
+
+func _fx_host(fn: Callable) -> Control:
+	var n: Control = preload("res://scripts/view/draw_host.gd").new()
+	n.mouse_filter = MOUSE_FILTER_IGNORE
+	n.set_anchors_preset(PRESET_FULL_RECT)
+	n.paint = fn
+	return n
+
+
+func _ease_in_out(u: float) -> float:
+	var t := clampf(u, 0.0, 1.0)
+	if t < 0.5:
+		return 2.0 * t * t
+	return 1.0 - pow(-2.0 * t + 2.0, 2.0) / 2.0
+
+
+func _draw_fireflies(c: Control) -> void:
+	if not bool(sky.get("fireflies", false)) or freeze:
+		return
+	for i in 9:
+		var base := Vector2(120.0 + float(i) * 190.0, 560.0 + float(i - 4) * float(i - 4) * 14.0)
+		var local := fposmod(_clock + float(i) * 1.7, 7.5) / 7.5
+		var pos := Vector2.ZERO
+		var op := 0.0
+		if local < 0.2:
+			op = lerpf(0.0, 0.9, local / 0.2)
+		elif local < 0.5:
+			var u := (local - 0.2) / 0.3
+			pos = Vector2(40, -60) * u
+			op = lerpf(0.9, 0.4, u)
+		elif local < 0.75:
+			pos = Vector2(40, -60)
+			op = lerpf(0.4, 0.85, (local - 0.5) / 0.25)
+		elif local < 0.9:
+			var u2 := (local - 0.75) / 0.15
+			pos = Vector2(40, -60).lerp(Vector2(-20, -110), u2)
+			op = lerpf(0.85, 0.0, u2)
+		else:
+			pos = Vector2(-20, -110)
+			op = 0.0
+		if op <= 0.02:
+			continue
+		c.draw_circle(base + pos, 8.0, Color(1.0, 0.88, 0.55, 0.28 * op))
+		c.draw_circle(base + pos, 3.0, Color(1.0, 0.91, 0.64, op))
+
+
+func _draw_dust(c: Control) -> void:
+	if freeze:
+		return
+	var spec := [
+		{"x": 580.0, "d": -1.2, "dur": 7.0},
+		{"x": 660.0, "d": -2.6, "dur": 5.4},
+		{"x": 540.0, "d": -3.8, "dur": 8.0},
+		{"x": 690.0, "d": -4.7, "dur": 6.6},
+		{"x": 620.0, "d": 0.0, "dur": 6.0},
+	]
+	for item in spec:
+		var dur := float(item["dur"])
+		var local := fposmod(_clock - float(item["d"]), dur) / dur
+		var pos := Vector2(float(item["x"]), 630.0) + Vector2(18.0, -170.0) * local
+		var op := 0.0
+		if local < 0.2:
+			op = lerpf(0.0, 0.9, local / 0.2)
+		elif local < 0.8:
+			op = lerpf(0.9, 0.6, (local - 0.2) / 0.6)
+		else:
+			op = lerpf(0.6, 0.0, (local - 0.8) / 0.2)
+		if op <= 0.02:
+			continue
+		c.draw_circle(pos, 5.0, Color(1.0, 0.82, 0.51, 0.35 * op))
+		c.draw_circle(pos, 2.0, Color(1.0, 0.9, 0.67, 0.85 * op))
+
+
 func dusk_opacity() -> float:
 	if phase != "entering":
 		return 1.0 if visible else 0.0
@@ -567,9 +663,24 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 	if _glow:
 		_glow.color.a = doors * 0.35
 	if _sign and not freeze and not busy:
-		_sign.rotation_degrees = sin(_clock / 6.0 * TAU) * 1.1
+		var sway := fposmod(_clock, 12.0) / 6.0
+		var leg := sway if sway <= 1.0 else 2.0 - sway
+		var e := _ease_in_out(leg)
+		_sign.rotation_degrees = lerpf(-1.1, 1.1, e) if sway <= 1.0 else lerpf(1.1, -1.1, e)
 	elif _sign:
 		_sign.rotation_degrees = 0.0
+	_hit_px = px
+	_hit_py = py
+	if _sky_fx:
+		_sky_fx.queue_redraw()
+	if _dust_fx:
+		_dust_fx.queue_redraw()
+	if tilt == null or busy or tilt.mode == "off":
+		_hit_mode = "off"
+	elif tilt.mode == "flat":
+		_hit_mode = "flat"
+	else:
+		_hit_mode = "full"
 	if _knocker and phase == "opening":
 		var u := clampf(enter_t / (0.42 * speed), 0.0, 1.0)
 		_knocker.rotation_degrees = sin(u * TAU * 2.0) * -14.0

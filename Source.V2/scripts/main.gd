@@ -217,6 +217,21 @@ func _prepare_shot() -> void:
 			Game.brew = d
 			workshop.begin_discard()
 			workshop.discard_t = 0.28
+		"pot":
+			phase = "workshop"
+			gate.visible = false
+			var pot: Dictionary = Alchemy.create_brew()
+			pot = Alchemy.add_ingredient(pot, "chamomile", 1.0, "fine", Game.defs)
+			pot = Alchemy.advance_time(pot, 12.0, Game.defs)
+			pot = Alchemy.stir(pot, Game.defs)
+			Game.brew = pot
+			workshop._spoon_angle = -0.2
+			workshop._stirring = true
+			_warm_workshop(1.6)
+			workshop.jump_pot_closeup()
+		"tilt":
+			phase = "gate"
+			tilt.hold_pose(0.62, -0.38)
 	if phase == "workshop":
 		Sfx.stop_ambience()
 		workshop._fire.set_level(0.7, true)

@@ -84,6 +84,46 @@ var _shadows: Control
 var _smoke: Control
 var _haze := 0.0
 var _flights: Array = []
+var _flight_key := 1
+var _camera: Control
+var _pin: Control
+var _fx_back: Control
+var _transfer: SpoonTransfer
+var _transfer_last: Dictionary = {}
+var _transfer_draw: Control
+var _spoon_art: ClassicSpoon
+var _discard_scene: Dictionary = {}
+var _discard_tone: Dictionary = {}
+var _discard_color := Color("#3f6f8f")
+var _discard_burnt := false
+var _wall: Control
+var _discard_fx: Control
+var _splat_fired := false
+var _clang_fired := false
+var _thud_fired := false
+var _respawned := false
+var _cam_zoom := 1.0
+var _cam_from := 1.0
+var _cam_to := 1.0
+var _cam_focus := Vector2(960.0, 540.0)
+var _cam_focus_from := Vector2(960.0, 540.0)
+var _cam_focus_to := Vector2(960.0, 540.0)
+var _cam_t := 1.0
+var _cam_dur := 0.001
+var _cam_owner := ""
+var _mortar_shot := false
+var _cam_return := -1.0
+var _bar := 0.0
+var _bar_target := 0.0
+var _bars_top: ColorRect
+var _bars_bot: ColorRect
+var _hole_back: Control
+var _hole_lip: Control
+var _stove := Vector4.ZERO
+var _shadow_sprites: Array = []
+var _customer_armed := false
+var _pour_seen := ""
+var _tilt_mode := "lite"
 const _PUFFS: Array = [
 	{"dx": -60.0, "delay": 0.0, "dur": 6.2, "size": 260.0, "drift": -140.0},
 	{"dx": 40.0, "delay": 0.9, "dur": 6.8, "size": 300.0, "drift": 120.0},
@@ -103,6 +143,8 @@ func _ready() -> void:
 	_fire = FireField.new()
 	_brew = ClassicBrewSim.new(7)
 	_brew_painter = ClassicBrewPainter.new()
+	_transfer = SpoonTransfer.new()
+	_spoon_art = ClassicSpoon.new()
 	_pile = MortarPile.new()
 	_pile.struck.connect(_on_mortar_strike)
 	_mortar_parts = _pile.make_particles()
@@ -123,6 +165,7 @@ func _layout_geometry() -> void:
 	_mouth = pot_fit.position + Vector2(538, 130) * ps
 	_mouth_r = Vector2(378, 84) * ps
 	_pot_base = pot_fit.position + Vector2(1071 * 0.5, 750) * ps
+	_stove = Vector4(_pot_base.x, _pot_base.y - 25.0, roundf((743.0 / 2.0) * ps) + 14.0, 42.0)
 
 
 func set_behind(on: bool) -> void:
@@ -142,6 +185,8 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 			_work.position = Vector2(px, py) * 2.0
 		if _near:
 			_near.position = Vector2(px, py) * 12.0
+		_tilt_mode = "off" if tilt == null else tilt.mode
+		_tick_camera(dt)
 		if _bg_mat:
 			var dimensional := use and tilt.mode != "flat"
 			_bg_mat.set_shader_parameter("ax", deg_to_rad(-py * 2.0) if dimensional else 0.0)
@@ -185,11 +230,19 @@ func set_dusk(opacity: float) -> void:
 
 
 func _build() -> void:
+	_camera = Control.new()
+	_camera.set_anchors_preset(PRESET_FULL_RECT)
+	_camera.mouse_filter = MOUSE_FILTER_IGNORE
+	_camera.clip_contents = true
+	add_child(_camera)
+	_pin = Control.new()
+	_pin.set_anchors_preset(PRESET_FULL_RECT)
+	_pin.mouse_filter = MOUSE_FILTER_IGNORE
 	_bg_rig = Control.new()
 	_bg_rig.set_anchors_preset(PRESET_FULL_RECT)
 	_bg_rig.pivot_offset = Vector2(960, 540)
 	_bg_rig.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(_bg_rig)
+	_camera.add_child(_bg_rig)
 	_bg = UiKit.sprite("background/shop_background.png", Rect2(0, 0, 1920, 1080), "fill")
 	_bg_mat = ShaderMaterial.new()
 	_bg_mat.shader = load("res://shaders/rig_perspective.gdshader")
@@ -199,7 +252,10 @@ func _build() -> void:
 	_work = Control.new()
 	_work.mouse_filter = MOUSE_FILTER_IGNORE
 	_work.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(_work)
+	_camera.add_child(_work)
+	_wall = _painter(_draw_wall)
+	_wall.set_anchors_preset(PRESET_FULL_RECT)
+	_work.add_child(_wall)
 	_work.add_child(UiKit.sprite("table/work_table.png", ZONE_TABLE, "contain"))
 	_shadows = _painter(_draw_shadows)
 	_shadows.set_anchors_preset(PRESET_FULL_RECT)
@@ -213,6 +269,9 @@ func _build() -> void:
 	_fire_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	_fire_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_fire_rect.mouse_filter = MOUSE_FILTER_IGNORE
+	_hole_back = _painter(_draw_hole_back)
+	_hole_back.set_anchors_preset(PRESET_FULL_RECT)
+	_work.add_child(_hole_back)
 	_work.add_child(_fire_rect)
 
 	_pot_pivot = Control.new()
@@ -234,9 +293,26 @@ func _build() -> void:
 	_spoon.size = Vector2(320, 320)
 	_pot_pivot.add_child(_spoon)
 
-	_fx = _painter(_draw_brew)
+	_fx_back = _painter(_draw_brew_back)
+	_fx_back.set_anchors_preset(PRESET_FULL_RECT)
+	_fx_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_work.add_child(_fx_back)
+	_brew_painter.disc_interior = _radial_disc()
+	_brew_painter.disc_liquid = _radial_disc()
+	_brew_painter.disc_highlight = _radial_disc()
+	_brew_painter.disc_glow = _radial_disc()
+	_work.add_child(_brew_painter.disc_interior)
+	_work.add_child(_brew_painter.disc_liquid)
+	_work.add_child(_brew_painter.disc_highlight)
+	_work.add_child(_brew_painter.disc_glow)
+	_fx = _painter(_draw_brew_front)
 	_fx.set_anchors_preset(PRESET_FULL_RECT)
+	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_work.add_child(_fx)
+	_hole_lip = _painter(_draw_hole_lip)
+	_hole_lip.set_anchors_preset(PRESET_FULL_RECT)
+	_hole_lip.z_index = 4
+	_work.add_child(_hole_lip)
 
 	var pot_hit := UiKit.hit(ZONE_CAULDRON)
 	pot_hit.gui_input.connect(_cauldron_input)
@@ -253,10 +329,14 @@ func _build() -> void:
 
 	_build_mortar()
 	_build_cabinet()
-	_work.add_child(UiKit.sprite("table/bucket.png", Rect2(590, 958, 96, 112), "contain"))
-	var bucket := UiKit.hit(Rect2(590, 958, 96, 112))
-	bucket.pressed.connect(_on_bucket)
-	_work.add_child(bucket)
+	_transfer_draw = _painter(_draw_transfer)
+	_transfer_draw.set_anchors_preset(PRESET_FULL_RECT)
+	_transfer_draw.z_index = 40
+	_work.add_child(_transfer_draw)
+	_discard_fx = _painter(_draw_discard_flight)
+	_discard_fx.set_anchors_preset(PRESET_FULL_RECT)
+	_discard_fx.z_index = 35
+	_work.add_child(_discard_fx)
 
 	var papers := ColorRect.new()
 	papers.position = Vector2(1296, 712)
@@ -272,7 +352,13 @@ func _build() -> void:
 	_near = Control.new()
 	_near.mouse_filter = MOUSE_FILTER_IGNORE
 	_near.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(_near)
+	_camera.add_child(_near)
+	_camera.add_child(_pin)
+	var bucket_art := UiKit.sprite("table/bucket.png", Rect2(590, 958, 96, 112), "contain")
+	_pin.add_child(bucket_art)
+	var bucket := UiKit.hit(Rect2(590, 958, 96, 112))
+	bucket.pressed.connect(_on_bucket)
+	_pin.add_child(bucket)
 	var near := _near
 	_customer = UiKit.sprite("customer/customer_woman_elder.png", ZONE_CUSTOMER, "contain")
 	near.add_child(_customer)
@@ -293,17 +379,18 @@ func _build() -> void:
 	_build_notebook()
 	_build_heat()
 	_hint = UiKit.label("", Rect2(300, 790, 520, 40), 18, Color("e9d9b4"))
-	add_child(_hint)
+	_pin.add_child(_hint)
 
 	_ghost = UiKit.sprite("cauldron/cauldron_body.png", ZONE_CAULDRON, "contain")
 	_ghost.visible = false
 	_ghost.z_index = 8
-	add_child(_ghost)
+	_ghost.visible = false
+	_camera.add_child(_ghost)
 
 	_smoke = _painter(_draw_smoke)
 	_smoke.set_anchors_preset(PRESET_FULL_RECT)
 	_smoke.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(_smoke)
+	_camera.add_child(_smoke)
 
 	_dusk = ColorRect.new()
 	_dusk.color = Color(8.0 / 255.0, 5.0 / 255.0, 3.0 / 255.0, 0.86)
@@ -319,6 +406,17 @@ func _build() -> void:
 	_vignette.material = shade
 	_vignette.visible = false
 	add_child(_vignette)
+	_bars_top = ColorRect.new()
+	_bars_top.color = Color("050302")
+	_bars_top.mouse_filter = MOUSE_FILTER_IGNORE
+	_bars_top.size = Vector2(1920, 0)
+	add_child(_bars_top)
+	_bars_bot = ColorRect.new()
+	_bars_bot.color = Color("050302")
+	_bars_bot.mouse_filter = MOUSE_FILTER_IGNORE
+	_bars_bot.size = Vector2(1920, 0)
+	add_child(_bars_bot)
+	_bake_shadows()
 
 
 func _build_mortar() -> void:
@@ -388,20 +486,20 @@ func _build_notebook() -> void:
 	book.size = Vector2(150, 165)
 	book.color = Color("6e1f2e")
 	book.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(book)
+	_pin.add_child(book)
 	var page := ColorRect.new()
 	page.position = Vector2(1752, 912)
 	page.size = Vector2(126, 140)
 	page.color = Color("e9d9b4")
 	page.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(page)
-	add_child(UiKit.label(Content.UI["notebook"], Rect2(1752, 960, 126, 40), 16, Color("4a2f16"), UiKit.bold))
+	_pin.add_child(page)
+	_pin.add_child(UiKit.label(Content.UI["notebook"], Rect2(1752, 960, 126, 40), 16, Color("4a2f16"), UiKit.bold))
 	var hit := UiKit.hit(Rect2(1740, 900, 150, 165))
 	hit.pressed.connect(func() -> void:
 		Sfx.paper()
 		open_overlay.emit("notebook")
 	)
-	add_child(hit)
+	_pin.add_child(hit)
 
 
 func _build_heat() -> void:
@@ -414,7 +512,7 @@ func _build_heat() -> void:
 			Sfx.fire_whoosh()
 			Haptics.pulse("light")
 		)
-		add_child(b)
+		_pin.add_child(b)
 
 
 func _tick_fire(dt: float) -> void:
@@ -436,9 +534,13 @@ func _sync_customer() -> void:
 	var rel := "customer/customer_%s%s.png" % [look, emo]
 	if rel == _last_customer:
 		return
+	var changed := _last_customer != ""
 	_last_customer = rel
 	if _customer:
 		_customer.texture = UiKit.tex(rel)
+	if changed and _tilt_mode != "off" and pour == "":
+		_set_camera(_customer_focus(), 1.16, 1.0, true, "enter")
+		_cam_return = 1.7
 
 
 func _sync_note() -> void:
@@ -500,21 +602,63 @@ func _painter(fn: Callable) -> Control:
 
 
 func _draw_shadows(c: Control) -> void:
-	_soft_ellipse(c, 415.0, 763.0, 110.0, 22.0, 0.6)
-	_soft_ellipse(c, 1212.5, 772.0, 62.5, 12.0, 0.5)
-	_soft_ellipse(c, 1364.0, 782.0, 74.8, 12.0, 0.4)
-	_soft_ellipse(c, 1664.6, 1076.0, 285.6, 26.0, 0.55)
+	for sprite in _shadow_sprites:
+		var tex: Texture2D = sprite["tex"]
+		var at: Vector2 = sprite["at"]
+		c.draw_texture(tex, at)
 
 
-func _soft_ellipse(c: Control, cx: float, cy: float, rx: float, ry: float, strength: float) -> void:
-	var xf := Transform2D(Vector2(rx, 0), Vector2(0, ry), Vector2(cx, cy))
-	c.draw_set_transform_matrix(xf)
-	for i in 5:
-		var t := float(i) / 4.0
-		var rad := lerpf(0.42, 1.05, t)
-		var a := strength * lerpf(0.55, 0.0, t)
-		c.draw_circle(Vector2.ZERO, rad, Color(10.0 / 255.0, 6.0 / 255.0, 2.0 / 255.0, a))
-	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+func _bake_shadows() -> void:
+	_shadow_sprites = [
+		_shadow_sprite(415.0, 763.0, 110.0, 22.0, 0.6),
+		_shadow_sprite(1212.5, 772.0, 62.5, 12.0, 0.5),
+		_shadow_sprite(1364.0, 782.0, 74.8, 12.0, 0.4),
+		_shadow_sprite(1664.6, 1076.0, 285.6, 26.0, 0.55),
+	]
+
+
+func _shadow_sprite(cx: float, cy: float, rx: float, ry: float, strength: float) -> Dictionary:
+	var pad := 18
+	var w := int(ceil(rx * 2.0 + float(pad) * 2.0))
+	var h := int(ceil(ry * 2.0 + float(pad) * 2.0))
+	var img := Image.create(maxi(1, w), maxi(1, h), false, Image.FORMAT_RGBA8)
+	var ocx := float(w) * 0.5
+	var ocy := float(h) * 0.5
+	for y in h:
+		for x in w:
+			var nx := (float(x) + 0.5 - ocx) / maxf(rx, 1.0)
+			var ny := (float(y) + 0.5 - ocy) / maxf(ry, 1.0)
+			var d := sqrt(nx * nx + ny * ny)
+			var a := 0.0
+			if d < 0.45:
+				a = 0.85
+			elif d < 0.78:
+				a = lerpf(0.85, 0.45, (d - 0.45) / 0.33)
+			elif d < 1.15:
+				a = lerpf(0.45, 0.0, (d - 0.78) / 0.37)
+			img.set_pixel(x, y, Color(10.0 / 255.0, 6.0 / 255.0, 2.0 / 255.0, a * strength))
+	_blur_image(img, 1)
+	_blur_image(img, 1)
+	_blur_image(img, 1)
+	var tex := ImageTexture.create_from_image(img)
+	return {"tex": tex, "at": Vector2(cx - ocx, cy - ocy)}
+
+
+func _blur_image(img: Image, radius: int) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var copy := img.duplicate()
+	for y in h:
+		for x in w:
+			var acc := Color(0, 0, 0, 0)
+			var n := 0
+			for dy in range(-radius, radius + 1):
+				var yy := clampi(y + dy, 0, h - 1)
+				for dx in range(-radius, radius + 1):
+					var xx := clampi(x + dx, 0, w - 1)
+					acc += copy.get_pixel(xx, yy)
+					n += 1
+			img.set_pixel(x, y, acc / float(n))
 
 
 func _draw_smoke(c: Control) -> void:
@@ -537,9 +681,25 @@ func _draw_smoke(c: Control) -> void:
 		var scale := lerpf(0.25, 3.1, u * u)
 		var drift := float(puff["drift"]) * u
 		var rise := -760.0 * u
-		var sz := float(puff["size"]) * 0.22 * scale
-		var at := _mouth + Vector2(float(puff["dx"]) + drift, rise)
-		c.draw_circle(at, sz, Color(90.0 / 255.0, 84.0 / 255.0, 82.0 / 255.0, alpha * _haze))
+		var box := Vector2(float(puff["size"]) * 0.45, float(puff["size"]))
+		var origin := Vector2(_mouth.x + float(puff["dx"]) - float(puff["size"]) * 0.22, _mouth.y - float(puff["size"]) * 0.85)
+		var pivot := origin + Vector2(box.x * 0.5, box.y * 0.6)
+		var shift := Vector2(drift, rise)
+		var col := Color(90.0 / 255.0, 84.0 / 255.0, 82.0 / 255.0, alpha * _haze)
+		var blob := PackedVector2Array([
+			Vector2(0.46, 0.0), Vector2(0.62, 0.18), Vector2(0.78, 0.08), Vector2(0.70, 0.36),
+			Vector2(0.92, 0.48), Vector2(0.68, 0.58), Vector2(0.80, 0.88), Vector2(0.50, 0.72),
+			Vector2(0.22, 0.96), Vector2(0.34, 0.60), Vector2(0.08, 0.42), Vector2(0.32, 0.28), Vector2(0.18, 0.12),
+		])
+		for pass_i in 4:
+			var spread := float(pass_i) * 3.0
+			var pts := PackedVector2Array()
+			for p in blob:
+				var pt := origin + Vector2(p.x * box.x, p.y * box.y)
+				pts.append(pivot + (pt - pivot) * scale + shift + Vector2(spread, spread * 0.4))
+			var fade := col
+			fade.a *= 0.45 if pass_i > 0 else 1.0
+			c.draw_colored_polygon(pts, fade)
 
 
 func _tick_flights(dt: float) -> void:
@@ -569,21 +729,50 @@ func _tick_flights(dt: float) -> void:
 	_pending_lands = waiting
 
 
+func _flight_rand(seed: float) -> float:
+	var x := sin(seed * 127.1) * 43758.5453
+	return x - floor(x)
+
+
 func _spawn_flight(ingredient_id: String, from: Vector2) -> void:
 	var kind := MortarPile.kind_for(ingredient_id)
-	var count := MortarPile.sprite_count(kind)
-	var target := ZONE_MORTAR.position + Vector2(0.5016, 0.3359) * ZONE_MORTAR.size
-	for i in 5:
+	var sprites := maxi(1, MortarPile.sprite_count(kind))
+	var key := _flight_key
+	_flight_key += 1
+	var count := 4 + int(floor(_flight_rand(float(key + 1)) * 4.0))
+	var target := Vector2(
+		MortarPile.ZONE_X + (MortarPile.FLOOR_CX / 100.0) * MortarPile.ZONE_W,
+		MortarPile.ZONE_Y + ((MortarPile.FLOOR_CY - 2.5) / 100.0) * MortarPile.ZONE_H
+	)
+	var dist := from.distance_to(target)
+	var control := Vector2(
+		from.x + (target.x - from.x) * 0.3,
+		minf(from.y, target.y) - clampf(0.28 * dist, 70.0, 150.0)
+	)
+	for i in count:
+		var fi := float(i)
+		var fk := float(key)
 		_flights.append({
-			"t": -0.12 - float(i) * 0.022,
+			"t": -0.12 - fi * 0.022,
 			"from": from,
 			"to": target,
+			"control": control,
 			"kind": kind,
-			"sprite": 1 + (i % maxi(1, count)),
-			"sx": randf_range(-18.0, 36.0),
-			"sy": randf_range(-10.0, 14.0),
-			"spin": randf_range(-2.4, 2.4),
+			"sprite": 1 + int(floor(_flight_rand(fk * 23.0 + fi) * float(sprites))) % sprites,
+			"sx": _flight_rand(fk * 29.0 + fi) * 14.0,
+			"sy": (_flight_rand(fk * 31.0 + fi) - 0.5) * 8.0,
+			"dx": (_flight_rand(fk * 7.0 + fi) - 0.5) * 34.0,
+			"dy": (_flight_rand(fk * 11.0 + fi) - 0.5) * 10.0,
+			"rot0": _flight_rand(fk * 13.0 + fi) * TAU,
+			"spin": (_flight_rand(fk * 17.0 + fi) - 0.5) * deg_to_rad(520.0),
+			"size": 40.0 * (0.75 + _flight_rand(fk * 19.0 + fi) * 0.5),
 		})
+	_pending_lands.append({
+		"id": ingredient_id,
+		"color": "",
+		"left": 0.12 + 0.3 + float(count - 1) * 0.022,
+		"count": count,
+	})
 
 
 func _draw_liquid(_c: Control) -> void:
@@ -594,16 +783,35 @@ func _draw_spoon(_c: Control) -> void:
 	pass
 
 
-func _draw_brew(c: Control) -> void:
+func _brew_drawable() -> bool:
 	if _brew == null or _brew_painter == null:
-		return
+		return false
 	if not _brew.pot_visible():
-		return
+		return false
 	if discard_t >= 0.0:
-		return
+		return false
 	if bool(Game.brew["bottled"]) and pour == "":
+		return false
+	return true
+
+
+func _draw_brew_back(c: Control) -> void:
+	if not _brew_drawable():
+		if _brew_painter:
+			_brew_painter.hide_discs()
 		return
-	_brew_painter.draw(c, _brew, _mouth, _mouth_r.x, _mouth_r.y)
+	_brew_painter.draw_back(c, _brew, _mouth, _mouth_r.x, _mouth_r.y)
+
+
+func _draw_brew_front(c: Control) -> void:
+	if not _brew_drawable():
+		return
+	_brew_painter.draw_front(c, _brew, _mouth, _mouth_r.x, _mouth_r.y)
+
+
+func _draw_brew(c: Control) -> void:
+	_draw_brew_back(c)
+	_draw_brew_front(c)
 
 
 func _sync_brew(dt: float) -> void:
@@ -739,25 +947,39 @@ func _draw_stream(c: Control) -> void:
 		var ft := float(flight["t"])
 		if ft < 0.0:
 			continue
-		var u := clampf(ft / 0.3, 0.0, 1.0)
+		var k := clampf(ft / 0.3, 0.0, 1.0)
+		var e := _ease_in_out(k)
+		var u := 1.0 - e
 		var from: Vector2 = flight["from"]
 		var to: Vector2 = flight["to"]
-		var spread := Vector2(float(flight["sx"]), float(flight["sy"])) * (1.0 - u)
-		var arc := Vector2(0, -70.0 * sin(u * PI))
-		var at := from.lerp(to, u * u * (3.0 - 2.0 * u)) + spread + arc
+		var control: Vector2 = flight["control"]
+		var at := u * u * (from + Vector2(float(flight["sx"]), float(flight["sy"]))) + 2.0 * u * e * control + e * e * (to + Vector2(float(flight["dx"]), float(flight["dy"])))
 		var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(flight["kind"]), int(flight["sprite"])])
 		if tex == null:
 			continue
-		var px := lerpf(40.0, 28.0, u)
-		c.draw_set_transform(at, float(flight["spin"]) * ft, Vector2.ONE)
-		c.draw_texture_rect(tex, Rect2(-px * 0.5, -px * 0.5, px, px), false)
+		var px := float(flight["size"]) * (1.0 - 0.4 * e)
+		var alpha := 0.0 if k >= 1.0 else (1.0 if k <= 0.88 else (1.0 - k) / 0.12)
+		c.draw_set_transform(at, float(flight["rot0"]) + float(flight["spin"]) * e, Vector2.ONE)
+		c.draw_texture_rect(tex, Rect2(-px * 0.5, -px * 0.5, px, px), false, Color(1, 1, 1, alpha))
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if pour != "stream":
 		return
 	var col := LiquidColor.mix(Game.brew["entries"], str(Game.brew["currentHeat"]), _clock)
 	var rim := _tilted_rim()
-	var mouth := _pour_bottle.position + Vector2(_pour_bottle.size.x * 0.5, 18)
-	c.draw_line(rim, mouth, col, 8.0)
+	var mouth := _pour_bottle.position + Vector2(_pour_bottle.size.x * 0.5, 10.0)
+	var mid := (rim + mouth) * 0.5
+	var c1 := Vector2(rim.x + 22.0, rim.y + 4.0)
+	var c2 := mid * 2.0 - c1
+	var pts := PackedVector2Array()
+	for i in 25:
+		var t := float(i) / 24.0
+		pts.append(_stream_point(rim, c1, mid, c2, mouth, t))
+	var glow := Color(col.r, col.g, col.b, 0.35)
+	var sheen := Color(1.0, 1.0, 1.0, 0.45)
+	if pts.size() >= 2:
+		c.draw_polyline(pts, glow, 16.0, true)
+		c.draw_polyline(pts, col, 7.0, true)
+		c.draw_polyline(pts, sheen, 2.0, true)
 
 
 func _draw_pieces(c: Control) -> void:
@@ -786,11 +1008,32 @@ func _draw_pieces(c: Control) -> void:
 		var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(chip["kind"]), int(chip["sprite"])])
 		if tex == null:
 			continue
-		c.draw_set_transform(center, deg_to_rad(float(chip["rot"])), Vector2(sc, sc))
-		c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
-		var tint: Color = chip["color"]
-		c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint.r, tint.g, tint.b, 0.22), true)
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var rot := deg_to_rad(float(chip["rot"]))
+		var nick := int(chip.get("nick", 0))
+		var cracked := bool(chip.get("cracked", false)) or int(chip.get("generation", 0)) > 0
+		if cracked:
+			var clip := MortarPile.clip_polygon(nick)
+			var poly := PackedVector2Array()
+			var uvs := PackedVector2Array()
+			for p in clip:
+				uvs.append(p)
+				var local := Vector2((p.x - 0.5) * w, (p.y - 0.5) * h) * sc
+				poly.append(center + Vector2(cos(rot) * local.x - sin(rot) * local.y, sin(rot) * local.x + cos(rot) * local.y))
+			var cols := PackedColorArray()
+			cols.resize(poly.size())
+			cols.fill(Color.WHITE)
+			c.draw_polygon(poly, cols, uvs, tex)
+			var tinted := PackedColorArray()
+			tinted.resize(poly.size())
+			var tint: Color = chip["color"]
+			tinted.fill(Color(tint.r, tint.g, tint.b, 0.22))
+			c.draw_polygon(poly, tinted)
+		else:
+			c.draw_set_transform(center, rot, Vector2(sc, sc))
+			c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
+			var tint2: Color = chip["color"]
+			c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint2.r, tint2.g, tint2.b, 0.22), true)
+			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_mortar_fx(c: Control) -> void:
@@ -934,6 +1177,7 @@ func _tick_pour(dt: float) -> void:
 			Game.open_overlay_action("result")
 			Game.deliver()
 	_place_pour_bottle()
+	_sync_pour_camera()
 
 
 func _tilted_rim() -> Vector2:
@@ -973,23 +1217,37 @@ func _on_mortar_tap() -> void:
 		return
 	transfer_t = 0.0
 	_transfer_dropped = false
+	_transfer.begin(_mouth, _mouth_r)
+	if _cam_owner == "mortar":
+		_mortar_shot = false
+		_set_camera(Vector2(960, 540), 1.0, 0.45, false, "")
 	Sfx.scoop()
 	Haptics.pulse("light")
 
 
 func _tick_transfer(dt: float) -> void:
-	if transfer_t < 0.0:
+	if transfer_t < 0.0 or _transfer == null or not _transfer.active():
+		transfer_t = -1.0
 		return
-	transfer_t += dt
-	var drop_at := 0.32 + 1.6 + 0.7 + 0.88 * 0.46
-	if not _transfer_dropped and transfer_t >= drop_at:
+	var pose: Dictionary = _transfer.update(dt, _pile)
+	_transfer_last = pose
+	transfer_t = _transfer.t
+	var trails := int(pose.get("trail", 0))
+	if trails > 0 and _mortar_parts:
+		var col: Color = pose.get("color", Color("#8a7a52"))
+		for _i in trails:
+			_mortar_parts.burst("trail", Vector2(float(pose["x"]), float(pose["y"]) + 10.0), {"color": "#" + col.to_html(false)})
+	if bool(pose.get("landed", false)) and not _transfer_dropped:
 		_transfer_dropped = true
-		if _pile:
-			_held_chips = _pile.scoop_rest()
+		_held_chips = _transfer.chips.duplicate()
 		Game.add_mortar_to_cauldron()
 		Sfx.splash()
 		Haptics.pulse("medium")
-	if transfer_t >= 0.32 + 1.6 + 0.7 + 0.88 + 0.35:
+		if _mortar_parts:
+			var col2: Color = pose.get("color", Color("#8a7a52"))
+			for i in 3:
+				_mortar_parts.burst("ripple", Vector2(_transfer.land.x + float(i - 1) * 16.0, _transfer.land.y), {"color": "#" + col2.to_html(false)})
+	if not bool(pose.get("alive", false)):
 		transfer_t = -1.0
 
 
@@ -1007,6 +1265,7 @@ func _tick_mortar(dt: float) -> void:
 	if _pile == null:
 		return
 	var grinding := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0 and not Game.is_paused()
+	_tick_grind_camera(grinding, dt)
 	if Game.mortar == null:
 		_pile.sync({})
 		_fine_played = false
@@ -1182,11 +1441,8 @@ func _tap_jar(local: Vector2) -> void:
 	var id := str(ings[index]["id"])
 	var from := ZONE_CABINET.position + Vector2(43.0 + 64.0, INNER.position.y + _scroll + float(index) * SLOT_H + 76.0)
 	_spawn_flight(id, from)
-	_pending_lands.append({
-		"id": id,
-		"color": str(ings[index]["color"]),
-		"left": 0.12 + 0.3 + 4.0 * 0.022,
-	})
+	if not _pending_lands.is_empty():
+		_pending_lands[_pending_lands.size() - 1]["color"] = str(ings[index]["color"])
 	Haptics.pulse("light")
 
 
@@ -1199,6 +1455,8 @@ func _on_bucket() -> void:
 
 
 func begin_discard() -> void:
+	_discard_color = LiquidColor.mix(Game.brew["entries"], str(Game.brew["currentHeat"]), _clock)
+	_discard_burnt = Game.overprocessed()
 	Sfx.cauldron_throw()
 	Haptics.pulse("heavy")
 	Game.reset_brew()
@@ -1208,41 +1466,278 @@ func begin_discard() -> void:
 	pour = ""
 	transfer_t = -1.0
 	discard_t = 0.0
+	_stain = false
+	_splat_fired = false
+	_clang_fired = false
+	_thud_fired = false
+	_respawned = false
+	_discard_scene = DiscardMotion.build_scene(int(_clock * 1000.0) + 17)
+	_discard_tone = DiscardMotion.tones_for(_discard_color, _discard_burnt)
 	if _ghost:
-		_ghost.visible = true
-		_ghost.position = ZONE_CAULDRON.position
-		_ghost.rotation = 0
+		_ghost.visible = false
+	if _brew_painter:
+		_brew_painter.hide_discs()
 
 
 func _tick_discard(dt: float) -> void:
-	if discard_t < 0.0 or _ghost == null:
+	if discard_t < 0.0:
 		return
 	discard_t += dt
-	var u := clampf(discard_t / 0.7, 0.0, 1.0)
-	var start := ZONE_CAULDRON.position
-	var end := Vector2(820, 180)
-	var mid := (start + end) * 0.5 + Vector2(0, -220)
-	var uu := 1.0 - u
-	_ghost.position = uu * uu * start + 2.0 * uu * u * mid + u * u * end
-	_ghost.rotation_degrees = u * 140.0
-	_ghost.scale = Vector2.ONE * lerpf(1.0, 0.55, u)
-	if discard_t >= 0.45 and not _stain:
+	if not _splat_fired and discard_t >= DiscardMotion.GOBS_HIT:
+		_splat_fired = true
 		_stain = true
 		Sfx.cauldron_splat()
-	if discard_t >= 0.7:
+	if not _clang_fired and discard_t >= DiscardMotion.POT_HIT:
+		_clang_fired = true
 		Sfx.cauldron_clang()
-		Sfx.cauldron_land(0.6)
-		_ghost.visible = false
+		_shake_t = 0.18
+	if not _thud_fired and discard_t >= DiscardMotion.THUD_AT:
+		_thud_fired = true
+		Sfx.cauldron_land(0.55)
+	if not _respawned and discard_t >= DiscardMotion.RESPAWN_AT:
+		_respawned = true
+		if _brew:
+			_brew.respawn(0.0)
+	if discard_t >= DiscardMotion.END_AT:
 		discard_t = -1.0
 		_stain = false
-		if _brew:
-			_brew.respawn(0.35)
 
 
 func jump_pour(phase_name: String, t: float) -> void:
 	pour = phase_name
 	pour_t = t
 	_place_pour_bottle()
+	_sync_pour_camera()
 	if _pot_pivot:
 		_cauldron_angle = deg_to_rad(11.0 if phase_name != "deliver" else 4.0)
 		_pot_pivot.rotation = _cauldron_angle
+
+
+func jump_pot_closeup() -> void:
+	_set_camera(Vector2(_mouth.x, _mouth.y + 20.0), 1.45, 0.01, false, "pot")
+	_cam_t = _cam_dur
+	_apply_camera()
+
+
+func _radial_disc() -> ColorRect:
+	var node := ColorRect.new()
+	node.mouse_filter = MOUSE_FILTER_IGNORE
+	node.visible = false
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/radial_disc.gdshader")
+	node.material = mat
+	return node
+
+
+func _ease_in_out(u: float) -> float:
+	var t := clampf(u, 0.0, 1.0)
+	if t < 0.5:
+		return 2.0 * t * t
+	return 1.0 - pow(-2.0 * t + 2.0, 2.0) / 2.0
+
+
+func _stream_point(a: Vector2, c1: Vector2, mid: Vector2, c2: Vector2, b: Vector2, t: float) -> Vector2:
+	if t <= 0.5:
+		var u := t * 2.0
+		var k := 1.0 - u
+		return a * (k * k) + c1 * (2.0 * k * u) + mid * (u * u)
+	var u2 := (t - 0.5) * 2.0
+	var k2 := 1.0 - u2
+	return mid * (k2 * k2) + c2 * (2.0 * k2 * u2) + b * (u2 * u2)
+
+
+func _customer_focus() -> Vector2:
+	return Vector2(ZONE_CUSTOMER.position.x + ZONE_CUSTOMER.size.x * 0.42, ZONE_CUSTOMER.position.y + ZONE_CUSTOMER.size.y * 0.55)
+
+
+func _pour_focus() -> Vector2:
+	return Vector2(_mouth.x + 90.0, _mouth.y + 70.0)
+
+
+func _deliver_focus() -> Vector2:
+	return Vector2(ZONE_COUNTER.position.x + ZONE_COUNTER.size.x * 0.28, ZONE_COUNTER.position.y + 40.0)
+
+
+func _mortar_focus() -> Vector2:
+	return Vector2(ZONE_MORTAR.position.x + ZONE_MORTAR.size.x * 0.5, ZONE_MORTAR.position.y + ZONE_MORTAR.size.y * 0.45)
+
+
+func _set_camera(focus: Vector2, zoom: float, ms: float, letterbox: bool, owner: String) -> void:
+	if _tilt_mode == "off" and owner != "pot":
+		return
+	_cam_owner = owner
+	_cam_from = _cam_zoom
+	_cam_to = zoom
+	_cam_focus_from = _cam_focus
+	_cam_focus_to = focus
+	_cam_dur = maxf(ms, 0.001)
+	_cam_t = 0.0
+	_bar_target = 1.0 if letterbox else 0.0
+	_cam_return = -1.0
+
+
+func _apply_camera() -> void:
+	if _camera == null:
+		return
+	_camera.pivot_offset = _cam_focus
+	_camera.scale = Vector2(_cam_zoom, _cam_zoom)
+	var h := 72.0 * _bar
+	if _bars_top:
+		_bars_top.size = Vector2(1920, h)
+		_bars_top.position = Vector2.ZERO
+	if _bars_bot:
+		_bars_bot.size = Vector2(1920, h)
+		_bars_bot.position = Vector2(0, 1080.0 - h)
+
+
+func _tick_camera(dt: float) -> void:
+	if _cam_return > 0.0 and _cam_owner == "enter":
+		_cam_return -= dt
+		if _cam_return <= 0.0 and pour == "":
+			_set_camera(Vector2(960, 540), 1.0, 0.9, false, "")
+	if _cam_t < _cam_dur:
+		_cam_t += dt
+		var u := _ease_in_out(clampf(_cam_t / _cam_dur, 0.0, 1.0))
+		_cam_zoom = lerpf(_cam_from, _cam_to, u)
+		_cam_focus = _cam_focus_from.lerp(_cam_focus_to, u)
+	_bar = move_toward(_bar, _bar_target, dt / 0.55)
+	_apply_camera()
+
+
+func _tick_grind_camera(grinding: bool, dt: float) -> void:
+	if _tilt_mode == "off":
+		return
+	if grinding:
+		_cam_return = -1.0
+		if _cam_owner == "" or _cam_owner == "mortar":
+			if not _mortar_shot:
+				_mortar_shot = true
+				_set_camera(_mortar_focus(), 1.3, 0.65, false, "mortar")
+		return
+	if not _mortar_shot:
+		return
+	if transfer_t >= 0.0:
+		_mortar_shot = false
+		_set_camera(Vector2(960, 540), 1.0, 0.45, false, "")
+		return
+	if _cam_return < 0.0:
+		_cam_return = 0.5
+		return
+	_cam_return -= dt
+	if _cam_return <= 0.0:
+		_mortar_shot = false
+		_set_camera(Vector2(960, 540), 1.0, 0.65, false, "")
+
+
+func _sync_pour_camera() -> void:
+	if pour == _pour_seen:
+		return
+	_pour_seen = pour
+	if _tilt_mode == "off":
+		return
+	if pour == "tilt" or pour == "stream":
+		_mortar_shot = false
+		_set_camera(_pour_focus(), 1.22, 0.48, true, "pour")
+	elif pour == "deliver":
+		_set_camera(_deliver_focus(), 1.14, 0.68, true, "deliver")
+	elif pour == "" and (_cam_owner == "pour" or _cam_owner == "deliver"):
+		_set_camera(Vector2(960, 540), 1.0, 0.7, false, "")
+
+
+func _draw_transfer(c: Control) -> void:
+	if _transfer == null or not _transfer.active() or _spoon_art == null:
+		return
+	var pose := _transfer_pose()
+	if pose.is_empty():
+		return
+	_spoon_art.draw_free(c, Vector2(float(pose["x"]), float(pose["y"])), deg_to_rad(float(pose["rot"])), 250.0, float(pose["opacity"]))
+	if float(pose["blob"]) > 0.05:
+		for chip in pose.get("chips", []):
+			_draw_mini_chip(c, chip, Vector2(float(pose["x"]) + float(chip.get("sx", 0.0)), float(pose["y"]) + float(chip.get("sy", 0.0)) - 8.0), float(chip.get("dw", 16.0)), float(chip.get("dh", 16.0)), 1.0)
+	for item in pose.get("falling", []):
+		var eased := float(item.get("eased", 0.0))
+		var at := Vector2(_transfer.end.x + float(item["ox"]), _transfer.end.y + float(item["oy"])).lerp(Vector2(_transfer.land.x + float(item["ox"]) * 0.3, _transfer.land.y), eased)
+		_draw_mini_chip(c, item["chip"], at, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
+
+
+func _transfer_pose() -> Dictionary:
+	return {
+		"x": _transfer_last.get("x", _transfer.start.x),
+		"y": _transfer_last.get("y", _transfer.start.y),
+		"rot": _transfer_last.get("rot", 0.0),
+		"opacity": _transfer_last.get("opacity", 1.0),
+		"blob": _transfer_last.get("blob", 0.0),
+		"chips": _transfer_last.get("chips", []),
+		"falling": _transfer_last.get("falling", []),
+	}
+
+
+func _draw_mini_chip(c: Control, chip: Dictionary, at: Vector2, w: float, h: float, alpha: float) -> void:
+	if alpha <= 0.02:
+		return
+	if str(chip.get("kind", "")) == "dust":
+		var col: Color = chip.get("color", Color("#8a7a52"))
+		c.draw_circle(at, maxf(w, h) * 0.35, Color(col.r, col.g, col.b, 0.9 * alpha))
+		return
+	var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(chip.get("kind", "petal")), int(chip.get("sprite", 1))])
+	if tex == null:
+		return
+	c.draw_set_transform(at, deg_to_rad(float(chip.get("rot", 0.0))), Vector2.ONE)
+	c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false, Color(1, 1, 1, alpha))
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_wall(c: Control) -> void:
+	if discard_t < 0.0 or _discard_scene.is_empty():
+		return
+	DiscardMotion.draw_wall(c, discard_t, _discard_scene, _discard_tone)
+
+
+func _draw_discard_flight(c: Control) -> void:
+	if discard_t < 0.0 or _body == null:
+		return
+	DiscardMotion.draw_flight(c, _body.texture, discard_t, _discard_color, _discard_scene)
+
+
+func _draw_hole_back(c: Control) -> void:
+	_draw_stove(c, false)
+
+
+func _draw_hole_lip(c: Control) -> void:
+	_draw_stove(c, true)
+
+
+func _draw_stove(c: Control, lip: bool) -> void:
+	var cx := _stove.x
+	var cy := _stove.y
+	var rx := _stove.z
+	var ry := _stove.w
+	if rx < 2.0:
+		return
+	if not lip:
+		c.draw_set_transform(Vector2(cx, cy), 0.0, Vector2(rx, ry))
+		c.draw_circle(Vector2.ZERO, 1.0, Color("080402"))
+		c.draw_circle(Vector2(0, -0.15), 0.72, Color(0.16, 0.08, 0.03, 0.9))
+		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var glow := 0.5
+		if _fire:
+			glow = 0.5 + _fire.intensity * 0.6
+		c.draw_set_transform(Vector2(cx, cy + ry * 0.15), 0.0, Vector2(rx * 0.55, ry * 0.45))
+		c.draw_circle(Vector2.ZERO, 1.0, Color(1.0, 0.55, 0.2, 0.35 * glow))
+		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_ellipse_ring(c, cx, cy, rx, ry, PI * 1.15, PI * 1.85, Color(0.47, 0.39, 0.33, 0.55), 7.0)
+		_ellipse_ring(c, cx, cy, rx, ry, 0.2, PI - 0.2, Color(0, 0, 0, 0.55), 7.0)
+		_ellipse_ring(c, cx, cy, rx, ry, 0.0, TAU, Color("2a211c"), 7.0)
+	else:
+		_ellipse_ring(c, cx, cy, rx, ry, 0.05, PI - 0.05, Color("2a211c"), 7.0)
+		_ellipse_ring(c, cx, cy, rx, ry, 0.15, PI - 0.15, Color(0, 0, 0, 0.55), 5.0)
+
+
+func _ellipse_ring(c: Control, cx: float, cy: float, rx: float, ry: float, a0: float, a1: float, color: Color, width: float) -> void:
+	var pts := PackedVector2Array()
+	var n := 36
+	for i in n + 1:
+		var a := lerpf(a0, a1, float(i) / float(n))
+		pts.append(Vector2(cx + cos(a) * rx, cy + sin(a) * ry))
+	if pts.size() >= 2:
+		c.draw_polyline(pts, color, width, true)

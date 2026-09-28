@@ -44,6 +44,8 @@ var _origin: Vector2 = Vector2.ZERO
 var _upper: PackedVector2Array = PackedVector2Array()
 var _lower: PackedVector2Array = PackedVector2Array()
 var _mouth_clip: PackedVector2Array = PackedVector2Array()
+var _free := false
+var _fade := 1.0
 
 
 func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
@@ -71,6 +73,32 @@ func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	_head()
 	_handle()
 	_bowl()
+	_c = null
+
+
+func draw_free(c: CanvasItem, bowl_at: Vector2, rot: float, box: float, fade: float) -> void:
+	if c == null or fade <= 0.01 or box < 1.0:
+		return
+	_c = c
+	_free = true
+	_fade = clampf(fade, 0.0, 1.0)
+	_sc = box / 256.0
+	_rot = rot
+	_origin = bowl_at
+	var pad := box * 3.0
+	_upper = PackedVector2Array([
+		bowl_at + Vector2(-pad, -pad),
+		bowl_at + Vector2(pad, -pad),
+		bowl_at + Vector2(pad, pad),
+		bowl_at + Vector2(-pad, pad),
+	])
+	_lower = PackedVector2Array()
+	_mouth_clip = PackedVector2Array()
+	_head()
+	_handle()
+	_bowl()
+	_free = false
+	_fade = 1.0
 	_c = null
 
 
@@ -265,7 +293,7 @@ func _fill_design(pts: PackedVector2Array, color: Color) -> void:
 func _fill_screen(screen: PackedVector2Array, color: Color) -> void:
 	var up: PackedVector2Array = _clean(_clip_poly(screen, _upper))
 	if up.size() >= 3:
-		_c.draw_colored_polygon(up, color)
+		_c.draw_colored_polygon(up, Color(color.r, color.g, color.b, color.a * _fade))
 	var below: PackedVector2Array = _clip_poly(screen, _lower)
 	var in_mouth: PackedVector2Array = _clean(_clip_poly(below, _mouth_clip))
 	if in_mouth.size() >= 3:
@@ -284,7 +312,7 @@ func _stroke_design(pts: PackedVector2Array, color: Color, width: float, closed:
 	for run in _runs(screen):
 		var poly: PackedVector2Array = run
 		if poly.size() >= 2:
-			_c.draw_polyline(poly, color, px, true)
+			_c.draw_polyline(poly, Color(color.r, color.g, color.b, color.a * _fade), px, true)
 
 
 func _line_design(a: Vector2, b: Vector2, color: Color, width: float) -> void:
@@ -302,6 +330,8 @@ func _map(p: Vector2) -> Vector2:
 
 
 func _visible(p: Vector2) -> bool:
+	if _free:
+		return true
 	var ex: float = _rx * 0.96
 	var ey: float = _ry * 0.92
 	if ex > 0.0 and ey > 0.0:

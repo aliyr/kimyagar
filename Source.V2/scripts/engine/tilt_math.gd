@@ -173,9 +173,23 @@ static func unproject_work(pose: Dictionary, sx: float, sy: float) -> Vector2:
 
 
 static func unproject_mid(pose: Dictionary, sx: float, sy: float) -> Vector2:
+	return unproject_layer(pose, sx, sy, DEPTH_MID, "full")
+
+
+## Inverse of the rig shader: scale, then rotateX/rotateY, then the layer's depth translate.
+## `mode` off is identity. flat keeps scale 1.06 and the depth translate, with no angles.
+static func unproject_layer(pose: Dictionary, sx: float, sy: float, depth: float, mode: String) -> Vector2:
+	if mode == "off":
+		return Vector2(sx, sy)
+	var px := float(pose.get("px", 0.0))
+	var py := float(pose.get("py", 0.0))
+	if mode == "flat":
+		var lx := SCENE_W * 0.5 + (sx - SCENE_W * 0.5) / RIG_SCALE
+		var ly := SCENE_H * 0.5 + (sy - SCENE_H * 0.5) / RIG_SCALE
+		return Vector2(lx - px * depth, ly - py * depth)
 	var ang := _rig_angles(pose)
-	var cx := sx - SCENE_W / 2.0
-	var cy := sy - SCENE_H / 2.0
+	var cx := sx - SCENE_W * 0.5
+	var cy := sy - SCENE_H * 0.5
 	var s := RIG_SCALE
 	var d := PERSPECTIVE
 	var p0 := _invert_rig(ang.x, ang.y, 0.0, 0.0, d)
@@ -183,4 +197,4 @@ static func unproject_mid(pose: Dictionary, sx: float, sy: float) -> Vector2:
 	var dz := p1.z - p0.z
 	var t := 1.0 if absf(dz) < 1e-8 else -p0.z / dz
 	var hit := _invert_rig(ang.x, ang.y, (t * cx) / s, (t * cy) / s, d * (1.0 - t))
-	return Vector2(hit.x + SCENE_W / 2.0 - float(pose["px"]) * DEPTH_MID, hit.y + SCENE_H / 2.0 - float(pose["py"]) * DEPTH_MID)
+	return Vector2(hit.x + SCENE_W * 0.5 - px * depth, hit.y + SCENE_H * 0.5 - py * depth)

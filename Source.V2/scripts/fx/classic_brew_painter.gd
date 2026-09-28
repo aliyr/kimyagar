@@ -29,6 +29,18 @@ var _deep: Color = Color.WHITE
 var _light: Color = Color.WHITE
 var _glint: Color = Color.WHITE
 var _edge: Color = Color.WHITE
+var disc_interior: ColorRect
+var disc_liquid: ColorRect
+var disc_highlight: ColorRect
+var disc_glow: ColorRect
+var _rad_i := 0
+var _rad_img: Array = []
+var _rad_tex: Array = []
+var _liq_center := Vector2.ZERO
+var _lrx := 0.0
+var _lry := 0.0
+var _liq_fill := 0.0
+var _liq_ox := 0.0
 
 
 func _init() -> void:
@@ -36,8 +48,48 @@ func _init() -> void:
 
 
 func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
-	if rx < 1.0 or ry < 1.0:
+	draw_back(c, sim, mouth, rx, ry)
+	draw_front(c, sim, mouth, rx, ry)
+
+
+func hide_discs() -> void:
+	for node in [disc_interior, disc_liquid, disc_highlight, disc_glow]:
+		if node != null:
+			node.visible = false
+
+
+func draw_back(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
+	_rad_i = 0
+	if not _prepare(c, sim, mouth, rx, ry):
+		hide_discs()
 		return
+	_steam()
+	_heat_haze()
+	_spoon.draw(c, sim, mouth, rx, ry)
+	_interior()
+	_liquid_body()
+	_c = null
+	_sim = null
+
+
+func draw_front(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
+	if not _prepare(c, sim, mouth, rx, ry):
+		return
+	_liquid_marks()
+	_blooms()
+	_chips()
+	_bubbles()
+	_spots()
+	_sheen()
+	_droplets()
+	_sparkles()
+	_c = null
+	_sim = null
+
+
+func _prepare(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> bool:
+	if c == null or sim == null or rx < 1.0 or ry < 1.0:
+		return false
 	_c = c
 	_sim = sim
 	_mouth = mouth
@@ -52,70 +104,58 @@ func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	_light = _whiten(_base, 0.38)
 	_glint = _whiten(_base, 0.7)
 	_edge = _whiten(_base, -0.01)
-	_steam()
-	_heat_haze()
-	_spoon.draw(c, sim, mouth, rx, ry)
-	_interior()
-	_liquid()
-	_blooms()
-	_chips()
-	_bubbles()
-	_spots()
-	_sheen()
-	_droplets()
-	_sparkles()
-	_c = null
-	_sim = null
+	return true
 
 
 func _interior() -> void:
 	var ts: PackedFloat32Array = PackedFloat32Array([0.0, 0.72, 1.0])
 	var cols: Array[Color] = [Color("4a2818"), Color("2a140c"), Color("140804")]
-	_radial(_mouth, _rx, _ry, Vector2(_mouth.x, _mouth.y - _ry * 0.2), _rx, ts, cols, 10, 16, false)
+	_fill_radial(disc_interior, _mouth, _rx, _ry, Vector2(_mouth.x, _mouth.y - _ry * 0.2), _rx, ts, cols, false)
 
 
-func _liquid() -> void:
+func _liquid_geom() -> bool:
 	var fillv: float = clampf(float(_sim.fill), 0.0, 1.0)
+	_liq_fill = fillv
 	if fillv <= 0.01:
-		return
+		return false
 	var depth: float = 1.0 - fillv
 	var level: float = 0.42 + 0.58 * fillv
-	var ox: float = float(_sim.slosh_x) * _rx
+	_liq_ox = float(_sim.slosh_x) * _rx
 	var oy: float = float(_sim.slosh_y) * _ry + float(_sim.shiver) * _ry * 0.02
 	if float(_sim.dome) > 0.0:
 		oy -= _ry * 0.03 * float(_sim.dome)
-	var lx: float = _mouth.x + ox
-	var lrx: float = _rx * 0.97 * level
-	var lry: float = _ry * 0.88 * level
-	var ly: float = _mouth.y - _ry * 0.04 + oy + depth * (_ry * 1.15 - lry)
+	var lx: float = _mouth.x + _liq_ox
+	_lrx = _rx * 0.97 * level
+	_lry = _ry * 0.88 * level
+	var ly: float = _mouth.y - _ry * 0.04 + oy + depth * (_ry * 1.15 - _lry)
 	if depth > 0.0:
-		_wall_shadow(ly, lry, depth)
-	var center: Vector2 = Vector2(lx, ly)
+		_wall_shadow(ly, _lry, depth)
+	_liq_center = Vector2(lx, ly)
+	return true
+
+
+func _liquid_body() -> void:
+	if not _liquid_geom():
+		if disc_liquid:
+			disc_liquid.visible = false
+		if disc_highlight:
+			disc_highlight.visible = false
+		if disc_glow:
+			disc_glow.visible = false
+		return
+	var lx := _liq_center.x
+	var ly := _liq_center.y
 	var body: Color = Color(_base.r, _base.g, _base.b, 0.92)
 	var mid: Color = Color(_base.r, _base.g, _base.b, 0.97)
 	var edge: Color = Color(_edge.r, _edge.g, _edge.b, 1.0)
 	var ts: PackedFloat32Array = PackedFloat32Array([0.0, 0.62, 1.0])
 	var cols: Array[Color] = [body, mid, edge]
-	_radial(center, lrx, lry, Vector2(lx - lrx * 0.15, ly - lry * 0.2), lrx, ts, cols, 12, 18, true)
-	var swirl: float = float(_sim.swirl)
-	var vein: Color = Color(1.0, 244.0 / 255.0, 220.0 / 255.0, 0.07 * 0.9)
-	var vein_w: float = maxf(1.0, _ry * 0.035)
-	for i in 2:
-		_stroke(_arc(center, lrx * (0.34 + float(i) * 0.22), lry * (0.26 + float(i) * 0.18), swirl + float(i) * 0.5, 0.4, PI * 1.35, 16), vein, vein_w)
-	_stroke(_arc(center, lrx * 0.99, lry * 0.99, 0.0, 0.0, TAU, 32), Color(70.0 / 255.0, 32.0 / 255.0, 14.0 / 255.0, 0.45), maxf(1.0, _ry * 0.028))
-	_stroke(_arc(center, lrx * 0.9, lry * 0.88, 0.0, PI * 1.05, PI * 1.85, 12), Color(196.0 / 255.0, 120.0 / 255.0, 64.0 / 255.0, 0.4), maxf(1.2, _ry * 0.03))
-	var hx: float = lx - lrx * 0.22 + ox * 0.4
-	var hy: float = ly - lry * 0.28
+	_fill_radial(disc_liquid, _liq_center, _lrx, _lry, Vector2(lx - _lrx * 0.15, ly - _lry * 0.2), _lrx, ts, cols, true)
+	var hx: float = lx - _lrx * 0.22 + _liq_ox * 0.4
+	var hy: float = ly - _lry * 0.28
 	var hts: PackedFloat32Array = PackedFloat32Array([0.0, 1.0])
 	var hcols: Array[Color] = [Color(1.0, 248.0 / 255.0, 230.0 / 255.0, 0.38), Color(1.0, 248.0 / 255.0, 230.0 / 255.0, 0.0)]
-	_radial(Vector2(hx, hy), lrx * 0.38, lry * 0.28, Vector2(hx, hy), lrx * 0.45, hts, hcols, 8, 14, true)
-	if fillv < 1.0:
-		var ripple: Color = Color(1.0, 250.0 / 255.0, 240.0 / 255.0, 1.0)
-		var rw: float = maxf(1.0, _ry * 0.04)
-		for i in 3:
-			var p: float = fmod(float(_sim.time) * 1.7 + float(i) / 3.0, 1.0)
-			var a: float = (1.0 - p) * 0.4 * minf(1.0, fillv * 4.0) * 0.9
-			_stroke(_arc(center, lrx * (0.1 + 0.85 * p), lry * (0.1 + 0.85 * p), 0.0, 0.0, TAU, 28), Color(ripple.r, ripple.g, ripple.b, a), rw)
+	_fill_radial(disc_highlight, Vector2(hx, hy), _lrx * 0.38, _lry * 0.28, Vector2(hx, hy), _lrx * 0.45, hts, hcols, true)
 	var glow: float = float(_sim.fire_glow)
 	if glow > 0.02:
 		var gmul: float = glow * 0.28
@@ -125,7 +165,29 @@ func _liquid() -> void:
 			Color(1.0, 120.0 / 255.0, 40.0 / 255.0, 0.45 * gmul),
 			Color(1.0, 80.0 / 255.0, 20.0 / 255.0, 0.0),
 		]
-		_radial(center, lrx, lry, Vector2(lx, ly + lry * 0.4), lrx, gts, gcols, 6, 14, true)
+		_fill_radial(disc_glow, _liq_center, _lrx, _lry, Vector2(lx, ly + _lry * 0.4), _lrx, gts, gcols, true)
+	elif disc_glow:
+		disc_glow.visible = false
+
+
+func _liquid_marks() -> void:
+	if _liq_fill <= 0.01 or _lrx < 1.0:
+		return
+	var center := _liq_center
+	var swirl: float = float(_sim.swirl)
+	var vein: Color = Color(1.0, 244.0 / 255.0, 220.0 / 255.0, 0.07 * 0.9)
+	var vein_w: float = maxf(1.0, _ry * 0.035)
+	for i in 2:
+		_stroke(_arc(center, _lrx * (0.34 + float(i) * 0.22), _lry * (0.26 + float(i) * 0.18), swirl + float(i) * 0.5, 0.4, PI * 1.35, 16), vein, vein_w)
+	_stroke(_arc(center, _lrx * 0.99, _lry * 0.99, 0.0, 0.0, TAU, 32), Color(70.0 / 255.0, 32.0 / 255.0, 14.0 / 255.0, 0.45), maxf(1.0, _ry * 0.028))
+	_stroke(_arc(center, _lrx * 0.9, _lry * 0.88, 0.0, PI * 1.05, PI * 1.85, 12), Color(196.0 / 255.0, 120.0 / 255.0, 64.0 / 255.0, 0.4), maxf(1.2, _ry * 0.03))
+	if _liq_fill < 1.0:
+		var ripple: Color = Color(1.0, 250.0 / 255.0, 240.0 / 255.0, 1.0)
+		var rw: float = maxf(1.0, _ry * 0.04)
+		for i in 3:
+			var p: float = fmod(float(_sim.time) * 1.7 + float(i) / 3.0, 1.0)
+			var a: float = (1.0 - p) * 0.4 * minf(1.0, _liq_fill * 4.0) * 0.9
+			_stroke(_arc(center, _lrx * (0.1 + 0.85 * p), _lry * (0.1 + 0.85 * p), 0.0, 0.0, TAU, 28), Color(ripple.r, ripple.g, ripple.b, a), rw)
 
 
 func _wall_shadow(ly: float, lry: float, depth: float) -> void:
@@ -440,35 +502,84 @@ func _sparkles() -> void:
 		_paint(_star(pos, rot + 0.4, 4, rad * 0.42, rad * 0.16), Color("fff6d2", a))
 
 
-func _radial(ell_c: Vector2, ell_rx: float, ell_ry: float, grad_c: Vector2, grad_r: float, ts: PackedFloat32Array, cols: Array, bands: int, segs: int, also_mouth: bool) -> void:
-	if ell_rx < 0.4 or ell_ry < 0.4 or grad_r < 0.4 or bands < 1 or segs < 3:
+func _fill_radial(node: ColorRect, ell_c: Vector2, ell_rx: float, ell_ry: float, grad_c: Vector2, grad_r: float, ts: PackedFloat32Array, cols: Array, also_mouth: bool) -> void:
+	if node != null and node.material is ShaderMaterial:
+		_place_disc(node, ell_c, ell_rx, ell_ry, grad_c, grad_r, ts, cols, also_mouth)
 		return
-	var region: PackedVector2Array = _ellipse_pts(ell_c, ell_rx, ell_ry, 32, 0.0)
-	for b in bands:
-		var t0: float = float(b) / float(bands)
-		var t1: float = float(b + 1) / float(bands)
-		var col: Color = _sample(ts, cols, (t0 + t1) * 0.5)
-		if col.a <= 0.004:
-			continue
-		var r0: float = grad_r * t0
-		var r1: float = maxf(grad_r * t1, 0.4)
-		for s in segs:
-			var a0: float = TAU * float(s) / float(segs)
-			var a1: float = TAU * float(s + 1) / float(segs)
-			var quad: PackedVector2Array = PackedVector2Array()
-			if r0 < 0.2:
-				quad.append(grad_c)
-				quad.append(grad_c + Vector2(cos(a1), sin(a1)) * r1)
-				quad.append(grad_c + Vector2(cos(a0), sin(a0)) * r1)
-			else:
-				quad.append(grad_c + Vector2(cos(a0), sin(a0)) * r0)
-				quad.append(grad_c + Vector2(cos(a1), sin(a1)) * r0)
-				quad.append(grad_c + Vector2(cos(a1), sin(a1)) * r1)
-				quad.append(grad_c + Vector2(cos(a0), sin(a0)) * r1)
-			var cut: PackedVector2Array = _clip_poly(quad, region)
-			if also_mouth:
-				cut = _clip_poly(cut, _mouth_clip)
-			_paint(cut, col)
+	_radial(ell_c, ell_rx, ell_ry, grad_c, grad_r, ts, cols, 1, 1, also_mouth)
+
+
+func _place_disc(node: ColorRect, ell_c: Vector2, ell_rx: float, ell_ry: float, grad_c: Vector2, grad_r: float, ts: PackedFloat32Array, cols: Array, also_mouth: bool) -> void:
+	if ell_rx < 0.4 or ell_ry < 0.4 or grad_r < 0.4:
+		node.visible = false
+		return
+	node.visible = true
+	node.position = ell_c - Vector2(ell_rx, ell_ry)
+	node.size = Vector2(ell_rx, ell_ry) * 2.0
+	var mat := node.material as ShaderMaterial
+	mat.set_shader_parameter("rect_size", node.size)
+	mat.set_shader_parameter("grad_center", grad_c - node.position)
+	mat.set_shader_parameter("grad_radius", grad_r)
+	mat.set_shader_parameter("clip_mouth", also_mouth)
+	mat.set_shader_parameter("mouth_center", _mouth - node.position)
+	mat.set_shader_parameter("mouth_radii", Vector2(_rx, _ry))
+	var stops: Array[Color] = [Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 0)]
+	var times := [0.0, 1.0, 1.0, 1.0]
+	var n := mini(4, mini(ts.size(), cols.size()))
+	for i in n:
+		stops[i] = cols[i]
+		times[i] = float(ts[i])
+	mat.set_shader_parameter("stop_count", n)
+	mat.set_shader_parameter("stop0", stops[0])
+	mat.set_shader_parameter("stop1", stops[1])
+	mat.set_shader_parameter("stop2", stops[2])
+	mat.set_shader_parameter("stop3", stops[3])
+	mat.set_shader_parameter("t0", times[0])
+	mat.set_shader_parameter("t1", times[1])
+	mat.set_shader_parameter("t2", times[2])
+	mat.set_shader_parameter("t3", times[3])
+
+
+func _radial(ell_c: Vector2, ell_rx: float, ell_ry: float, grad_c: Vector2, grad_r: float, ts: PackedFloat32Array, cols: Array, _bands: int, _segs: int, also_mouth: bool) -> void:
+	if _c == null or ell_rx < 0.4 or ell_ry < 0.4 or grad_r < 0.4:
+		return
+	var tex := _bake_radial(ell_c, ell_rx, ell_ry, grad_c, grad_r, ts, cols)
+	var count := 36
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	pts.resize(count)
+	uvs.resize(count)
+	for i in count:
+		var a := TAU * float(i) / float(count)
+		pts[i] = ell_c + Vector2(cos(a) * ell_rx, sin(a) * ell_ry)
+		uvs[i] = Vector2((cos(a) + 1.0) * 0.5, (sin(a) + 1.0) * 0.5)
+	if also_mouth:
+		var cut: Array = _clip_uv(pts, uvs, _mouth_clip)
+		pts = cut[0]
+		uvs = cut[1]
+	_paint_tex(pts, uvs, tex, Color.WHITE)
+
+
+func _bake_radial(ell_c: Vector2, ell_rx: float, ell_ry: float, grad_c: Vector2, grad_r: float, ts: PackedFloat32Array, cols: Array) -> Texture2D:
+	const RES := 96
+	if _rad_img.size() <= _rad_i:
+		var created := Image.create(RES, RES, false, Image.FORMAT_RGBA8)
+		_rad_img.append(created)
+		_rad_tex.append(ImageTexture.create_from_image(created))
+	var img: Image = _rad_img[_rad_i]
+	var tex: ImageTexture = _rad_tex[_rad_i]
+	_rad_i += 1
+	for y in RES:
+		for x in RES:
+			var uv := Vector2((float(x) + 0.5) / float(RES), (float(y) + 0.5) / float(RES))
+			var e := (uv - Vector2(0.5, 0.5)) * 2.0
+			var col := Color(0, 0, 0, 0)
+			if e.length_squared() <= 1.0:
+				var world := ell_c + Vector2(e.x * ell_rx, e.y * ell_ry)
+				col = _sample(ts, cols, world.distance_to(grad_c) / grad_r)
+			img.set_pixel(x, y, col)
+	tex.update(img)
+	return tex
 
 
 func _blit(tex: Texture2D, origin: Vector2, size: Vector2, alpha: float) -> void:
@@ -559,8 +670,8 @@ func _ell_box(box_c: Vector2, rx: float, ry: float, local_rot: float, w: float, 
 
 
 func _teardrop(rl: float, rs: float, ang: float, pos: Vector2) -> PackedVector2Array:
-	var a: PackedVector2Array = _cubic(Vector2(-rl, 0.0), Vector2(-rl * 0.6, -rs), Vector2(rl * 0.25, -rs), Vector2(rl, 0.0), 12)
-	var b: PackedVector2Array = _cubic(Vector2(rl, 0.0), Vector2(rl * 0.25, rs), Vector2(-rl * 0.6, rs), Vector2(-rl, 0.0), 12)
+	var a: PackedVector2Array = _cubic(Vector2(-rl, 0.0), Vector2(-rl * 0.6, -rs), Vector2(rl * 0.25, -rs), Vector2(rl, 0.0), 18)
+	var b: PackedVector2Array = _cubic(Vector2(rl, 0.0), Vector2(rl * 0.25, rs), Vector2(-rl * 0.6, rs), Vector2(-rl, 0.0), 18)
 	var pts: PackedVector2Array = PackedVector2Array()
 	for i in a.size():
 		pts.append(_spin(a[i], ang, pos))

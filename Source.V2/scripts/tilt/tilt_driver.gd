@@ -21,6 +21,9 @@ var _cooldown_until := 0
 var _auto_dropped := false
 var _enabled := true
 var lock_pose := false
+var held := false
+var hold_px := 0.0
+var hold_py := 0.0
 
 
 func _ready() -> void:
@@ -38,8 +41,20 @@ func set_enabled(on: bool) -> void:
 		py = 0.0
 
 
+func hold_pose(nx: float, ny: float) -> void:
+	held = true
+	hold_px = nx
+	hold_py = ny
+	px = nx
+	py = ny
+
+
 func _process(dt: float) -> void:
 	_probe_frame()
+	if held:
+		px = hold_px
+		py = hold_py
+		return
 	if not _enabled or mode == "off":
 		px = 0.0
 		py = 0.0
