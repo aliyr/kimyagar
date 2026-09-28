@@ -51,6 +51,7 @@ var _note_who: Label
 var _note_sum: Label
 var _hint: Label
 var _grind_label: Label
+var _noroom: Label
 var _dusk: ColorRect
 var _vignette: ColorRect
 var _vignette_mat: ShaderMaterial
@@ -426,7 +427,11 @@ func _build() -> void:
 
 	_build_notebook()
 	_build_heat()
-	_hint = UiKit.label("", Rect2(300, 790, 520, 40), 18, Color("e9d9b4"))
+	# layout.ts stirHint. Classic only shows this for stir, bottle, and burnt.
+	_hint = UiKit.label("", Rect2(655, 396, 440, 48), 24, Color(233.0 / 255.0, 217.0 / 255.0, 180.0 / 255.0, 0.7))
+	_hint.clip_text = false
+	_hint.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_hint.add_theme_constant_override("shadow_offset_y", 2)
 	_pin.add_child(_hint)
 
 	_ghost = UiKit.sprite("cauldron/cauldron_body.png", ZONE_CAULDRON, "contain")
@@ -491,8 +496,13 @@ func _build_mortar() -> void:
 	_mortar_over.z_index = 6
 	_work.add_child(_mortar_over)
 	_build_brush()
-	_grind_label = UiKit.label("", Rect2(ZONE_MORTAR.position.x - 30, ZONE_MORTAR.position.y + ZONE_MORTAR.size.y + 4, ZONE_MORTAR.size.x + 60, 36), 22, Color("f3e6c4"), UiKit.bold)
+	# layout.ts mortarLabel, under the bowl. Grind copy lives here, not on the pot hint.
+	_grind_label = UiKit.label("", Rect2(252, 787, 326, 46), 22, Color(233.0 / 255.0, 217.0 / 255.0, 180.0 / 255.0, 0.62), UiKit.bold)
+	_grind_label.clip_text = false
 	_work.add_child(_grind_label)
+	_noroom = UiKit.label("جا ندارد!", Rect2(ZONE_MORTAR.position.x, ZONE_MORTAR.position.y - 36, ZONE_MORTAR.size.x, 32), 22, Color("ffe3c4"), UiKit.bold)
+	_noroom.visible = false
+	_work.add_child(_noroom)
 	var hit := UiKit.hit(ZONE_MORTAR.grow(20))
 	hit.pressed.connect(_on_mortar_tap)
 	_work.add_child(hit)
@@ -650,26 +660,39 @@ func _sync_note() -> void:
 
 
 func _sync_hint() -> void:
+	if _noroom:
+		_noroom.visible = _shake_t > 0.0
 	if _hint == null:
 		return
-	if _shake_t > 0.0:
-		_hint.text = "جا ندارد!"
-		return
-	if Game.overprocessed() and not Game.brew["bottled"]:
+	var entries: Array = Game.brew["entries"]
+	var filled := not entries.is_empty()
+	var bottled := bool(Game.brew["bottled"])
+	var burnt := Game.overprocessed() and not bottled
+	var stir_count := int(Game.brew.get("stirCount", 0))
+	var discarding := discard_t >= 0.0
+	var transferring := transfer_t >= 0.0
+	var pouring := pour != ""
+	if burnt and not discarding:
 		_hint.text = Content.UI["burntHint"]
-	if _grind_label:
-		var gstate = null if Game.mortar == null else Game.mortar.get("grindState")
-		_grind_label.text = "" if gstate == null else str(Content.GRIND.get(gstate, ""))
-	if Game.mortar != null and bool(Game.mortar.get("grinding", false)):
-		_hint.text = Content.UI["grindingHint"]
-	elif Game.mortar != null:
-		_hint.text = Content.UI["tapMortarHint"]
-	elif (Game.brew["entries"] as Array).is_empty():
-		_hint.text = Content.UI["jarTapHint"]
-	elif Game.all_ready():
+	elif filled and not bottled and stir_count == 0 and not discarding:
+		_hint.text = Content.UI["stirHint"]
+	elif Game.all_ready() and not bottled and not pouring and not transferring and not discarding and stir_count > 0:
 		_hint.text = Content.UI["tapToBottleHint"]
 	else:
-		_hint.text = Content.UI["stirHint"]
+		_hint.text = ""
+	if _grind_label == null:
+		return
+	if Game.mortar != null and not transferring:
+		var grinding := bool(Game.mortar.get("grinding", false))
+		var gstate = Game.mortar.get("grindState")
+		if gstate == null:
+			_grind_label.text = Content.UI["grindingHint"]
+		elif grinding:
+			_grind_label.text = str(Content.GRIND.get(gstate, ""))
+		else:
+			_grind_label.text = "%s — %s" % [str(Content.GRIND.get(gstate, "")), Content.UI["tapMortarHint"]]
+	else:
+		_grind_label.text = ""
 
 
 func _sync_liquid() -> void:

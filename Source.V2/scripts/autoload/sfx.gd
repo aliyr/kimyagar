@@ -32,11 +32,14 @@ var prof_mix_us := 0
 var prof_mix_frames := 0
 var _acc := PackedFloat32Array()
 var _out := PackedVector2Array()
+var _quit_after := 0
+var _playback_released := false
 
 
 func _ready() -> void:
 	_rng.randomize()
 	_build_noise()
+	_quit_after = _read_quit_after()
 	if DisplayServer.get_name() == "headless":
 		return
 	var gen := AudioStreamGenerator.new()
@@ -129,10 +132,13 @@ func _band_voice(freq: float, q: float, gain: float) -> Dictionary:
 
 
 func _process(delta: float) -> void:
-	# Movie Maker quits from the main loop while the generator playback is still
-	# queued, and the audio server then reports it as leaked. Stop on frame 2
-	# so later mixes drop it before that check. The picture is unchanged.
-	if OS.has_feature("movie") and Engine.get_process_frames() >= 2:
+	# The audio server's leak check runs before the tree exits. Movie Maker and
+	# `--quit-after` both leave the generator playback queued unless it is
+	# stopped a few frames earlier. The picture is unchanged.
+	var frame := Engine.get_process_frames()
+	if OS.has_feature("movie") and frame >= 2:
+		_release_playback()
+	elif _quit_after > 0 and frame >= maxi(_quit_after - 8, 1):
 		_release_playback()
 	if _play == null:
 		return
@@ -783,18 +789,125 @@ func _chime() -> void:
 		at += 0.08 + _rng.randf() * 0.22
 
 
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_release_playback()
+
+
 func _exit_tree() -> void:
 	_release_playback()
 
 
+func _read_quit_after() -> int:
+	# Godot consumes --quit-after before OS.get_cmdline_args(), so the flag is
+	# not visible there. The process command line still has it.
+	var n := _scan_quit_after(OS.get_cmdline_user_args())
+	if n > 0:
+		return n
+	n = _scan_quit_after(OS.get_cmdline_args())
+	if n > 0:
+		return n
+	return _scan_quit_after(_raw_argv())
+
+
+func _scan_quit_after(args: PackedStringArray) -> int:
+	var i := 0
+	while i < args.size():
+		var a := str(args[i])
+		if a.begins_with("--quit-after="):
+			return int(a.substr("--quit-after=".length()))
+		if a == "--quit-after" and i + 1 < args.size():
+			return int(str(args[i + 1]))
+		i += 1
+	return 0
+
+
+func _raw_argv() -> PackedStringArray:
+	var os_name := OS.get_name()
+	if os_name == "Linux" or os_name == "FreeBSD" or os_name == "Android":
+		return _argv_proc()
+	if os_name == "Windows":
+		return _argv_windows()
+	if os_name == "macOS":
+		return _argv_ps()
+	return PackedStringArray()
+
+
+func _argv_proc() -> PackedStringArray:
+	var f := FileAccess.open("/proc/self/cmdline", FileAccess.READ)
+	if f == null:
+		return PackedStringArray()
+	var raw := f.get_buffer(65536)
+	var parts := PackedStringArray()
+	var cur := PackedByteArray()
+	for b in raw:
+		if b == 0:
+			if cur.size() > 0:
+				parts.append(cur.get_string_from_utf8())
+				cur = PackedByteArray()
+		else:
+			cur.append(b)
+	if cur.size() > 0:
+		parts.append(cur.get_string_from_utf8())
+	return parts
+
+
+func _argv_windows() -> PackedStringArray:
+	var out: Array = []
+	var pid := OS.get_process_id()
+	var code := OS.execute("powershell", [
+		"-NoProfile", "-NonInteractive", "-Command",
+		"(Get-CimInstance Win32_Process -Filter \"ProcessId=%d\").CommandLine" % pid,
+	], out, true)
+	if code != 0 or out.is_empty():
+		return PackedStringArray()
+	return _split_win_cmdline(str(out[0]).strip_edges())
+
+
+func _argv_ps() -> PackedStringArray:
+	var out: Array = []
+	var code := OS.execute("/bin/ps", ["-p", str(OS.get_process_id()), "-o", "command="], out, true)
+	if code != 0 or out.is_empty():
+		return PackedStringArray()
+	return _split_win_cmdline(str(out[0]).strip_edges())
+
+
+func _split_win_cmdline(line: String) -> PackedStringArray:
+	var parts := PackedStringArray()
+	var cur := ""
+	var quote := ""
+	var i := 0
+	while i < line.length():
+		var ch := line.substr(i, 1)
+		if quote == "" and (ch == " " or ch == "\t"):
+			if cur != "":
+				parts.append(cur)
+				cur = ""
+		elif quote == "" and (ch == "\"" or ch == "'"):
+			quote = ch
+		elif ch == quote:
+			quote = ""
+		else:
+			cur += ch
+		i += 1
+	if cur != "":
+		parts.append(cur)
+	return parts
+
+
 func _release_playback() -> void:
+	if _playback_released:
+		return
+	_playback_released = true
 	_voices.clear()
 	_later.clear()
-	var playback: AudioStreamGeneratorPlayback = _play
 	_play = null
 	if _player and is_instance_valid(_player):
 		_player.stream_paused = true
 		_player.stop()
-	playback = null
+		_player.stream = null
+		var player := _player
+		_player = null
+		player.free()
 
 

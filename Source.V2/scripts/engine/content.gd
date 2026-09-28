@@ -164,6 +164,20 @@ static func hour_override(search: String) -> Variant:
 	return null
 
 
+## `--hour=N` from the Godot command line. Hours outside 0–23 are ignored.
+static func hour_from_flag(arg: String) -> Variant:
+	var prefix := "--hour="
+	if not arg.begins_with(prefix):
+		return null
+	var body := arg.substr(prefix.length())
+	if not body.is_valid_int():
+		return null
+	var h := int(body)
+	if h >= 0 and h < 24:
+		return h
+	return null
+
+
 static func stage_unlocked(index: int) -> bool:
 	return index == 0
 

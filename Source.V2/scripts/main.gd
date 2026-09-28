@@ -13,6 +13,7 @@ var _chrome: CanvasLayer
 var _plate_frames := 0
 var _gear: Button
 var _back: Button
+var _v2: Button
 var _shot := ""
 var _shot_out := ""
 var _start_workshop := false
@@ -111,13 +112,21 @@ func _exit_tree() -> void:
 
 
 func _parse_args() -> void:
-	for arg in OS.get_cmdline_user_args():
+	# Engine args first, then user args after `--`, so `-- --hour=N` wins.
+	_scan_args(OS.get_cmdline_args())
+	_scan_args(OS.get_cmdline_user_args())
+
+
+func _scan_args(args: PackedStringArray) -> void:
+	for arg in args:
 		if arg.begins_with("--shot="):
 			_shot = arg.substr("--shot=".length())
 		elif arg.begins_with("--out="):
 			_shot_out = arg.substr("--out=".length())
 		elif arg.begins_with("--hour="):
-			Settings.hour_override = int(arg.substr("--hour=".length()))
+			var h = Content.hour_from_flag(arg)
+			if h != null:
+				Settings.hour_override = h
 		elif arg == "--workshop":
 			_start_workshop = true
 		elif arg == "--profile":
@@ -135,17 +144,26 @@ func _build_chrome() -> void:
 		Game.open_overlay_action("settings")
 	)
 	_chrome.add_child(_gear)
-	# scene.css .classic-corner-links .gate-return — dark pill, bottom inline-end.
-	_back = Button.new()
-	_back.text = Content.UI["gateReturn"]
-	_back.focus_mode = Control.FOCUS_NONE
-	_back.clip_text = false
+	# scene.css .classic-corner-links — RTL flex at inline-end 14, bottom 12.
+	# First child is «سردر», then «نسخه ۲», so the version chip sits on the left.
+	_v2 = _corner_pill("نسخه ۲", Rect2(14, 1038, 108, 30))
+	_back = _corner_pill(Content.UI["gateReturn"], Rect2(130, 1038, 84, 30))
+	_back.pressed.connect(_go_gate)
+	_chrome.add_child(_v2)
+	_chrome.add_child(_back)
+
+
+func _corner_pill(text: String, rect: Rect2) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.clip_text = false
 	UiKit.ensure()
-	_back.add_theme_font_override("font", UiKit.regular)
-	_back.add_theme_font_size_override("font_size", 14)
-	_back.add_theme_color_override("font_color", Color(0.914, 0.851, 0.706, 0.6))
-	_back.add_theme_color_override("font_hover_color", Color(0.914, 0.851, 0.706, 0.95))
-	_back.text_direction = Control.TEXT_DIRECTION_RTL
+	b.add_theme_font_override("font", UiKit.regular)
+	b.add_theme_font_size_override("font_size", 14)
+	b.add_theme_color_override("font_color", Color(0.914, 0.851, 0.706, 0.6))
+	b.add_theme_color_override("font_hover_color", Color(0.914, 0.851, 0.706, 0.95))
+	b.text_direction = Control.TEXT_DIRECTION_RTL
 	var pill := StyleBoxFlat.new()
 	pill.bg_color = Color(16.0 / 255.0, 10.0 / 255.0, 6.0 / 255.0, 0.55)
 	pill.border_color = Color(0.914, 0.851, 0.706, 0.22)
@@ -155,14 +173,16 @@ func _build_chrome() -> void:
 	pill.content_margin_right = 16
 	pill.content_margin_top = 5
 	pill.content_margin_bottom = 5
-	_back.add_theme_stylebox_override("normal", pill)
-	_back.add_theme_stylebox_override("hover", pill)
-	_back.add_theme_stylebox_override("pressed", pill)
-	_back.add_theme_stylebox_override("focus", pill)
-	UiKit.place(_back, Rect2(14, 1038, 84, 30))
-	_back.size = Vector2(84, 30)
-	_back.pressed.connect(_go_gate)
-	_chrome.add_child(_back)
+	b.add_theme_stylebox_override("normal", pill)
+	b.add_theme_stylebox_override("hover", pill)
+	b.add_theme_stylebox_override("pressed", pill)
+	b.add_theme_stylebox_override("focus", pill)
+	b.modulate.a = 0.55
+	b.mouse_entered.connect(func() -> void: b.modulate.a = 1.0)
+	b.mouse_exited.connect(func() -> void: b.modulate.a = 0.55)
+	UiKit.place(b, rect)
+	b.size = rect.size
+	return b
 
 
 func _process(dt: float) -> void:
@@ -188,6 +208,8 @@ func _process(dt: float) -> void:
 		workshop.set_behind(false)
 	_gear.visible = phase == "workshop"
 	_back.visible = phase == "workshop"
+	if _v2:
+		_v2.visible = phase == "workshop"
 	overlays.advance(dt)
 	debug.refresh("phase %s tilt %s" % [phase, tilt.describe()])
 	_probe_t += dt

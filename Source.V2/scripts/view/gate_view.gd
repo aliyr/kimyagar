@@ -59,6 +59,20 @@ var grade_tint_sat := 1.0
 var grade_tint_bright := 1.0
 var grade_sat := 1.0
 
+# intro-passer 26s ease-in-out. Transform and opacity are separate keyframe tracks.
+const _PASSER_TX := [
+	Vector2(0.00, 440.0), Vector2(0.22, 40.0), Vector2(0.28, 10.0),
+	Vector2(0.46, 440.0), Vector2(0.50, 470.0), Vector2(1.00, 470.0),
+]
+const _PASSER_SC := [
+	Vector2(0.00, 0.55), Vector2(0.22, 1.0), Vector2(0.28, 1.02),
+	Vector2(0.46, 0.55), Vector2(0.50, 0.52), Vector2(1.00, 0.52),
+]
+const _PASSER_OP := [
+	Vector2(0.00, 0.0), Vector2(0.04, 0.7), Vector2(0.22, 1.0), Vector2(0.28, 1.0),
+	Vector2(0.46, 0.6), Vector2(0.50, 0.0), Vector2(1.00, 0.0),
+]
+
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
@@ -209,9 +223,13 @@ func _build() -> void:
 	_dust_fx = _fx_host(_draw_dust)
 	_front_layer.add_child(_dust_fx)
 
-	_passer = UiKit.sprite("gate/customer_shadow.png", Rect2(1500, 230, 280, 780), "contain")
+	# intro.css .intro__passer img: left 1500, bottom -70, height 780, origin 50% 100%.
+	# The PNG is 378×1111, so the laid-out width is 265. A top of 230 put the
+	# head on the wall behind the settings lantern.
+	var passer_w := 378.0 / 1111.0 * 780.0
+	_passer = UiKit.sprite("gate/customer_shadow.png", Rect2(1500, 370, passer_w, 780), "fill")
 	_passer.modulate = Color(0.22, 0.22, 0.22, 0)
-	_passer.pivot_offset = Vector2(140, 780)
+	_passer.pivot_offset = Vector2(passer_w * 0.5, 780)
 	_front_layer.add_child(_passer)
 
 	_cat_sleep = UiKit.sprite("intro/cat_sleep.png", Rect2(700, 922, 200, 110), "contain")
@@ -231,8 +249,6 @@ func _build() -> void:
 	var settings := UiKit.sprite("intro/lantern.png", Rect2(1764, 328, 80, 208), "contain")
 	settings.modulate.a = 0.92
 	_mid_layer.add_child(settings)
-	# .intro__tag bottom is 32px below the 230px-tall settings hit.
-	_mid_layer.add_child(_tag(Content.UI["settings"], Rect2(1704, 548, 200, 40), 17))
 	_rig_hits.append({"rect": Rect2(1764, 328, 80, 230), "depth": 36.0, "cb": _open_settings})
 
 	_wrap_rig()
@@ -455,6 +471,12 @@ func _build_pin() -> void:
 	var map_hit := UiKit.hit(Rect2(1748, 746, 112, 307))
 	map_hit.pressed.connect(func() -> void: _toggle_panel("stages"))
 	add_child(map_hit)
+	# .intro__settings .intro__tag is inside the 1.06 rig. Its box runs past
+	# x=1920, and a label there was clipped away. This is the same caption
+	# after that scale, on the unscaled pin, so the glyphs stay on screen.
+	var settings_tag := _tag(Content.UI["settings"], Rect2(1774, 562, 160, 32), 17)
+	settings_tag.modulate.a = 0.92
+	add_child(settings_tag)
 
 	_fresh = UiKit.fresh_button(Content.UI["gateFresh"], Rect2(900, 1002, 168, 36))
 	_fresh.pivot_offset = Vector2(75, 20)
@@ -851,17 +873,51 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 	else:
 		scale = Vector2.ONE
 		modulate.a = 1.0
-	if not freeze and _passer and phase == "idle":
-		var p := fposmod(_clock, 26.0) / 26.0
-		var op := float(sky["passerOpacity"])
-		if p < 0.04:
-			_passer.modulate.a = 0.0
-		elif p < 0.22:
-			_passer.modulate.a = op
-			_passer.position.x = lerpf(1940, 1540, (p - 0.04) / 0.18)
-		elif p < 0.4:
-			_passer.modulate.a = op * (1.0 - (p - 0.28) / 0.12)
-		else:
-			_passer.modulate.a = 0.0
-	elif _passer and freeze:
+	_apply_passer()
+
+
+func _apply_passer() -> void:
+	if _passer == null:
+		return
+	if freeze or phase == "boot" or phase == "entering":
 		_passer.modulate.a = 0.0
+		return
+	var p := fposmod(_clock, 26.0) / 26.0
+	var tx := _track(p, _PASSER_TX)
+	var sc := _track(p, _PASSER_SC)
+	var mul := _track(p, _PASSER_OP)
+	_passer.position = Vector2(1500.0 + tx, 370.0)
+	_passer.scale = Vector2(sc, sc)
+	_passer.modulate = Color(0.22, 0.22, 0.22, float(sky["passerOpacity"]) * mul)
+
+
+func _track(p: float, keys: Array) -> float:
+	var a: Vector2 = keys[0]
+	if p <= a.x:
+		return a.y
+	var last: Vector2 = keys[keys.size() - 1]
+	if p >= last.x:
+		return last.y
+	for i in keys.size() - 1:
+		var left: Vector2 = keys[i]
+		var right: Vector2 = keys[i + 1]
+		if p <= right.x:
+			var span := right.x - left.x
+			var u := 0.0 if span <= 0.0 else (p - left.x) / span
+			return lerpf(left.y, right.y, _css_ease(u))
+	return last.y
+
+
+func _css_ease(t: float) -> float:
+	# cubic-bezier(0.42, 0, 0.58, 1), the CSS ease-in-out used by intro-passer.
+	t = clampf(t, 0.0, 1.0)
+	var u := t
+	for _i in 6:
+		var o := 1.0 - u
+		var x := 3.0 * o * o * u * 0.42 + 3.0 * o * u * u * 0.58 + u * u * u
+		var dx := 3.0 * o * o * 0.42 + 6.0 * o * u * 0.16 + 3.0 * u * u * 0.42
+		if absf(dx) < 1e-6:
+			break
+		u = clampf(u - (x - t) / dx, 0.0, 1.0)
+	var o2 := 1.0 - u
+	return 3.0 * o2 * u * u + u * u * u
