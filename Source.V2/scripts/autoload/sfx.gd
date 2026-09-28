@@ -674,9 +674,9 @@ func _chime() -> void:
 
 
 func _exit_tree() -> void:
-	_play = null
 	_voices.clear()
 	_later.clear()
 	if _player:
 		_player.stop()
-		_player.stream = null
+	# Drop our playback ref after stop. Clearing the stream first orphans it.
+	_play = null
