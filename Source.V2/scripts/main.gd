@@ -308,12 +308,13 @@ func _print_grade_probe() -> void:
 	var sky_s := "none"
 	var brick_s := "none"
 	if img != null:
-		var sky_px := img.get_pixel(960, 70)
+		# (200, 40) is open sky on the gate. (1400, 450) is facade brick at dusk.
+		var sky_px := img.get_pixel(200, 40)
 		var brick_px := img.get_pixel(1400, 450)
 		sky_s = "%d,%d,%d" % [sky_px.r8, sky_px.g8, sky_px.b8]
 		brick_s = "%d,%d,%d" % [brick_px.r8, brick_px.g8, brick_px.b8]
-	print("grade adapter=\"%s\" hour=%d time=%s path=%s hue=%.1f bright=%.2f tint_op=%.2f sky_px=%s brick_px=%s" % [
-		adapter, hour_n, gate.time_name, gate.grade_path, gate.grade_hue, gate.grade_bright, gate.grade_tint_op, sky_s, brick_s
+	print("grade adapter=\"%s\" hour=%d time=%s phase=%s path=%s hue=%.1f bright=%.2f tint_op=%.2f sky_px=%s brick_px=%s" % [
+		adapter, hour_n, gate.time_name, phase, gate.grade_path, gate.grade_hue, gate.grade_bright, gate.grade_tint_op, sky_s, brick_s
 	])
 
 

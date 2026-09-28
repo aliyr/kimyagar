@@ -408,13 +408,13 @@ func _build() -> void:
 	note_bg.queue_redraw()
 	# .note__who is the small line; .note__summary is the bold order under it.
 	# Inset matches .note__content so the name is not cut off at the card edge.
-	_note_who = UiKit.label("", Rect2(1476, 40, 360, 30), 20, Color(0.231, 0.173, 0.075, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT)
-	_note_sum = UiKit.label("", Rect2(1476, 72, 360, 78), 25, Color("3b2c13"), UiKit.bold, HORIZONTAL_ALIGNMENT_RIGHT)
+	_note_who = UiKit.label("", Rect2(1484, 42, 340, 28), 18, Color(0.231, 0.173, 0.075, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT)
+	_note_sum = UiKit.label("", Rect2(1484, 70, 340, 72), 22, Color("3b2c13"), UiKit.bold, HORIZONTAL_ALIGNMENT_RIGHT)
 	_note_who.clip_text = false
-	_note_sum.clip_text = true
+	_note_sum.clip_text = false
 	near.add_child(_note_who)
 	near.add_child(_note_sum)
-	var pin := _radial_dot(Rect2(1822, 12, 26, 26), Color(0.878, 0.25, 0.22, 1.0))
+	var pin := _radial_dot(Rect2(1856, 10, 22, 22), Color(0.878, 0.25, 0.22, 1.0))
 	near.add_child(pin)
 	var note_hit := UiKit.hit(ZONE_NOTE)
 	note_hit.pressed.connect(func() -> void:
@@ -527,8 +527,8 @@ func _add_jar(ing: Dictionary, index: int) -> void:
 	_cabinet_strip.add_child(jar)
 	# .cabinet .shelf-jar__label — parchment plaque on the jar's lower edge.
 	var plaque := Panel.new()
-	plaque.position = Vector2(32, y + 112)
-	plaque.size = Vector2(150, 28)
+	plaque.position = Vector2(6, y + 112)
+	plaque.size = Vector2(202, 28)
 	plaque.mouse_filter = MOUSE_FILTER_IGNORE
 	var plate := StyleBoxFlat.new()
 	plate.bg_color = Color("e6d3a8")
@@ -540,7 +540,7 @@ func _add_jar(ing: Dictionary, index: int) -> void:
 	plate.shadow_offset = Vector2(0, 2)
 	plaque.add_theme_stylebox_override("panel", plate)
 	_cabinet_strip.add_child(plaque)
-	var name := UiKit.label(str(ing["nameFa"]), Rect2(0, 0, 150, 28), 16, Color("33240f"))
+	var name := UiKit.label(str(ing["nameFa"]), Rect2(0, 0, 202, 28), 15, Color("33240f"))
 	name.clip_text = false
 	plaque.add_child(name)
 
@@ -576,7 +576,7 @@ func _build_heat() -> void:
 		notch.draw.connect(_draw_notch.bind(notch))
 		notch.gui_input.connect(_on_notch_input.bind(heat_name))
 		_pin.add_child(notch)
-		var lab := UiKit.label(Content.HEAT[heat_name], Rect2(0, 36, 104, 24), 18, Color(0.91, 0.85, 0.71, 0.55))
+		var lab := UiKit.label(Content.HEAT[heat_name], Rect2(0, 34, 104, 26), 20, Color(0.91, 0.85, 0.71, 0.55))
 		lab.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
 		lab.add_theme_constant_override("shadow_offset_y", 2)
 		notch.add_child(lab)
@@ -612,7 +612,7 @@ func _tick_fire(dt: float) -> void:
 	if _fire_rect:
 		_fire_rect.texture = _fire.texture
 	if _fire_glow:
-		var glow := 0.24 if heat == "low" else (0.74 if heat == "high" else 0.46)
+		var glow := 0.16 if heat == "low" else (0.42 if heat == "high" else 0.28)
 		_fire_glow.modulate.a = glow
 	_sync_notches()
 
@@ -1817,7 +1817,7 @@ func _radial_dot(rect: Rect2, tint: Color) -> TextureRect:
 
 func _build_ambience() -> void:
 	# .amb-fire — screen-like warm pool over the stove. Additive on a dark room.
-	_fire_glow = _radial_dot(Rect2(500, 560, 780, 740), Color(1.0, 0.55, 0.18, 0.46))
+	_fire_glow = _radial_dot(Rect2(500, 560, 780, 740), Color(1.0, 0.55, 0.18, 0.28))
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_fire_glow.material = add
