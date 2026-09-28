@@ -48,6 +48,13 @@ var _furnace_fx: Control
 var _stove_back: Control
 var _stove_front: Control
 var hold_camera := false
+## Boil shots must not grow the stir spoon. The web auto-stir is 900ms and the
+## boil frame is taken at 800ms, so the ladle is still out of the pot.
+var block_auto_stir := false
+## Shot captures warm the sim to the web's timestamp, then hold it. The frames
+## before the screenshot would otherwise keep stirring, burning, and carrying.
+var hold_sim := false
+var overlay: OverlayView
 var _liquid: Control
 var _spoon: Control
 var _body: TextureRect
@@ -90,6 +97,8 @@ var _brush: Control
 var _brew: ClassicBrewSim
 var _brew_painter: ClassicBrewPainter
 var _fx: Control
+var _fx_spin: Control
+var _focus_t := 0.0
 var _known := {}
 var _brew_acc := 0.0
 var _stir_delay := -1.0
@@ -198,7 +207,11 @@ func set_behind(on: bool) -> void:
 
 
 func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
-	_clock += dt
+	# Shots freeze the sim at the web timestamp. The backdrop scale and the
+	# dusk cover still have to match a live frame, or idle samples the wall wrong.
+	var sim_dt := 0.0 if hold_sim else dt
+	if not hold_sim:
+		_clock += dt
 	if _bg_rig:
 		var px := 0.0
 		var py := 0.0
@@ -211,7 +224,7 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 		if _near:
 			_near.position = Vector2(px, py) * 12.0
 		_tilt_mode = "off" if tilt == null else tilt.mode
-		_tick_camera(dt)
+		_tick_camera(sim_dt)
 		if _bg and _bg_mat:
 			var dimensional := use and tilt.mode != "flat" and (absf(px) > 0.02 or absf(py) > 0.02)
 			if dimensional:
@@ -239,6 +252,13 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 		return
 	if _dusk:
 		_dusk.visible = false
+	if hold_sim:
+		_sync_customer()
+		_sync_note()
+		_sync_hint()
+		_place_pestle()
+		_sync_pot_spin()
+		return
 	_tick_fire(dt)
 	_tick_mortar(dt)
 	_sync_brew(dt)
@@ -253,7 +273,17 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	if _vignette:
 		_vignette.visible = true
 		if _vignette_mat:
-			_vignette_mat.set_shader_parameter("pause", 1.0 if Game.is_paused() else 0.0)
+			var pause := overlay.vignette_pause() if overlay != null else (1.0 if Game.is_paused() else 0.0)
+			var grinding_now := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0
+			# .cst-focus fades in over 0.65s with the CSS ease curve. The grind
+			# pair is only 60ms in, so a full overlay is much darker than the web.
+			if grinding_now:
+				_focus_t = minf(_focus_t + dt, 0.65)
+			else:
+				_focus_t = maxf(_focus_t - dt, 0.0)
+			_vignette_mat.set_shader_parameter("pause", pause)
+			_vignette_mat.set_shader_parameter("grind", _css_ease(clampf(_focus_t / 0.65, 0.0, 1.0)))
+	_sync_pot_spin()
 	var burnt: bool = Game.overprocessed() and not bool(Game.brew["bottled"]) and discard_t < 0.0
 	var haze_target := 1.0 if burnt else 0.0
 	_haze = move_toward(_haze, haze_target, dt / 4.0)
@@ -337,22 +367,29 @@ func _build() -> void:
 	_spoon.size = Vector2(320, 320)
 	_pot_pivot.add_child(_spoon)
 
+	# Steam, spoon, and liquid ride the same pivot as the cauldron body. The web
+	# rotates that whole canvas around the pot base while the pot tilts to pour.
+	_fx_spin = Control.new()
+	_fx_spin.mouse_filter = MOUSE_FILTER_IGNORE
+	_fx_spin.pivot_offset = _pot_base
+	UiKit.fill(_fx_spin)
+	_work.add_child(_fx_spin)
 	_fx_back = _painter(_draw_brew_back)
 	UiKit.fill(_fx_back)
 	_fx_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	_work.add_child(_fx_back)
+	_fx_spin.add_child(_fx_back)
 	_brew_painter.disc_interior = _radial_disc()
 	_brew_painter.disc_liquid = _radial_disc()
 	_brew_painter.disc_highlight = _radial_disc()
 	_brew_painter.disc_glow = _radial_disc()
-	_work.add_child(_brew_painter.disc_interior)
-	_work.add_child(_brew_painter.disc_liquid)
-	_work.add_child(_brew_painter.disc_highlight)
-	_work.add_child(_brew_painter.disc_glow)
+	_fx_spin.add_child(_brew_painter.disc_interior)
+	_fx_spin.add_child(_brew_painter.disc_liquid)
+	_fx_spin.add_child(_brew_painter.disc_highlight)
+	_fx_spin.add_child(_brew_painter.disc_glow)
 	_fx = _painter(_draw_brew_front)
 	UiKit.fill(_fx)
 	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	_work.add_child(_fx)
+	_fx_spin.add_child(_fx)
 	_hole_lip = _painter(_draw_hole_lip)
 	UiKit.fill(_hole_lip)
 	_hole_lip.z_index = 4
@@ -372,6 +409,7 @@ func _build() -> void:
 	_work.add_child(_pour_bottle)
 	_stream = _painter(_draw_stream)
 	UiKit.fill(_stream)
+	_stream.z_index = 8
 	_work.add_child(_stream)
 
 	_build_mortar()
@@ -936,8 +974,6 @@ func _brew_drawable() -> bool:
 		return false
 	if discard_t >= 0.0:
 		return false
-	if bool(Game.brew["bottled"]) and pour == "":
-		return false
 	return true
 
 
@@ -1015,8 +1051,10 @@ func _sync_brew(dt: float) -> void:
 				"strength": ClassicBrewSim.strength_for(ing_id),
 				"quantity": float(entry["quantity"]),
 			}, poured)
-		if not fresh.is_empty():
+		if not fresh.is_empty() and not block_auto_stir:
 			_stir_delay = 0.9 + float(fresh.size() - 1) * 0.35
+	if block_auto_stir:
+		_stir_delay = -1.0
 	if _stir_delay >= 0.0:
 		_stir_delay -= dt
 		if _stir_delay < 0.0:
@@ -1110,7 +1148,7 @@ func _draw_stream(c: Control) -> void:
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if pour != "stream":
 		return
-	var col := LiquidColor.mix(Game.brew["entries"], str(Game.brew["currentHeat"]), _clock)
+	var col := _pour_stream_color()
 	var rim := _tilted_rim()
 	var mouth := _pour_bottle.position + Vector2(_pour_bottle.size.x * 0.5, 10.0)
 	var mid := (rim + mouth) * 0.5
@@ -1120,13 +1158,45 @@ func _draw_stream(c: Control) -> void:
 	for i in 25:
 		var t := float(i) / 24.0
 		pts.append(_stream_point(rim, c1, mid, c2, mouth, t))
-	# classic-stations.css: glow 26px, core 14px, sheen 3px.
-	var glow := Color(col.r, col.g, col.b, 0.35)
+	# classic-stations.css: glow 26px solid, core 14px dashed 24/10, sheen 3px dashed 18/30.
+	var light := Color(col.r + (1.0 - col.r) * 0.28, col.g + (1.0 - col.g) * 0.28, col.b + (1.0 - col.b) * 0.28, 0.35)
+	var glow := light
 	var sheen := Color(1.0, 1.0, 1.0, 0.55)
 	if pts.size() >= 2:
 		c.draw_polyline(pts, glow, 26.0, true)
-		c.draw_polyline(pts, col, 14.0, true)
-		c.draw_polyline(pts, sheen, 3.0, true)
+		_draw_dashed(c, pts, col, 14.0, 24.0, 10.0)
+		_draw_dashed(c, pts, sheen, 3.0, 18.0, 30.0)
+
+
+func _draw_dashed(c: Control, pts: PackedVector2Array, color: Color, width: float, on_len: float, off_len: float) -> void:
+	var period := on_len + off_len
+	var dist := 0.0
+	var seg := PackedVector2Array()
+	for i in range(pts.size() - 1):
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		var span := a.distance_to(b)
+		if span < 0.001:
+			continue
+		var walked := 0.0
+		while walked < span - 0.001:
+			var along := fmod(dist, period)
+			var drawing := along < on_len
+			var room := (on_len - along) if drawing else (period - along)
+			var step := minf(room, span - walked)
+			var p0 := a.lerp(b, walked / span)
+			var p1 := a.lerp(b, (walked + step) / span)
+			if drawing:
+				if seg.is_empty():
+					seg.append(p0)
+				seg.append(p1)
+			elif seg.size() >= 2:
+				c.draw_polyline(seg, color, width, true)
+				seg = PackedVector2Array()
+			walked += step
+			dist += step
+	if seg.size() >= 2:
+		c.draw_polyline(seg, color, width, true)
 
 
 func _draw_pieces(c: Control) -> void:
@@ -1211,15 +1281,25 @@ func _place_pestle() -> void:
 	var aim: Dictionary = _pile.pestle()
 	var box := Vector2(MortarPile.PESTLE_W, MortarPile.PESTLE_H) / 100.0 * ZONE_MORTAR.size
 	var anchor := Vector2(MortarPile.PESTLE_HEAD_X, MortarPile.PESTLE_HEAD_Y)
-	var head := ZONE_MORTAR.position + Vector2(float(aim["head_x"]), float(aim["head_y"])) / 100.0 * ZONE_MORTAR.size
-	_pestle.visible = transfer_t < 0.0
+	_pestle.visible = true
 	_pestle.texture = UiKit.tex("mortar/v3/pestle_%d.png" % int(aim["frame"]))
 	_pestle.custom_minimum_size = Vector2.ZERO
 	_pestle.size = box
-	_pestle.pivot_offset = anchor * box
-	_pestle.position = head - anchor * box
-	_pestle.rotation_degrees = float(aim["rotate"])
-	_pestle.z_index = 4 if _pile.pestle_in_front(aim) else 2
+	if transfer_t >= 0.0:
+		# .cst-pestle.is-aside: translate(64px, -34px) rotate(34deg). The inline
+		# transform-origin stays on the head (it wins over the class's 78% 12%),
+		# so the head slides up-right and the handle swings toward the cauldron.
+		var home := ZONE_MORTAR.position + Vector2(MortarPile.FLOOR_CX, MortarPile.FLOOR_CY) / 100.0 * ZONE_MORTAR.size
+		_pestle.pivot_offset = anchor * box
+		_pestle.position = home + Vector2(64.0, -34.0) - anchor * box
+		_pestle.rotation_degrees = 34.0
+		_pestle.z_index = 2
+	else:
+		var head := ZONE_MORTAR.position + Vector2(float(aim["head_x"]), float(aim["head_y"])) / 100.0 * ZONE_MORTAR.size
+		_pestle.pivot_offset = anchor * box
+		_pestle.position = head - anchor * box
+		_pestle.rotation_degrees = float(aim["rotate"])
+		_pestle.z_index = 4 if _pile.pestle_in_front(aim) else 2
 	if _brush:
 		var show := (Game.mortar != null or not _pile.residue().is_empty()) and transfer_t < 0.0
 		_brush.visible = show
@@ -1512,22 +1592,26 @@ func _build_brush() -> void:
 	_brush.visible = false
 	_brush.mouse_filter = MOUSE_FILTER_IGNORE
 	_work.add_child(_brush)
+	# scene.css .brush — rotate(8deg) around the centre, dark handle, brass band,
+	# striped bristles. A pale block read as a different tool.
+	_brush.pivot_offset = rect.size * 0.5
+	_brush.rotation_degrees = 8.0
 	var handle := ColorRect.new()
-	handle.position = Vector2(rect.size.x * 0.38, 0)
-	handle.size = Vector2(rect.size.x * 0.24, rect.size.y * 0.62)
-	handle.color = Color("6b3e22")
+	handle.position = Vector2(rect.size.x * 0.34, 0)
+	handle.size = Vector2(rect.size.x * 0.32, rect.size.y * 0.62)
+	handle.color = Color("4a3018")
 	handle.mouse_filter = MOUSE_FILTER_IGNORE
 	_brush.add_child(handle)
 	var ferrule := ColorRect.new()
-	ferrule.position = Vector2(rect.size.x * 0.32, rect.size.y * 0.58)
-	ferrule.size = Vector2(rect.size.x * 0.36, rect.size.y * 0.08)
-	ferrule.color = Color("c4913b")
+	ferrule.position = Vector2(rect.size.x * 0.26, rect.size.y * 0.58)
+	ferrule.size = Vector2(rect.size.x * 0.48, rect.size.y * 0.12)
+	ferrule.color = Color("a67c32")
 	ferrule.mouse_filter = MOUSE_FILTER_IGNORE
 	_brush.add_child(ferrule)
 	var bristles := ColorRect.new()
-	bristles.position = Vector2(rect.size.x * 0.22, rect.size.y * 0.66)
-	bristles.size = Vector2(rect.size.x * 0.56, rect.size.y * 0.3)
-	bristles.color = Color("d7c39a")
+	bristles.position = Vector2(rect.size.x * 0.20, rect.size.y * 0.68)
+	bristles.size = Vector2(rect.size.x * 0.60, rect.size.y * 0.32)
+	bristles.color = Color("4a3d28")
 	bristles.mouse_filter = MOUSE_FILTER_IGNORE
 	_brush.add_child(bristles)
 	var hit := UiKit.hit(Rect2(Vector2.ZERO, rect.size))
@@ -1683,6 +1767,57 @@ func _radial_disc() -> ColorRect:
 	mat.shader = load("res://shaders/radial_disc.gdshader")
 	node.material = mat
 	return node
+
+
+func _sync_pot_spin() -> void:
+	if _fx_spin == null or _pot_pivot == null:
+		return
+	var shifted := _pot_pivot.position - _pot_base
+	var ang := _pot_pivot.rotation
+	var sc: Vector2 = _pot_pivot.scale
+	var still := absf(ang) < 0.0008 and shifted.length() < 0.4 and absf(sc.x - 1.0) < 0.004 and absf(sc.y - 1.0) < 0.004
+	if still:
+		_fx_spin.position = Vector2.ZERO
+		_fx_spin.rotation = 0.0
+		_fx_spin.scale = Vector2.ONE
+		return
+	_fx_spin.position = shifted
+	_fx_spin.pivot_offset = _pot_base
+	_fx_spin.rotation = ang
+	_fx_spin.scale = sc
+
+
+func _pour_stream_color() -> Color:
+	# BottlingSequence mixes the ingredient colours, then shade(-0.18).
+	var weight := 0.0
+	var mixed := Vector3.ZERO
+	for e in Game.brew["entries"]:
+		var w := maxf(float(e["quantity"]), 0.001)
+		var tint := _ingredient_color(str(e["ingredientId"]))
+		mixed += Vector3(tint.r, tint.g, tint.b) * w
+		weight += w
+	if weight <= 0.0:
+		return Color("3f6f8f")
+	mixed /= weight
+	return Color(mixed.x * 0.82, mixed.y * 0.82, mixed.z * 0.82, 1.0)
+
+
+func _css_ease(x: float) -> float:
+	# cubic-bezier(0.25, 0.1, 0.25, 1), the CSS `ease` used by .cst-focus.
+	var u := clampf(x, 0.0, 1.0)
+	var lo := 0.0
+	var hi := 1.0
+	for _i in 18:
+		var mid := (lo + hi) * 0.5
+		var s := 1.0 - mid
+		var bx := 3.0 * s * s * mid * 0.25 + 3.0 * s * mid * mid * 0.25 + mid * mid * mid
+		if bx < u:
+			lo = mid
+		else:
+			hi = mid
+	var t := (lo + hi) * 0.5
+	var s2 := 1.0 - t
+	return 3.0 * s2 * s2 * t * 0.1 + 3.0 * s2 * t * t + t * t * t
 
 
 func _ease_in_out(u: float) -> float:
@@ -2240,6 +2375,11 @@ func jump_transfer(at: float) -> void:
 	var steps := int(maxf(at, 0.0) * 60.0)
 	for _i in steps:
 		_tick_transfer(1.0 / 60.0)
+	# The click ends grinding, and by the carry frame the focus has faded out.
+	_focus_t = 0.0
+	if _vignette_mat:
+		_vignette_mat.set_shader_parameter("grind", 0.0)
+	_place_pestle()
 	if _transfer_draw:
 		_transfer_draw.queue_redraw()
 	if _mortar_fx:

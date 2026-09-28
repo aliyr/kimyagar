@@ -234,6 +234,11 @@ func residue() -> Dictionary:
 	}
 
 
+func seed_residue(hex: String, amount: float) -> void:
+	_residue_hex = hex
+	_residue_amount = clampf(amount, 0.0, 1.0)
+
+
 func clear_residue() -> void:
 	if _residue_hex == "":
 		return

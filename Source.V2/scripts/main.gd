@@ -85,6 +85,7 @@ func _ready() -> void:
 	add_child(_chrome)
 	_build_chrome()
 	overlays = OverlayView.new()
+	workshop.overlay = overlays
 	overlays.name = "Overlays"
 	_chrome.add_child(overlays)
 	debug = DebugPanel.new()
@@ -370,8 +371,15 @@ func _prepare_shot() -> void:
 			gate.visible = false
 			Game.add_classic_unit("chamomile")
 			Game.start_grinding()
-			Game.apply_grind_work(1.2)
-			_warm_workshop(0.85)
+			# Web grind frame is 60ms after applyGrindWork(2.14), pestle just in the bowl.
+			Game.apply_grind_work(2.14)
+			# Pestle beat matches the web at 60ms (still on the lift, head in the bowl).
+			# The focus overlay on that same frame is already partway through its
+			# 0.65s fade — the captured web edge is about 0.14s into the ease.
+			_warm_workshop(0.06)
+			workshop._focus_t = 0.14
+			if workshop._vignette_mat:
+				workshop._vignette_mat.set_shader_parameter("grind", workshop._css_ease(0.14 / 0.65))
 		"mortar":
 			phase = "workshop"
 			gate.visible = false
@@ -403,6 +411,7 @@ func _prepare_shot() -> void:
 			Game.brew = brew
 			workshop._spoon_angle = -0.2
 			workshop._stirring = true
+			_seed_brush_residue()
 			_warm_workshop(0.35)
 		"bottle":
 			phase = "workshop"
@@ -414,10 +423,14 @@ func _prepare_shot() -> void:
 			b = Alchemy.stir(b, Game.defs)
 			Game.brew = b
 			Game.bottle_brew()
+			# Click is immediate; the frame is 1.1s later, mid-stream. Chips sink
+			# during that wait, and the 900ms auto-stir has the ladle 0.2s into
+			# its entrance. Hold the pour so the extra sim time does not deliver.
 			workshop.jump_pour("stream", 1.1)
-			# Toast has been up since the click; the stream is 1.1s into the pour.
+			workshop.hold_pour = true
 			overlays.prime_toast(1.05)
-			_warm_workshop(0.12)
+			_seed_brush_residue()
+			_warm_workshop(1.1)
 		"receive", "receive-reject":
 			_receive_shot("chamomile")
 		"receive-accept":
@@ -468,10 +481,16 @@ func _prepare_shot() -> void:
 			tilt.hold_pose(0.62, -0.38)
 	if phase == "workshop":
 		Sfx.stop_ambience()
-		var heat_name := str(Game.brew.get("currentHeat", "medium"))
-		var fire_level := float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat_name, 0.7))
-		workshop._fire.set_level(fire_level, true)
-		workshop._fire.warm()
+		# Boil frames already simulated the fire for 0.8s. Snapping it to a fully
+		# warmed field makes the high flame brighter than the web at that moment.
+		if not _shot.begins_with("boil"):
+			var heat_name := str(Game.brew.get("currentHeat", "medium"))
+			var fire_level := float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat_name, 0.7))
+			workshop._fire.set_level(fire_level, true)
+			workshop._fire.warm()
+	# The screenshot is a few real frames later. On software GL those frames are
+	# long enough to carry the spoon, raise the fire, and turn the pestle.
+	workshop.hold_sim = true
 
 
 func _boil_shot(heat_name: String) -> void:
@@ -485,6 +504,10 @@ func _boil_shot(heat_name: String) -> void:
 	brew = Alchemy.advance_time(brew, 5.0, Game.defs)
 	brew = Alchemy.stir(brew, Game.defs)
 	Game.brew = brew
+	# The web frame is 800ms after the brew appears. Auto-stir is 900ms, so the
+	# ladle is not in the pot yet; steam at high heat has had time to rise.
+	workshop.block_auto_stir = true
+	_seed_brush_residue()
 	_warm_workshop(0.8)
 
 
@@ -497,21 +520,26 @@ func _receive_shot(ingredient_id: String) -> void:
 	got = Alchemy.stir(got, Game.defs)
 	Game.brew = got
 	Game.bottle_brew()
-	# The pour outlasts the discovery toast, so the reaction stands alone.
+	# The web frame is 3.6s after the click. The pour has finished, so the shelf
+	# bottle is back and there is no stream; the auto-stir ladle is still in the
+	# pot; the reaction has been up for 0.9s with the softened vignette.
 	Game.discovery_queue = []
-	workshop.jump_pour("deliver", 2.69)
-	workshop._cauldron_angle = 0.0
-	if workshop._pot_pivot:
-		workshop._pot_pivot.rotation = 0.0
-	workshop.hold_pour = true
-	Game.open_overlay_action("result")
-	Game.deliver()
-	overlays.prime_reveal(0.85)
-	_warm_workshop(0.05)
+	workshop.pour = "tilt"
+	workshop.pour_t = 0.0
+	_seed_brush_residue()
+	_warm_workshop(3.6)
+	overlays.prime_reveal(0.9)
+
+
+func _seed_brush_residue() -> void:
+	# The web brush stays after a scoop because residue lives outside the store.
+	# Boil, stir, bottle, and receive are captured after that transfer.
+	if workshop._pile:
+		workshop._pile.seed_residue("#c6a24e", 0.55)
 
 
 func _warm_workshop(seconds: float) -> void:
-	var steps := int(seconds * 60.0)
+	var steps := int(round(seconds * 60.0))
 	for _i in steps:
 		if not Game.is_paused():
 			Game.tick(1.0 / 60.0)

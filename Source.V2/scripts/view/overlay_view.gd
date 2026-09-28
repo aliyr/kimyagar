@@ -64,6 +64,15 @@ func _in_reaction() -> bool:
 	return str(Game.open_overlay) == "result" and Game.evaluation != null and _reveal < 2.2 and not force_reveal
 
 
+## .scene.is-paused fades the vignette to 1. The reaction window overrides that to 0.16.
+func vignette_pause() -> float:
+	if _in_reaction():
+		return 0.16
+	if Game.is_paused():
+		return 1.0
+	return 0.0
+
+
 func _sync_toast(dt: float) -> void:
 	if Game.discovery_queue.is_empty():
 		_toast.visible = false
