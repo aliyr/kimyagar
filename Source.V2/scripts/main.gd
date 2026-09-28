@@ -10,6 +10,9 @@ var debug: DebugPanel
 var _workshop_vp: SubViewport
 var _plate: SubViewportContainer
 var _chrome: CanvasLayer
+var _gate_layer: CanvasLayer
+var _letterbox: TextureRect
+var _stage_origin := Vector2.ZERO
 var _plate_frames := 0
 var _gear: BaseButton
 var _back: Button
@@ -53,6 +56,18 @@ func _ready() -> void:
 	if _tilt_pose is Vector2:
 		var forced: Vector2 = _tilt_pose
 		tilt.force_pose(forced.x, forced.y)
+	# .stage-letterbox — radial-gradient(120% 120% at 50% 50%, #120c08, #060403).
+	# expand makes the viewport the whole window, so this can fill the margins
+	# around the centered 1920×1080 stage. On 16:9 the stage covers it.
+	_letterbox = TextureRect.new()
+	_letterbox.name = "Letterbox"
+	_letterbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_letterbox.texture = _letterbox_texture()
+	_letterbox.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_letterbox.stretch_mode = TextureRect.STRETCH_SCALE
+	_letterbox.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_letterbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_letterbox)
 	# The workshop is a picture under the gate. Its sprites live in their own
 	# viewport, so a child z_index cannot paint over the facade.
 	_plate = SubViewportContainer.new()
@@ -74,15 +89,15 @@ func _ready() -> void:
 	workshop.name = "Workshop"
 	workshop.open_overlay.connect(func(id: String) -> void: Game.open_overlay_action(id))
 	_workshop_vp.add_child(workshop)
-	var gate_layer := CanvasLayer.new()
-	gate_layer.name = "GateLayer"
-	gate_layer.layer = 1
-	add_child(gate_layer)
+	_gate_layer = CanvasLayer.new()
+	_gate_layer.name = "GateLayer"
+	_gate_layer.layer = 1
+	add_child(_gate_layer)
 	gate = GateView.new()
 	gate.name = "Gate"
 	gate.entered.connect(_on_entered)
 	gate.open_settings.connect(func() -> void: Game.open_overlay_action("settings"))
-	gate_layer.add_child(gate)
+	_gate_layer.add_child(gate)
 	_chrome = CanvasLayer.new()
 	_chrome.name = "ChromeLayer"
 	_chrome.layer = 2
@@ -102,14 +117,65 @@ func _ready() -> void:
 		if _start_workshop:
 			_open_workshop_now()
 	_booted = true
-	call_deferred("_relock_plate")
+	resized.connect(_layout_stage)
+	call_deferred("_layout_stage")
 	print("viewport ", get_viewport().get_visible_rect().size, " window ", DisplayServer.window_get_size())
 
 
-func _relock_plate() -> void:
+func _layout_stage() -> void:
 	# The container owns the viewport size while stretch is on.
+	var vp := get_viewport().get_visible_rect().size
+	var safe := _safe_insets()
+	var fit: Script = load("res://scripts/engine/stage_fit.gd")
+	_stage_origin = fit.origin(vp, safe)
 	if _plate:
+		_plate.position = _stage_origin
 		_plate.size = Vector2(1920, 1080)
+	if _gate_layer:
+		_gate_layer.offset = _stage_origin
+	if overlays:
+		overlays.position = _stage_origin
+	if debug:
+		debug.position = _stage_origin
+	if _gear:
+		_gear.position = fit.gear_position(safe)
+	var py: float = fit.pill_y(vp.y)
+	if _v2:
+		_v2.position = Vector2(14, py)
+	if _back:
+		_back.position = Vector2(130, py)
+	print("stage origin ", _stage_origin, " viewport ", vp, " safe ", safe)
+
+
+func _safe_insets() -> Vector4:
+	var win := DisplayServer.window_get_size()
+	var safe := DisplayServer.get_display_safe_area()
+	if win.x <= 0 or win.y <= 0 or safe.size.x <= 0 or safe.size.y <= 0:
+		return Vector4.ZERO
+	var vp := get_viewport().get_visible_rect().size
+	var sx := vp.x / float(win.x)
+	var sy := vp.y / float(win.y)
+	var at := DisplayServer.window_get_position()
+	var left := float(safe.position.x - at.x) * sx
+	var top := float(safe.position.y - at.y) * sy
+	var right := float(at.x + win.x - safe.end.x) * sx
+	var bottom := float(at.y + win.y - safe.end.y) * sy
+	return Vector4(maxf(0.0, left), maxf(0.0, top), maxf(0.0, right), maxf(0.0, bottom))
+
+
+func _letterbox_texture() -> Texture2D:
+	# Ellipse radii are 120% of the box, matching the CSS gradient size.
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var inner := Color.html("#120c08")
+	var outer := Color.html("#060403")
+	for y in n:
+		for x in n:
+			var u := (float(x) + 0.5) / float(n) - 0.5
+			var v := (float(y) + 0.5) / float(n) - 0.5
+			var t := clampf(sqrt((u / 1.2) * (u / 1.2) + (v / 1.2) * (v / 1.2)), 0.0, 1.0)
+			img.set_pixel(x, y, inner.lerp(outer, t))
+	return ImageTexture.create_from_image(img)
 
 
 func _exit_tree() -> void:
@@ -566,8 +632,11 @@ func _print_grade_probe() -> void:
 	var brick_s := "none"
 	if img != null:
 		# (200, 40) is open sky on the gate. (1400, 450) is facade brick at dusk.
-		var sky_px := img.get_pixel(200, 40)
-		var brick_px := img.get_pixel(1400, 450)
+		# On a wide window those sit on the centered stage, not the window corner.
+		var ox := int(_stage_origin.x)
+		var oy := int(_stage_origin.y)
+		var sky_px := img.get_pixel(ox + 200, oy + 40)
+		var brick_px := img.get_pixel(ox + 1400, oy + 450)
 		sky_s = "%d,%d,%d" % [sky_px.r8, sky_px.g8, sky_px.b8]
 		brick_s = "%d,%d,%d" % [brick_px.r8, brick_px.g8, brick_px.b8]
 	print("grade adapter=\"%s\" hour=%d time=%s phase=%s path=%s hue=%.1f bright=%.2f tint_op=%.2f sky_px=%s brick_px=%s" % [

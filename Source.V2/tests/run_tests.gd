@@ -67,6 +67,7 @@ func _run() -> void:
 	_rng()
 	_golden()
 	_layout()
+	_stage_fit()
 	_layers()
 
 
@@ -505,6 +506,21 @@ func _golden() -> void:
 			near(float(ev["score"]), float(case["score"]), "golden score", 5e-3)
 			if case.has("reaction"):
 				check(ev["reactionFa"] == case["reaction"], "golden reaction %s\n got %s\n exp %s" % [case.get("name", ""), ev["reactionFa"], case["reaction"]])
+
+
+func _stage_fit() -> void:
+	var fit = load("res://scripts/engine/stage_fit.gd")
+	var z := Vector4.ZERO
+	check(fit.origin(Vector2(1920, 1080), z) == Vector2.ZERO, "16:9 stage fills the window")
+	check(fit.origin(Vector2(2400, 1080), z) == Vector2(240, 0), "2400x1080 stage origin got %s" % fit.origin(Vector2(2400, 1080), z))
+	check(fit.origin(Vector2(2340, 1080), z) == Vector2(210, 0), "2340x1080 stage origin got %s" % fit.origin(Vector2(2340, 1080), z))
+	check(fit.origin(Vector2(1920, 1200), z) == Vector2(0, 60), "taller window letterboxes vertically")
+	check(fit.origin(Vector2(1920, 1080), Vector4(40, 0, 0, 0)) == Vector2.ZERO, "16:9 stage does not shrink for a notch")
+	check(fit.origin(Vector2(2400, 1080), Vector4(48, 0, 0, 0)) == Vector2(240, 0), "a notch inside the bar leaves the stage centered")
+	check(fit.origin(Vector2(2400, 1080), Vector4(300, 0, 0, 0)) == Vector2(300, 0), "stage moves inside a safe inset deeper than the bar")
+	check(fit.gear_position(z) == Vector2(4, 2), "gear stays at the 16:9 corner")
+	check(fit.gear_position(Vector4(40, 20, 0, 0)) == Vector2(32, 12), "gear follows the safe inset")
+	check(is_equal_approx(fit.pill_y(1080.0), 1038.0), "pills stay on the 16:9 baseline")
 
 
 func _layout() -> void:
