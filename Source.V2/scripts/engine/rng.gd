@@ -24,7 +24,8 @@ func range(min_v: float, max_v: float) -> float:
 
 
 func int_range(min_v: int, max_inclusive: int) -> int:
-	return int(floor(range(float(min_v), float(max_inclusive) + 1.0)))
+	# `range` without a receiver is the engine helper, not this method.
+	return int(floor(self.range(float(min_v), float(max_inclusive) + 1.0)))
 
 
 func pick(items: Array):
