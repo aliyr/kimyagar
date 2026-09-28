@@ -16,6 +16,8 @@ var _shot_frames := 0
 var _shot_done := false
 var _keys := ""
 var _booted := false
+var _probe_t := 0.0
+var _probed := false
 
 
 func _ready() -> void:
@@ -82,8 +84,32 @@ func _build_chrome() -> void:
 		Game.open_overlay_action("settings")
 	)
 	add_child(_gear)
-	_back = UiKit.parchment_button(Content.UI["gateReturn"], Rect2(14, 1036, 90, 32))
+	# scene.css .classic-corner-links .gate-return — dark pill, bottom inline-end.
+	_back = Button.new()
+	_back.text = Content.UI["gateReturn"]
+	_back.focus_mode = Control.FOCUS_NONE
+	_back.clip_text = false
+	UiKit.ensure()
+	_back.add_theme_font_override("font", UiKit.regular)
 	_back.add_theme_font_size_override("font_size", 14)
+	_back.add_theme_color_override("font_color", Color(0.914, 0.851, 0.706, 0.6))
+	_back.add_theme_color_override("font_hover_color", Color(0.914, 0.851, 0.706, 0.95))
+	_back.text_direction = Control.TEXT_DIRECTION_RTL
+	var pill := StyleBoxFlat.new()
+	pill.bg_color = Color(16.0 / 255.0, 10.0 / 255.0, 6.0 / 255.0, 0.55)
+	pill.border_color = Color(0.914, 0.851, 0.706, 0.22)
+	pill.set_border_width_all(1)
+	pill.set_corner_radius_all(14)
+	pill.content_margin_left = 16
+	pill.content_margin_right = 16
+	pill.content_margin_top = 5
+	pill.content_margin_bottom = 5
+	_back.add_theme_stylebox_override("normal", pill)
+	_back.add_theme_stylebox_override("hover", pill)
+	_back.add_theme_stylebox_override("pressed", pill)
+	_back.add_theme_stylebox_override("focus", pill)
+	UiKit.place(_back, Rect2(14, 1038, 84, 30))
+	_back.size = Vector2(84, 30)
 	_back.pressed.connect(_go_gate)
 	add_child(_back)
 
@@ -110,6 +136,10 @@ func _process(dt: float) -> void:
 	_back.visible = phase == "workshop"
 	overlays.advance(dt)
 	debug.refresh("phase %s tilt %s" % [phase, tilt.describe()])
+	_probe_t += dt
+	if not _probed and _probe_t >= 3.2:
+		_probed = true
+		_print_grade_probe()
 	_capture_shot()
 
 
@@ -265,6 +295,26 @@ func _warm_workshop(seconds: float) -> void:
 		if not Game.is_paused():
 			Game.tick(1.0 / 60.0)
 		workshop.advance(1.0 / 60.0, tilt, true)
+
+
+func _print_grade_probe() -> void:
+	var adapter := RenderingServer.get_video_adapter_name()
+	var hour_n := 0
+	if Settings.hour_override == null:
+		hour_n = int(Time.get_datetime_dict_from_system()["hour"])
+	else:
+		hour_n = int(Settings.hour_override)
+	var img := get_viewport().get_texture().get_image()
+	var sky_s := "none"
+	var brick_s := "none"
+	if img != null:
+		var sky_px := img.get_pixel(960, 70)
+		var brick_px := img.get_pixel(1400, 450)
+		sky_s = "%d,%d,%d" % [sky_px.r8, sky_px.g8, sky_px.b8]
+		brick_s = "%d,%d,%d" % [brick_px.r8, brick_px.g8, brick_px.b8]
+	print("grade adapter=\"%s\" hour=%d time=%s path=%s hue=%.1f bright=%.2f tint_op=%.2f sky_px=%s brick_px=%s" % [
+		adapter, hour_n, gate.time_name, gate.grade_path, gate.grade_hue, gate.grade_bright, gate.grade_tint_op, sky_s, brick_s
+	])
 
 
 func _capture_shot() -> void:

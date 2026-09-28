@@ -28,12 +28,11 @@ var _sky_layer: Control
 var _mid_layer: Control
 var _front_layer: Control
 var _facade: TextureRect
-var _facade_mat: ShaderMaterial
 var _west: TextureRect
 var _east: TextureRect
 var _west_mat: ShaderMaterial
 var _east_mat: ShaderMaterial
-var _glow: ColorRect
+var _glow: TextureRect
 var _sign: Control
 var _passer: TextureRect
 var _cat_sleep: TextureRect
@@ -51,6 +50,14 @@ var _hit_py := 0.0
 var _hit_mode := "off"
 var _sky_fx: Control
 var _dust_fx: Control
+var grade_path := "baked"
+var grade_hue := 0.0
+var grade_bright := 1.0
+var grade_tint_op := 0.0
+var grade_sepia := 0.0
+var grade_tint_sat := 1.0
+var grade_tint_bright := 1.0
+var grade_sat := 1.0
 
 
 func _ready() -> void:
@@ -132,20 +139,10 @@ func _build() -> void:
 	_sky_layer.add_child(sky_layer)
 	_sky_fx = _fx_host(_draw_fireflies)
 	_sky_layer.add_child(_sky_fx)
-	var grad := Gradient.new()
-	grad.set_color(0, Color(sky["skyA"]))
-	grad.set_color(1, Color(sky["skyC"]))
-	grad.add_point(240.0 / 470.0, Color(sky["skyB"]))
-	var gt := GradientTexture2D.new()
-	gt.gradient = grad
-	gt.width = 4
-	gt.height = 470
-	gt.fill_from = Vector2(0.5, 0)
-	gt.fill_to = Vector2(0.5, 1)
 	var sky_tex := TextureRect.new()
 	sky_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	sky_tex.stretch_mode = TextureRect.STRETCH_SCALE
-	sky_tex.texture = gt
+	sky_tex.texture = _bake_sky()
 	sky_tex.mouse_filter = MOUSE_FILTER_IGNORE
 	UiKit.place(sky_tex, Rect2(Vector2.ZERO, sky_layer.size))
 	sky_layer.add_child(sky_tex)
@@ -161,37 +158,33 @@ func _build() -> void:
 	_mid_layer.add_child(doors)
 	_west = UiKit.sprite("gate/door_west.png", Rect2(0, 0, 304, 543), "fill")
 	_west_mat = _door_mat(0.0, Vector2(0, 0))
-	_west.material = _west_mat
 	_east = UiKit.sprite("gate/door_east.png", Rect2(304, 0, 304, 543), "fill")
 	_east_mat = _door_mat(1.0, Vector2(304, 0))
-	_east.material = _east_mat
+	# Idle leaves are the PNG. The hinge shader is attached only while the door swings.
 	doors.add_child(_west)
 	doors.add_child(_east)
-	_glow = ColorRect.new()
+	_glow = TextureRect.new()
+	_glow.texture = UiKit.radial_texture()
+	_glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_glow.stretch_mode = TextureRect.STRETCH_SCALE
 	_glow.position = Vector2(140, 0)
 	_glow.size = Vector2(328, 543)
-	_glow.color = Color(1, 0.7, 0.4, 0)
+	_glow.modulate = Color(1, 0.7, 0.4, 0)
 	_glow.mouse_filter = MOUSE_FILTER_IGNORE
 	doors.add_child(_glow)
 
 	_facade = UiKit.sprite("intro/facade.png", Rect2(0, 60, 1920, 1080), "fill")
-	_facade_mat = ShaderMaterial.new()
-	_facade_mat.shader = load("res://shaders/facade_grade.gdshader")
-	_apply_sky_shader()
-	_facade.material = _facade_mat
+	_read_grade()
+	_facade.texture = _bake_facade()
 	_mid_layer.add_child(_facade)
 
 	_add_window_glow(192)
 	_add_window_glow(1430)
 
+	var halo := _radial_sprite(Rect2(560 - 160, 330 + 30, 450, 450), Color(1, 0.75, 0.39, 0.5 * float(sky["lanternStrength"])))
+	_front_layer.add_child(halo)
 	var lantern := UiKit.sprite("intro/lantern.png", Rect2(560, 330, 130, 373), "contain")
 	_front_layer.add_child(lantern)
-	var halo := ColorRect.new()
-	halo.position = Vector2(560 - 160, 330 + 30)
-	halo.size = Vector2(450, 450)
-	halo.color = Color(1, 0.75, 0.4, 0.18 * float(sky["lanternStrength"]))
-	halo.mouse_filter = MOUSE_FILTER_IGNORE
-	_front_layer.add_child(halo)
 
 	_sign = Control.new()
 	_sign.position = Vector2(680, -30)
@@ -239,7 +232,7 @@ func _build() -> void:
 	settings.modulate.a = 0.92
 	_mid_layer.add_child(settings)
 	# .intro__tag bottom is 32px below the 230px-tall settings hit.
-	_mid_layer.add_child(_tag(Content.UI["settings"], Rect2(1724, 564, 160, 26), 17))
+	_mid_layer.add_child(_tag(Content.UI["settings"], Rect2(1704, 548, 200, 40), 17))
 	_rig_hits.append({"rect": Rect2(1764, 328, 80, 230), "depth": 36.0, "cb": _open_settings})
 
 	_wrap_rig()
@@ -283,25 +276,117 @@ func _wrap_rig() -> void:
 
 
 func _add_window_glow(x: float) -> void:
-	var g := ColorRect.new()
-	g.position = Vector2(x, 390)
-	g.size = Vector2(300, 400)
-	g.color = Color(1, 0.69, 0.34, 0.16 * float(sky["lanternStrength"]))
-	g.mouse_filter = MOUSE_FILTER_IGNORE
+	# intro.css .intro__window-glow is a radial ellipse, not a flat rectangle.
+	var g := _radial_sprite(Rect2(x, 330, 300, 460), Color(1.0, 0.69, 0.34, 0.6 * float(sky["lanternStrength"])))
 	_mid_layer.add_child(g)
 
 
-func _apply_sky_shader() -> void:
-	if _facade_mat == null:
-		return
-	_facade_mat.set_shader_parameter("brightness", float(sky["facadeBrightness"]))
-	_facade_mat.set_shader_parameter("saturate_amt", float(sky["facadeSaturate"]))
+func _radial_sprite(rect: Rect2, tint: Color) -> TextureRect:
+	var g := TextureRect.new()
+	g.texture = UiKit.radial_texture()
+	g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	g.stretch_mode = TextureRect.STRETCH_SCALE
+	g.modulate = tint
+	g.mouse_filter = MOUSE_FILTER_IGNORE
+	UiKit.place(g, rect)
+	g.size = rect.size
+	return g
+
+
+func _read_grade() -> void:
+	grade_bright = float(sky["facadeBrightness"])
+	grade_sat = float(sky["facadeSaturate"])
 	var filt := str(sky["tintFilter"])
-	_facade_mat.set_shader_parameter("sepia_amt", _filter_num(filt, "sepia"))
-	_facade_mat.set_shader_parameter("hue_deg", _filter_num(filt, "hue-rotate"))
-	_facade_mat.set_shader_parameter("tint_sat", _filter_num(filt, "saturate"))
-	_facade_mat.set_shader_parameter("tint_brightness", _filter_num(filt, "brightness"))
-	_facade_mat.set_shader_parameter("tint_opacity", float(sky["tintOpacity"]))
+	grade_sepia = _filter_num(filt, "sepia")
+	grade_hue = _filter_num(filt, "hue-rotate")
+	grade_tint_sat = _filter_num(filt, "saturate")
+	grade_tint_bright = _filter_num(filt, "brightness")
+	grade_tint_op = float(sky["tintOpacity"])
+
+
+func _bake_sky() -> Texture2D:
+	var h := 470
+	var w := 4
+	var bytes := PackedByteArray()
+	bytes.resize(w * h * 4)
+	var a := _html_rgb(str(sky["skyA"]))
+	var b := _html_rgb(str(sky["skyB"]))
+	var c := _html_rgb(str(sky["skyC"]))
+	var mid := 240.0 / 470.0
+	for y in h:
+		var t := float(y) / float(h - 1)
+		var rgb := a.lerp(b, clampf(t / mid, 0.0, 1.0)) if t < mid else b.lerp(c, clampf((t - mid) / (1.0 - mid), 0.0, 1.0))
+		for x in w:
+			var i := (y * w + x) * 4
+			bytes[i] = int(rgb.x * 255.0 + 0.5)
+			bytes[i + 1] = int(rgb.y * 255.0 + 0.5)
+			bytes[i + 2] = int(rgb.z * 255.0 + 0.5)
+			bytes[i + 3] = 255
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, bytes)
+	return ImageTexture.create_from_image(img)
+
+
+func _bake_facade() -> Texture2D:
+	var src := UiKit.tex("intro/facade.png")
+	if src == null or src.get_image() == null:
+		grade_path = "png"
+		return src
+	var img := src.get_image()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var raw := img.get_data()
+	var out := PackedByteArray()
+	out.resize(raw.size())
+	var i := 0
+	while i < raw.size():
+		var rgb := _grade_rgb(raw[i] / 255.0, raw[i + 1] / 255.0, raw[i + 2] / 255.0)
+		out[i] = clampi(int(rgb.x * 255.0 + 0.5), 0, 255)
+		out[i + 1] = clampi(int(rgb.y * 255.0 + 0.5), 0, 255)
+		out[i + 2] = clampi(int(rgb.z * 255.0 + 0.5), 0, 255)
+		out[i + 3] = raw[i + 3]
+		i += 4
+	var baked := Image.create_from_data(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8, out)
+	grade_path = "baked"
+	return ImageTexture.create_from_image(baked)
+
+
+func _grade_rgb(r: float, g: float, b: float) -> Vector3:
+	var c := Vector3(r, g, b)
+	var base := _sat(c, grade_sat) * grade_bright
+	var sep := _sepia(c)
+	var mixed := c.lerp(sep, grade_sepia)
+	var tinted := _sat(_hue(mixed, grade_hue), grade_tint_sat) * grade_tint_bright
+	return base.lerp(tinted, grade_tint_op)
+
+
+func _sat(c: Vector3, s: float) -> Vector3:
+	var l := c.dot(Vector3(0.299, 0.587, 0.114))
+	return Vector3(l, l, l).lerp(c, s)
+
+
+func _sepia(c: Vector3) -> Vector3:
+	return Vector3(
+		c.dot(Vector3(0.393, 0.769, 0.189)),
+		c.dot(Vector3(0.349, 0.686, 0.168)),
+		c.dot(Vector3(0.272, 0.534, 0.131))
+	)
+
+
+func _hue(c: Vector3, deg: float) -> Vector3:
+	var a := deg_to_rad(deg)
+	var si := sin(a)
+	var co := cos(a)
+	var r0 := (0.213 + co * 0.787 - si * 0.213) * c.x + (0.715 - co * 0.715 - si * 0.715) * c.y + (0.072 - co * 0.072 + si * 0.928) * c.z
+	var r1 := (0.213 - co * 0.213 + si * 0.143) * c.x + (0.715 + co * 0.285 + si * 0.140) * c.y + (0.072 - co * 0.072 - si * 0.283) * c.z
+	var r2 := (0.213 - co * 0.213 - si * 0.787) * c.x + (0.715 - co * 0.715 + si * 0.715) * c.y + (0.072 + co * 0.928 + si * 0.072) * c.z
+	return Vector3(clampf(r0, 0.0, 1.0), clampf(r1, 0.0, 1.0), clampf(r2, 0.0, 1.0))
+
+
+func _html_rgb(hex: String) -> Vector3:
+	var h := hex.replace("#", "")
+	if h.length() < 6:
+		return Vector3.ZERO
+	return Vector3(h.substr(0, 2).hex_to_int() / 255.0, h.substr(2, 2).hex_to_int() / 255.0, h.substr(4, 2).hex_to_int() / 255.0)
 
 
 func _filter_num(filt: String, key: String) -> float:
@@ -317,7 +402,9 @@ func _filter_num(filt: String, key: String) -> float:
 func _build_pin() -> void:
 	var ledger := UiKit.sprite("intro/ledger_closed.png", Rect2(24, 848, 200, 185), "contain")
 	add_child(ledger)
-	add_child(_tag(Content.UI["gateScores"], Rect2(-16, 1037, 280, 28), 20))
+	# .intro__tag sits 32px under the book. The box has to be tall enough that
+	# Vazirmatn 20 is not clip_text'd away at the bottom of the stage.
+	add_child(_tag(Content.UI["gateScores"], Rect2(-16, 1028, 280, 48), 20))
 	var led_hit := UiKit.hit(Rect2(24, 848, 200, 185))
 	led_hit.pressed.connect(func() -> void: _toggle_panel("scores"))
 	add_child(led_hit)
@@ -364,7 +451,7 @@ func _build_pin() -> void:
 		map_node.texture = atlas
 	map_node.pivot_offset = Vector2(56, 12)
 	add_child(map_node)
-	add_child(_tag(Content.UI["gateStages"], Rect2(1708, 1059, 192, 26), 20))
+	add_child(_tag(Content.UI["gateStages"], Rect2(1668, 1036, 232, 42), 20))
 	var map_hit := UiKit.hit(Rect2(1748, 746, 112, 307))
 	map_hit.pressed.connect(func() -> void: _toggle_panel("stages"))
 	add_child(map_hit)
@@ -378,7 +465,9 @@ func _build_pin() -> void:
 
 
 func _tag(text: String, rect: Rect2, size: int) -> Label:
-	var l := UiKit.label(text, rect, size, Color(0.91, 0.85, 0.71, 0.86))
+	var l := UiKit.label(text, rect, size, Color(0.914, 0.851, 0.706, 0.86))
+	l.clip_text = false
+	l.z_index = 6
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	l.add_theme_constant_override("shadow_offset_y", 2)
 	return l
@@ -708,7 +797,7 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 	if _east_mat:
 		_east_mat.set_shader_parameter("angle_deg", -ang)
 	if _glow:
-		_glow.color.a = doors * 0.35
+		_glow.modulate.a = doors * 0.85
 	if _sign and not freeze and not busy:
 		var sway := fposmod(_clock, 12.0) / 6.0
 		var leg := sway if sway <= 1.0 else 2.0 - sway

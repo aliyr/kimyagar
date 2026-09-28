@@ -12,29 +12,28 @@ uniform vec2 persp_origin = vec2(304.0, 271.5);
 
 void fragment() {
 	vec4 tint = COLOR;
-	float th = radians(angle_deg);
-	float c = cos(th);
-	float s = sin(th);
-	if (c < 0.02) {
-		discard;
-	}
+	highp float th = radians(angle_deg);
+	highp float c = cos(th);
+	highp float s = sin(th);
 	vec2 screen = leaf_origin + UV * leaf_size;
 	float hinge_x = leaf_origin.x + hinge * leaf_size.x;
 	float relx = screen.x - persp_origin.x;
 	float rely = screen.y - persp_origin.y;
 	float denom = relx * s - perspective * c;
 	float numer = (hinge_x - persp_origin.x) * s - perspective * c;
-	if (abs(denom) < 1e-5) {
-		discard;
+	float ok = 1.0;
+	if (c < 0.02 || abs(denom) < 1e-5) {
+		ok = 0.0;
 	}
 	float t = numer / denom;
 	float x = persp_origin.x + t * relx;
 	float y = persp_origin.y + t * rely;
-	float px = (x - hinge_x) / c;
+	float px = (x - hinge_x) / max(c, 0.02);
 	float u = hinge < 0.5 ? px / leaf_size.x : 1.0 + px / leaf_size.x;
 	float v = (y - leaf_origin.y) / leaf_size.y;
-	if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
-		discard;
+	if (ok < 0.5 || u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
+		COLOR = vec4(0.0);
+	} else {
+		COLOR = texture(TEXTURE, vec2(u, v)) * tint;
 	}
-	COLOR = texture(TEXTURE, vec2(u, v)) * tint;
 }

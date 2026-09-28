@@ -1,4 +1,7 @@
 shader_type canvas_item;
+// Reference for the CPU bake in gate_view.gd. The live facade is an RGBA8
+// image, not this shader: on ANGLE a canvas COLOR write is encoded again,
+// so sRGB dusk bytes come out blue-violet in the sky and pink-grey on the wall.
 
 uniform float brightness = 1.0;
 uniform float saturate_amt = 1.0;

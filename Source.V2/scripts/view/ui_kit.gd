@@ -6,6 +6,7 @@ static var medium: Font
 static var bold: Font
 static var extrabold: Font
 static var _cache := {}
+static var _radial: Texture2D
 
 const STAGE := Vector2(1920.0, 1080.0)
 
@@ -40,6 +41,28 @@ static func ensure() -> void:
 	medium = load("res://assets/fonts/Vazirmatn-Medium.ttf")
 	bold = load("res://assets/fonts/Vazirmatn-Bold.ttf")
 	extrabold = load("res://assets/fonts/Vazirmatn-ExtraBold.ttf")
+
+
+static func radial_texture() -> Texture2D:
+	if _radial != null:
+		return _radial
+	var n := 128
+	var bytes := PackedByteArray()
+	bytes.resize(n * n * 4)
+	var cx := float(n - 1) * 0.5
+	for y in n:
+		for x in n:
+			var d := Vector2(float(x) - cx, float(y) - cx).length() / cx
+			var a := clampf(1.0 - smoothstep(0.05, 1.0, d), 0.0, 1.0)
+			var i := (y * n + x) * 4
+			var b := int(a * 255.0 + 0.5)
+			bytes[i] = 255
+			bytes[i + 1] = 255
+			bytes[i + 2] = 255
+			bytes[i + 3] = b
+	var img := Image.create_from_data(n, n, false, Image.FORMAT_RGBA8, bytes)
+	_radial = ImageTexture.create_from_image(img)
+	return _radial
 
 
 static func tex(rel: String) -> Texture2D:

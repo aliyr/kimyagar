@@ -30,7 +30,7 @@ vec3 invert_rig(vec3 p) {
 
 void fragment() {
 	vec4 tint = COLOR;
-	vec2 center = scene_size * 0.5;
+	highp vec2 center = scene_size * 0.5;
 	vec2 screen = UV * scene_size;
 	float sx = screen.x - center.x;
 	float sy = screen.y - center.y;
@@ -42,8 +42,11 @@ void fragment() {
 	vec3 hit = invert_rig(vec3((t * sx) / s, (t * sy) / s, perspective * (1.0 - t)));
 	vec2 local = vec2(hit.x, hit.y) + center - depth_offset;
 	vec2 uv = local / scene_size;
+	// Alpha 0, not discard. ANGLE/D3D11 leaves a black streak where a canvas
+	// shader discards, and that streak was crossing the gate.
 	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-		discard;
+		COLOR = vec4(0.0);
+	} else {
+		COLOR = texture(TEXTURE, uv) * tint;
 	}
-	COLOR = texture(TEXTURE, uv) * tint;
 }
