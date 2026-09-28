@@ -33,7 +33,7 @@ A real run does not use `--shot` and does not need a warm `.godot/` cache. Delet
 godot --path Source.V2 --resolution 1920x1080 --write-movie f.png --fixed-fps 10 --quit-after 40
 ```
 
-Frame 39 is the idle gate (the 2.6 s boot has finished). The same command at `1280x720` and `2400x1080` letterboxes the 1920×1080 stage (`canvas_items` + `keep`), matching the web `fitStage`.
+Frame 39 is the idle gate (the 2.6 s boot has finished). The same command at `1280x720` and `2400x1080` keeps the logical viewport at 1920×1080 (`canvas_items` + `keep`) and scales it into the window, matching the web `fitStage`. `--write-movie` records that viewport, so the png sequence is 1920×1080 at every window size. Movie Maker stops the live generator on frame 2; quitting while it is still queued makes Godot report one `AudioStreamGeneratorPlayback` after the audio server has already shut down. A normal close with sound still playing can report that same engine object.
 
 Android, from the Godot editor: export the **Android** preset. A headless `--export-pack "Android"` pack includes the imported art (`door_west`, `customer_woman_cloth`, `mortar_back`, `cauldron_body`, piece sprites). This environment does not have the Android export templates installed, so a debug APK was not produced here. The pack is the check that the phone build will contain the textures. Windows git will check these files out as real files; there are no symlinks and no `.gdignore` on the art folder.
 

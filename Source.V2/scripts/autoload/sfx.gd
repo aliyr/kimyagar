@@ -123,6 +123,11 @@ func _band_voice(freq: float, q: float, gain: float) -> Dictionary:
 
 
 func _process(delta: float) -> void:
+	# Movie Maker quits from the main loop while the generator playback is still
+	# queued, and the audio server then reports it as leaked. Stop on frame 2
+	# so later mixes drop it before that check. The picture is unchanged.
+	if OS.has_feature("movie") and Engine.get_process_frames() >= 2:
+		_release_playback()
 	if _play == null:
 		return
 	_time += delta
@@ -674,9 +679,17 @@ func _chime() -> void:
 
 
 func _exit_tree() -> void:
+	_release_playback()
+
+
+func _release_playback() -> void:
 	_voices.clear()
 	_later.clear()
-	if _player:
-		_player.stop()
-	# Drop our playback ref after stop. Clearing the stream first orphans it.
+	var playback: AudioStreamGeneratorPlayback = _play
 	_play = null
+	if _player and is_instance_valid(_player):
+		_player.stream_paused = true
+		_player.stop()
+	playback = null
+
+
