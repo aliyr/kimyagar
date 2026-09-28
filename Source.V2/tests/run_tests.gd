@@ -46,6 +46,7 @@ func _run() -> void:
 	_format()
 	_rng()
 	_golden()
+	_mortar_fx()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -432,3 +433,229 @@ func _customer(defs: Dictionary, id: String) -> Dictionary:
 
 func _cmp_num(a, b, msg: String) -> void:
 	near(float(a), float(b), msg, 5e-4)
+
+
+func _mortar_fx() -> void:
+	check(MortarPile.kind_for("chamomile") == "flower", "kind flower")
+	check(MortarPile.kind_for("borage") == "star", "kind star")
+	check(MortarPile.kind_for("mint") == "leaf", "kind leaf")
+	check(MortarPile.kind_for("saffron") == "thread", "kind thread")
+	check(MortarPile.kind_for("poppy") == "seed", "kind seed")
+	check(MortarPile.kind_for("ginger") == "root", "kind root")
+	check(MortarPile.kind_for("rose") == "petal", "kind petal")
+	check(MortarPile.sprite_count("dust") == 0, "dust sprites")
+	check(MortarPile.sprite_count("leaf") == 7, "leaf sprites")
+	check(MortarPile.generation_cap(0.4) == 0, "gen 0")
+	check(MortarPile.generation_cap(1.4) == 1, "gen 1")
+	check(MortarPile.generation_cap(2.4) == 2, "gen 2")
+	check(MortarPile.generation_cap(3.6) == 3, "gen 3")
+
+	var at0: Dictionary = MortarPile.strike_profile(0.0)
+	check(float(at0["lift"]) < 0.05 and float(at0["impact"]) == 0.0 and float(at0["twist"]) == 0.0, "profile 0")
+	var at_lift: Dictionary = MortarPile.strike_profile(0.419)
+	check(float(at_lift["lift"]) > 0.95 and float(at_lift["impact"]) == 0.0, "profile lift")
+	var at_fall: Dictionary = MortarPile.strike_profile(0.56)
+	check(float(at_fall["lift"]) < 0.05 and float(at_fall["impact"]) > 0.5 and float(at_fall["twist"]) == 0.0, "profile fall")
+	check(float(MortarPile.strike_profile(0.99)["impact"]) < 0.15, "profile release")
+	check(float(MortarPile.strike_profile(1.0)["impact"]) == 0.0, "profile wrap")
+	var twist_seen := false
+	for i in 100:
+		var phase := float(i) / 100.0
+		var prof: Dictionary = MortarPile.strike_profile(phase)
+		check(float(prof["lift"]) >= 0.0 and float(prof["lift"]) <= 1.0, "lift range")
+		check(float(prof["impact"]) >= 0.0 and float(prof["impact"]) <= 1.0, "impact range")
+		check(absf(float(prof["twist"])) <= 6.0, "twist range")
+		if phase >= 0.56:
+			check(float(prof["lift"]) == 0.0, "lift after fall")
+		if phase < 0.42:
+			check(float(prof["impact"]) == 0.0 and float(prof["twist"]) == 0.0, "no press in lift")
+		if phase >= 0.56 and phase < 0.78 and absf(float(prof["twist"])) > 0.01:
+			twist_seen = true
+		if phase < 0.56 or phase >= 0.78:
+			check(float(prof["twist"]) == 0.0, "twist only in press")
+	check(twist_seen, "press twist")
+
+	var raw := MortarPile.new()
+	raw.setup({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 0.0}, 1)
+	var chips: Array[Dictionary] = raw.chips()
+	check(chips.size() >= 3 and chips.size() <= 4, "unit count %d" % chips.size())
+	for chip in chips:
+		check(str(chip["kind"]) == "flower" and int(chip["generation"]) == 0, "coarse flower")
+		check(raw.inside(chip), "inside bowl")
+		check(int(chip["sprite"]) >= 1 and int(chip["sprite"]) <= 7, "sprite index")
+		check(is_equal_approx(float(chip["depth"]), float(chip["y"])), "depth is bowl y")
+		var col: Color = chip["color"]
+		check(col.is_equal_approx(Color("#e8c96a")), "chamomile color")
+
+	var mint := MortarPile.new()
+	mint.setup({"ingredientId": "mint", "quantity": 1.0, "grindWork": 0.0, "grinding": false})
+	var start_n := mint.chips().size()
+	mint.sync({"ingredientId": "mint", "quantity": 1.0, "grindWork": 1.4, "grinding": false})
+	var coarse: Array[Dictionary] = mint.chips()
+	check(coarse.size() > start_n, "breaks under the head")
+	var any_solid := false
+	for chip in coarse:
+		check(mint.inside(chip), "coarse inside")
+		if str(chip["kind"]) != "dust":
+			any_solid = true
+	check(any_solid, "not all dust at 1.4")
+
+	var ginger := MortarPile.new()
+	ginger.setup({"ingredientId": "ginger", "quantity": 1.0, "grindWork": 0.0})
+	var ginger_area := 0.0
+	for chip in ginger.chips():
+		ginger_area += float(chip["w"]) * float(chip["h"])
+	var fine := MortarPile.new()
+	fine.setup({"ingredientId": "ginger", "quantity": 1.0, "grindWork": 3.6})
+	var fine_chips: Array[Dictionary] = fine.chips()
+	var fine_area := 0.0
+	var min_x := INF
+	var max_x := -INF
+	var min_y := INF
+	var max_y := -INF
+	for chip in fine_chips:
+		check(str(chip["kind"]) == "dust" and float(chip["w"]) >= 8.0 and float(chip["h"]) >= 8.0, "visible dust")
+		check(int(chip["sprite"]) == 0, "dust sprite")
+		check(is_equal_approx(float(chip["draw_k"]), MortarPile.DUST_DRAW), "dust draw scale")
+		check(fine.inside(chip), "dust inside")
+		fine_area += float(chip["w"]) * float(chip["h"])
+		min_x = minf(min_x, float(chip["x"]))
+		max_x = maxf(max_x, float(chip["x"]))
+		min_y = minf(min_y, float(chip["y"]))
+		max_y = maxf(max_y, float(chip["y"]))
+	check(fine_chips.size() > start_n, "fine has more pieces")
+	check(fine_area > ginger_area * 0.2, "volume held")
+	check(max_x - min_x > 20.0 and max_y - min_y > 8.0, "mound spread")
+
+	var mix := MortarPile.new()
+	mix.setup({
+		"portions": [
+			{"ingredientId": "saffron", "quantity": 1.0, "grindWork": 3.6, "color": "#c23b12"},
+			{"ingredientId": "poppy", "quantity": 2.0, "grindWork": 0.0, "color": "#a07888"},
+		],
+	})
+	var saffron_n := 0
+	var poppy_n := 0
+	for chip in mix.chips():
+		check(mix.inside(chip), "mix inside")
+		if str(chip["ingredient_id"]) == "saffron":
+			saffron_n += 1
+			var sc: Color = chip["color"]
+			check(str(chip["kind"]) == "dust" and sc.is_equal_approx(Color("#c23b12")), "saffron dust")
+		if str(chip["ingredient_id"]) == "poppy":
+			poppy_n += 1
+			var pc: Color = chip["color"]
+			check(str(chip["kind"]) == "seed" and int(chip["generation"]) == 0 and pc.is_equal_approx(Color("#a07888")), "poppy raw")
+	check(saffron_n > 0 and poppy_n > 0, "both portions")
+	mix.sync({
+		"portions": [{"ingredientId": "saffron", "quantity": 1.0, "grindWork": 0.0, "color": "#c23b12"}],
+	})
+	for chip in mix.chips():
+		check(str(chip["kind"]) == "thread" and int(chip["generation"]) == 0, "grind reset")
+		check(mix.inside(chip), "reset inside")
+
+	var empty := MortarPile.new()
+	var empty_tip := empty.handle_tip_y()
+	var loaded := MortarPile.new()
+	loaded.setup({"ingredientId": "saffron", "quantity": 1.0, "grindWork": 0.0})
+	loaded.update(0.016, false, null)
+	check(str(loaded.pestle()["mode"]) == "rest", "rest pose")
+	check(empty_tip < loaded.handle_tip_y(), "empty handle higher")
+	check(loaded.pestle_in_front(), "rest in front")
+
+	var grind := MortarPile.new()
+	grind.setup({"ingredientId": "mint", "quantity": 1.0, "grindWork": 0.4, "grinding": true})
+	grind.update(0.016, true, null)
+	check(str(grind.pestle()["mode"]) == "grind", "grind mode")
+	check(not grind.pestle_in_front(), "far half behind")
+	var struck := false
+	for _i in 80:
+		grind.update(0.016, true, null)
+		if grind.pestle_in_front():
+			break
+	check(grind.pestle_in_front(), "near half in front")
+	for _i in 40:
+		grind.update(0.016, true, null)
+		var strike: Dictionary = grind.last_strike()
+		if not strike.is_empty():
+			struck = true
+			check(strike.has("x") and strike.has("hits") and strike.has("colors"), "strike fields")
+			check(float(strike["fineness"]) >= 0.0 and float(strike["fineness"]) <= 1.0, "fineness")
+			break
+	check(struck, "beat strikes")
+	grind.update(0.016, false, null)
+	check(str(grind.pestle()["mode"]) == "rest", "stop to rest")
+
+	var fx_a := MortarParticles.new(42)
+	var fx_b := MortarParticles.new(42)
+	fx_a.burst("dust", Vector2(100, 200), {"colors": ["#c4a15a"], "fineness": 0.4})
+	fx_b.burst("dust", Vector2(100, 200), {"colors": ["#c4a15a"], "fineness": 0.4})
+	fx_a.update(1.0 / 60.0)
+	fx_b.update(1.0 / 60.0)
+	check(fx_a.count() == fx_b.count() and fx_a.count() > 0, "dust replay count")
+	for i in fx_a.count():
+		var pa: Dictionary = fx_a.live()[i]
+		var pb: Dictionary = fx_b.live()[i]
+		near(float(pa["x"]), float(pb["x"]), "replay x", 0.0)
+		near(float(pa["y"]), float(pb["y"]), "replay y", 0.0)
+
+	var fine_fx := MortarParticles.new(7)
+	var coarse_fx := MortarParticles.new(7)
+	fine_fx.burst("dust", Vector2(50, 50), {"colors": ["#abc"], "fineness": 1.0})
+	coarse_fx.burst("dust", Vector2(50, 50), {"colors": ["#abc"], "fineness": 0.0})
+	check(fine_fx.count() > coarse_fx.count(), "finer dust")
+	var coarse_drag := float(coarse_fx.live()[0]["drag"])
+	for p in fine_fx.live():
+		check(float(p["drag"]) > coarse_drag, "fine drag")
+	var none := MortarParticles.new(7)
+	none.set_budget(0.0)
+	none.burst("dust", Vector2(50, 50), {"colors": ["#abc"], "fineness": 1.0})
+	check(none.count() == 0, "scale 0")
+
+	var spill := MortarParticles.new(3)
+	var floor_y := 400.0
+	spill.burst("spill", Vector2.ZERO, {"colors": [Color("#c4a15a")]})
+	# emitSpill uses the mortar rim, not `at`. Force the floor by stepping the real table.
+	check(spill.count() > 0, "spill emits")
+	var bounced := false
+	for _i in 90:
+		spill.update(1.0 / 60.0)
+		for p in spill.live():
+			if bool(p["bounced"]):
+				bounced = true
+				check(float(p["y"]) <= float(p["floor_y"]) + 0.001, "spill floor")
+	check(bounced, "spill bounced")
+
+	var life := MortarParticles.new(11)
+	life.burst("dust", Vector2.ZERO, {"colors": ["#fff"], "fineness": 0.5})
+	var ttl := INF
+	for p in life.live():
+		ttl = minf(ttl, float(p["ttl"]))
+	life.update(ttl + 0.01)
+	for p in life.live():
+		check(float(p["life"]) < float(p["ttl"]), "still alive")
+	for _i in 200:
+		life.update(0.1)
+	check(life.count() == 0, "particles die")
+
+	var alpha_fx := MortarParticles.new(5)
+	alpha_fx.burst("dust", Vector2.ZERO, {"colors": ["#fff"], "fineness": 0.2})
+	var sample: Dictionary = alpha_fx.live()[0]
+	sample["life"] = sample["ttl"]
+	check(MortarParticles.particle_alpha(sample) == 0.0, "dust alpha end")
+	check(MortarParticles.particle_size(sample) > 0.0, "dust size end")
+
+	var rings := MortarParticles.new(7)
+	rings.burst("strike", Vector2(50.0, 36.0), {"colors": ["#c23b12"], "fineness": 0.2, "hits": 2})
+	check(rings.count() > 0, "strike burst")
+	rings.burst("fine", Vector2.ZERO, {"color": "#c23b12"})
+	rings.burst("land", Vector2.ZERO, {"color": "#3d8f5a"})
+	rings.burst("ripple", Vector2(400, 700), {"color": "#c23b12"})
+	rings.set_aroma(0.8, Color("#c23b12"))
+	rings.update(0.5)
+	check(rings.count() > 0, "aroma and puffs")
+	var taken := raw.scoop_rest()
+	check(taken.size() > 0 and raw.chips().is_empty(), "scoop rest")
+	check(not raw.residue().is_empty(), "residue remains")
+	raw.clear_residue()
+	check(raw.residue().is_empty(), "residue cleared")
