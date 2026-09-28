@@ -168,6 +168,17 @@ func _layout_geometry() -> void:
 	_stove = Vector4(_pot_base.x, _pot_base.y - 25.0, roundf((743.0 / 2.0) * ps) + 14.0, 42.0)
 
 
+func _exit_tree() -> void:
+	_shadow_sprites.clear()
+	if _fire_rect:
+		_fire_rect.texture = null
+	if _fire:
+		_fire.texture = null
+		_fire._img = null
+	if _bg:
+		_bg.material = null
+
+
 func set_behind(on: bool) -> void:
 	behind_gate = on
 

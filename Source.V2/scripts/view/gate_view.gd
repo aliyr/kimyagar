@@ -236,8 +236,8 @@ func _build() -> void:
 	_cat_awake.modulate.a = 0
 	_mid_layer.add_child(_cat_sleep)
 	_mid_layer.add_child(_cat_awake)
-	var cat_hit := UiKit.hit(Rect2(700, 922, 200, 110))
-	cat_hit.mouse_filter = MOUSE_FILTER_IGNORE
+	# The cat is inside the tilted rig, so the tap goes through unproject.
+	# A Button here would never be parented, and it leaked a CanvasItem on exit.
 	_rig_hits.append({"rect": Rect2(700, 922, 200, 110), "depth": 36.0, "cb": _poke_cat})
 
 	_knocker = UiKit.sprite("intro/knocker.png", Rect2(908, 640, 94, 131), "contain")

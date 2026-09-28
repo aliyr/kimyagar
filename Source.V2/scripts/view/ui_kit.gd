@@ -25,6 +25,14 @@ static func place(node: Control, rect: Rect2) -> void:
 	node.size = rect.size
 
 
+static func shutdown() -> void:
+	regular = null
+	medium = null
+	bold = null
+	extrabold = null
+	_cache.clear()
+
+
 static func ensure() -> void:
 	if regular != null:
 		return

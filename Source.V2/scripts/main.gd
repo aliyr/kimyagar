@@ -52,6 +52,10 @@ func _ready() -> void:
 	print("viewport ", get_viewport().get_visible_rect().size, " window ", DisplayServer.window_get_size())
 
 
+func _exit_tree() -> void:
+	UiKit.shutdown()
+
+
 func _parse_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--shot="):

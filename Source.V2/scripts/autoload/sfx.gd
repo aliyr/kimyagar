@@ -671,3 +671,12 @@ func _chime() -> void:
 			f *= 2.0
 		tone(f, 1.6 + _rng.randf() * 0.8, 0.035 + _rng.randf() * 0.02, "sine", null, at)
 		at += 0.08 + _rng.randf() * 0.22
+
+
+func _exit_tree() -> void:
+	_play = null
+	_voices.clear()
+	_later.clear()
+	if _player:
+		_player.stop()
+		_player.stream = null
