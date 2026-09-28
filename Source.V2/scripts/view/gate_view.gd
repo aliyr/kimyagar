@@ -30,7 +30,6 @@ var _front_layer: Control
 var _vp: SubViewport
 var _plate: TextureRect
 var _plate_mat: ShaderMaterial
-var _sky: ColorRect
 var _facade: TextureRect
 var _facade_mat: ShaderMaterial
 var _west: TextureRect
@@ -73,6 +72,9 @@ func _ready() -> void:
 		phase = "boot"
 		boot_left = 2.6
 	_build()
+	# Size set on stretched anchors is thrown away after _ready. Relock once
+	# that pass has finished so the plate stays the logical stage.
+	call_deferred("_relock_stage")
 
 
 func force_idle() -> void:
@@ -100,6 +102,29 @@ func begin_enter() -> void:
 	Haptics.pulse("light")
 
 
+func _exit_tree() -> void:
+	# ViewportTexture on the plate keeps the SubViewport's canvas item alive
+	# past shutdown (one leaked CanvasItem RID plus a few ObjectDB instances).
+	if _plate:
+		_plate.material = null
+		_plate.texture = null
+	if _facade:
+		_facade.material = null
+	if _west:
+		_west.material = null
+	if _east:
+		_east.material = null
+	if _vp:
+		_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+
+
+func _relock_stage() -> void:
+	UiKit.fill(self)
+	if _plate:
+		_plate.custom_minimum_size = Vector2.ZERO
+		UiKit.fill(_plate)
+
+
 func _build() -> void:
 	_rig = Control.new()
 	_rig.mouse_filter = MOUSE_FILTER_IGNORE
@@ -117,10 +142,6 @@ func _build() -> void:
 	_sky_layer.add_child(sky_layer)
 	_sky_fx = _fx_host(_draw_fireflies)
 	_sky_layer.add_child(_sky_fx)
-	_sky = ColorRect.new()
-	_sky.mouse_filter = MOUSE_FILTER_IGNORE
-	UiKit.fill(_sky)
-	_sky.size = sky_layer.size
 	var grad := Gradient.new()
 	grad.set_color(0, Color(sky["skyA"]))
 	grad.set_color(1, Color(sky["skyC"]))
@@ -132,11 +153,11 @@ func _build() -> void:
 	gt.fill_from = Vector2(0.5, 0)
 	gt.fill_to = Vector2(0.5, 1)
 	var sky_tex := TextureRect.new()
-	sky_tex.texture = gt
-	UiKit.fill(sky_tex)
-	sky_tex.mouse_filter = MOUSE_FILTER_IGNORE
 	sky_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	sky_tex.stretch_mode = TextureRect.STRETCH_SCALE
+	sky_tex.texture = gt
+	sky_tex.mouse_filter = MOUSE_FILTER_IGNORE
+	UiKit.place(sky_tex, Rect2(Vector2.ZERO, sky_layer.size))
 	sky_layer.add_child(sky_tex)
 	var fx := UiKit.sprite("intro/sky_fx.png", Rect2(520, -40, 1300, 731), "contain")
 	fx.modulate.a = float(sky["moon"])
@@ -184,16 +205,24 @@ func _build() -> void:
 
 	_sign = Control.new()
 	_sign.position = Vector2(680, -30)
-	_sign.size = Vector2(560, 360)
+	# Board is 560×315. The subtitle sits at top 322, outside that box.
+	_sign.size = Vector2(560, 380)
 	_sign.pivot_offset = Vector2(280, 0)
 	_sign.mouse_filter = MOUSE_FILTER_IGNORE
 	_front_layer.add_child(_sign)
 	_sign.add_child(UiKit.sprite("gate/sign.png", Rect2(0, 0, 560, 315), "fill"))
-	var logo := UiKit.label(Content.UI["gameTitle"], Rect2(30, 88, 500, 120), 78, Color("e6bd6a"), UiKit.extrabold)
-	logo.add_theme_color_override("font_shadow_color", Color(0.2, 0.1, 0.02, 0.9))
-	logo.add_theme_constant_override("shadow_offset_y", 3)
+	# intro.css .intro__logo: 128px ExtraBold, line box 1.5, left/right 40, top 96.
+	var logo := UiKit.label(Content.UI["gameTitle"], Rect2(40, 96, 480, 192), 128, Color("f1cd7a"), UiKit.extrabold)
+	logo.clip_text = false
+	logo.add_theme_color_override("font_outline_color", Color(0.235, 0.118, 0.02, 0.9))
+	logo.add_theme_constant_override("outline_size", 2)
+	logo.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
+	logo.add_theme_constant_override("shadow_offset_y", 5)
 	_sign.add_child(logo)
-	_sign.add_child(UiKit.label(Content.UI["gateSubtitle"], Rect2(20, 214, 520, 36), 20, Color(0.91, 0.85, 0.71, 0.9)))
+	var subtitle := UiKit.label(Content.UI["gateSubtitle"], Rect2(0, 322, 560, 36), 22, Color(0.914, 0.851, 0.706, 0.82))
+	subtitle.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	subtitle.add_theme_constant_override("shadow_offset_y", 2)
+	_sign.add_child(subtitle)
 	_dust_fx = _fx_host(_draw_dust)
 	_front_layer.add_child(_dust_fx)
 
@@ -217,8 +246,10 @@ func _build() -> void:
 	_rig_hits.append({"rect": Rect2(908, 620, 110, 160), "depth": 36.0, "cb": begin_enter})
 
 	var settings := UiKit.sprite("intro/lantern.png", Rect2(1764, 328, 80, 208), "contain")
+	settings.modulate.a = 0.92
 	_mid_layer.add_child(settings)
-	_mid_layer.add_child(UiKit.label(Content.UI["settings"], Rect2(1724, 530, 160, 28), 17, Color(0.91, 0.85, 0.71, 0.86)))
+	# .intro__tag bottom is 32px below the 230px-tall settings hit.
+	_mid_layer.add_child(_tag(Content.UI["settings"], Rect2(1724, 564, 160, 26), 17))
 	_rig_hits.append({"rect": Rect2(1764, 328, 80, 230), "depth": 36.0, "cb": _open_settings})
 
 	_wrap_rig()
@@ -264,16 +295,16 @@ func _wrap_rig() -> void:
 	add_child(_vp)
 	_vp.add_child(_rig)
 	_plate = TextureRect.new()
-	UiKit.fill(_plate)
-	_plate.mouse_filter = MOUSE_FILTER_IGNORE
 	_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_plate.stretch_mode = TextureRect.STRETCH_SCALE
+	_plate.mouse_filter = MOUSE_FILTER_IGNORE
 	_plate.texture = _vp.get_texture()
+	_plate.custom_minimum_size = Vector2.ZERO
+	UiKit.fill(_plate)
 	_plate_mat = ShaderMaterial.new()
 	_plate_mat.shader = load("res://shaders/rig_perspective.gdshader")
 	_plate.material = _plate_mat
 	add_child(_plate)
-	move_child(_plate, 0)
 
 
 func _add_window_glow(x: float) -> void:
@@ -311,7 +342,7 @@ func _filter_num(filt: String, key: String) -> float:
 func _build_pin() -> void:
 	var ledger := UiKit.sprite("intro/ledger_closed.png", Rect2(24, 848, 200, 185), "contain")
 	add_child(ledger)
-	add_child(UiKit.label(Content.UI["gateScores"], Rect2(-16, 1030, 280, 28), 20, Color(0.91, 0.85, 0.71, 0.86)))
+	add_child(_tag(Content.UI["gateScores"], Rect2(-16, 1037, 280, 28), 20))
 	var led_hit := UiKit.hit(Rect2(24, 848, 200, 185))
 	led_hit.pressed.connect(func() -> void: _toggle_panel("scores"))
 	add_child(led_hit)
@@ -324,8 +355,9 @@ func _build_pin() -> void:
 	add_child(_quote_root)
 	_quote_root.add_child(UiKit.sprite("gate/parchment.png", Rect2(0, 0, 306, 173), "fill"))
 	var qtext := str(quote["lines"][0]) + "\n" + str(quote["lines"][1])
-	_quote_root.add_child(UiKit.label(qtext, Rect2(18, 16, 270, 110), 16, Color("4a2f16")))
-	_quote_root.add_child(UiKit.label(str(quote["attribution"]), Rect2(16, 132, 200, 28), 13, Color(0.29, 0.18, 0.09, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_LEFT))
+	# .intro__quote-text inset 22px 20px 40px, 17px.
+	_quote_root.add_child(UiKit.label(qtext, Rect2(20, 22, 266, 111), 17, Color("4a2f16")))
+	_quote_root.add_child(UiKit.label(str(quote["attribution"]), Rect2(34, 129, 200, 28), 13, Color(0.29, 0.18, 0.09, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_LEFT))
 	var qhit := UiKit.hit(Rect2(0, 0, 306, 173))
 	qhit.pressed.connect(_toggle_quote)
 	_quote_root.add_child(qhit)
@@ -333,6 +365,10 @@ func _build_pin() -> void:
 	var plaque := UiKit.sprite("intro/plaque.png", Rect2(850, 805, 210, 97), "contain")
 	add_child(plaque)
 	_plaque_label = UiKit.label("", Rect2(850, 805, 210, 97), 30, Color("3a2410"), UiKit.bold)
+	_plaque_label.add_theme_color_override("font_shadow_color", Color(1.0, 0.91, 0.686, 0.55))
+	_plaque_label.add_theme_constant_override("shadow_offset_y", 1)
+	_plaque_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.35))
+	_plaque_label.add_theme_constant_override("outline_size", 1)
 	add_child(_plaque_label)
 	var start := UiKit.hit(Rect2(850, 805, 210, 97))
 	start.pressed.connect(begin_enter)
@@ -353,15 +389,24 @@ func _build_pin() -> void:
 		map_node.texture = atlas
 	map_node.pivot_offset = Vector2(56, 12)
 	add_child(map_node)
-	add_child(UiKit.label(Content.UI["gateStages"], Rect2(1708, 1052, 192, 26), 18, Color(0.91, 0.85, 0.71, 0.86)))
+	add_child(_tag(Content.UI["gateStages"], Rect2(1708, 1059, 192, 26), 20))
 	var map_hit := UiKit.hit(Rect2(1748, 746, 112, 307))
 	map_hit.pressed.connect(func() -> void: _toggle_panel("stages"))
 	add_child(map_hit)
 
-	_fresh = UiKit.parchment_button(Content.UI["gateFresh"], Rect2(900, 1002, 150, 40))
+	_fresh = UiKit.fresh_button(Content.UI["gateFresh"], Rect2(900, 1002, 168, 36))
+	_fresh.pivot_offset = Vector2(75, 20)
+	_fresh.rotation_degrees = 1.0
 	_fresh.pressed.connect(func() -> void: _toggle_panel("confirmFresh"))
 	add_child(_fresh)
 	_fresh.visible = ProgressLogic.has_progress(Progress.data)
+
+
+func _tag(text: String, rect: Rect2, size: int) -> Label:
+	var l := UiKit.label(text, rect, size, Color(0.91, 0.85, 0.71, 0.86))
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("shadow_offset_y", 2)
+	return l
 
 
 func _refresh_plaque() -> void:
@@ -417,23 +462,29 @@ func _refresh_panel() -> void:
 	)
 	_panel_layer.add_child(scrim)
 	var art := "intro/map_open.png" if panel == "stages" else "intro/ledger_open.png"
+	var frame_rect := Rect2(260, 146, 1400, 788)
 	if panel == "confirmFresh":
 		art = "gate/parchment.png"
-	var frame := UiKit.sprite(art, Rect2(260, 146, 1400, 788), "contain")
+		# .intro__panel--note
+		frame_rect = Rect2(560, 300, 800, 454)
+	var frame := UiKit.sprite(art, frame_rect, "fill")
 	_panel_layer.add_child(frame)
-	var title := ""
 	if panel == "stages":
-		title = Content.UI["gateMapTitle"]
-	elif panel == "scores":
-		title = Content.UI["gateLedgerTitle"]
-	_panel_layer.add_child(UiKit.label(title, Rect2(260, 210, 1400, 48), 34, Color("4a2f16"), UiKit.bold))
-	if panel == "stages":
+		var map_title := UiKit.label(Content.UI["gateMapTitle"], Rect2(260, 224, 1400, 48), 34, Color("4a2f16"), UiKit.bold)
+		map_title.add_theme_color_override("font_shadow_color", Color(1, 0.961, 0.863, 0.6))
+		map_title.add_theme_constant_override("shadow_offset_y", 1)
+		_panel_layer.add_child(map_title)
 		_fill_stages()
 	elif panel == "scores":
 		_fill_scores()
 	elif panel == "confirmFresh":
 		_fill_confirm()
-	var close := UiKit.parchment_button("×", Rect2(280, 164, 56, 56))
+	var close_rect := Rect2(282, 164, 56, 56)
+	if panel == "scores":
+		close_rect = Rect2(474, 246, 56, 56)
+	elif panel == "confirmFresh":
+		close_rect = Rect2(582, 318, 48, 48)
+	var close := UiKit.seal_button(close_rect)
 	close.pressed.connect(func() -> void:
 		panel = ""
 		_refresh_panel()
@@ -447,38 +498,58 @@ func _fill_stages() -> void:
 		var unlocked := Content.stage_unlocked(i)
 		var x := 260.0 + float(st["mapX"]) / 100.0 * 1400.0
 		var y := 146.0 + float(st["mapY"]) / 100.0 * 788.0
+		var seal := Panel.new()
+		seal.position = Vector2(x - 34, y - 34)
+		seal.size = Vector2(68, 68)
+		seal.mouse_filter = MOUSE_FILTER_IGNORE
+		var disc := StyleBoxFlat.new()
+		disc.bg_color = Color("2ba09a") if unlocked else Color("7a726a")
+		disc.set_corner_radius_all(34)
+		disc.shadow_color = Color(0, 0, 0, 0.4)
+		disc.shadow_size = 3
+		seal.add_theme_stylebox_override("panel", disc)
+		_panel_layer.add_child(seal)
 		var name := str(st["nameFa"]) if unlocked else Content.UI["gateLocked"]
-		_panel_layer.add_child(UiKit.label(name, Rect2(x - 90, y - 20, 180, 36), 20, Color("4a2f16"), UiKit.bold))
+		var name_color := Color("3b2a14") if unlocked else Color(0.231, 0.165, 0.078, 0.6)
+		var name_l := UiKit.label(name, Rect2(x - 120, y - 68, 240, 30), 22, name_color, UiKit.bold)
+		name_l.add_theme_color_override("font_shadow_color", Color(1, 0.961, 0.863, 0.6))
+		name_l.add_theme_constant_override("shadow_offset_y", 1)
+		_panel_layer.add_child(name_l)
 		i += 1
 
 
 func _fill_scores() -> void:
+	# .intro__page--right: 54.5% / 26% of the 1400×788 sheet, top 19%.
+	var page := Rect2(260.0 + 0.545 * 1400.0, 146.0 + 0.19 * 788.0, 0.26 * 1400.0, 0.58 * 788.0)
+	var title := UiKit.label(Content.UI["gateLedgerTitle"], Rect2(page.position.x, page.position.y, page.size.x, 54), 25, Color("3a2a12"), UiKit.bold)
+	_panel_layer.add_child(title)
 	var hist: Array = Progress.data["scoreHistory"]
 	if hist.is_empty():
-		_panel_layer.add_child(UiKit.label(Content.UI["gateLedgerEmpty"], Rect2(360, 360, 1200, 40), 26, Color("4a2f16")))
-		_panel_layer.add_child(UiKit.label(Content.UI["gateLedgerEmptyHint"], Rect2(360, 410, 1200, 40), 20, Color("6a4a2a")))
+		_panel_layer.add_child(UiKit.label(Content.UI["gateLedgerEmpty"], Rect2(page.position.x, page.position.y + 80, page.size.x, 40), 22, Color("3b2a14")))
+		_panel_layer.add_child(UiKit.label(Content.UI["gateLedgerEmptyHint"], Rect2(page.position.x, page.position.y + 124, page.size.x, 48), 16, Color(0.231, 0.165, 0.078, 0.7)))
 		return
 	var best := float(Progress.data.get("bestScore", 0))
-	_panel_layer.add_child(UiKit.label("%s  %s" % [Content.UI["gateLedgerBest"], Content.to_fa_digits(best)], Rect2(360, 280, 1200, 36), 24, Color("4a2f16"), UiKit.bold))
-	var y := 340.0
+	_panel_layer.add_child(UiKit.label("%s  %s" % [Content.UI["gateLedgerBest"], Content.to_fa_digits(best)], Rect2(page.position.x, page.position.y + 58, page.size.x, 32), 18, Color("3b2a14"), UiKit.bold))
+	var y := page.position.y + 100.0
 	var shown := mini(8, hist.size())
 	for n in shown:
 		var row: Dictionary = hist[hist.size() - 1 - n]
 		var line := "%s   %s   %s" % [str(row.get("customerId", "")), Content.BAND.get(str(row.get("band", "")), ""), Content.to_fa_digits(float(row.get("score", 0)))]
-		_panel_layer.add_child(UiKit.label(line, Rect2(400, y, 1120, 32), 20, Color("3a2410"), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT))
-		y += 36
+		_panel_layer.add_child(UiKit.label(line, Rect2(page.position.x, y, page.size.x, 46), 20, Color("3b2a14"), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT))
+		y += 46
 
 
 func _fill_confirm() -> void:
-	_panel_layer.add_child(UiKit.label(Content.UI["gateFreshConfirm"], Rect2(400, 400, 1120, 80), 28, Color("4a2f16")))
-	var yes := UiKit.parchment_button(Content.UI["gateFreshYes"], Rect2(980, 560, 220, 56))
+	# .intro__note-body inset 56px 80px 60px inside the 800×454 sheet.
+	_panel_layer.add_child(UiKit.label(Content.UI["gateFreshConfirm"], Rect2(640, 390, 640, 120), 24, Color("3b2a14")))
+	var yes := UiKit.note_button(Content.UI["gateFreshYes"], Rect2(980, 540, 220, 56), true)
 	yes.pressed.connect(func() -> void:
 		Game.start_fresh()
 		panel = ""
 		_refresh_plaque()
 		_refresh_panel()
 	)
-	var no := UiKit.parchment_button(Content.UI["gateFreshNo"], Rect2(700, 560, 240, 56))
+	var no := UiKit.note_button(Content.UI["gateFreshNo"], Rect2(720, 540, 240, 56))
 	no.pressed.connect(func() -> void:
 		panel = ""
 		_refresh_panel()
@@ -645,17 +716,37 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 		_mid_layer.position = Vector2(px, py) * 36.0
 	if _front_layer:
 		_front_layer.position = Vector2(px, py) * 60.0
-	if _plate_mat:
+	if _plate:
+		_plate.custom_minimum_size = Vector2.ZERO
+		if _plate.size != UiKit.STAGE:
+			UiKit.fill(_plate)
+	if _plate_mat and _plate:
 		var flat := tilt == null or busy or tilt.mode == "off" or tilt.mode == "flat"
 		var ax := 0.0 if flat else deg_to_rad(-py * 2.0)
 		var ay := 0.0 if flat else deg_to_rad(px * 2.2)
 		var sc := 1.0
 		if tilt != null and not busy and tilt.mode != "off":
 			sc = tilt.rig_scale()
-		_plate_mat.set_shader_parameter("ax", ax)
-		_plate_mat.set_shader_parameter("ay", ay)
-		_plate_mat.set_shader_parameter("rig_scale", sc)
+		# Rest pose is a plain scaled texture. The perspective shader only
+		# runs once the rig actually rotates, so a shader miss on ANGLE
+		# cannot hide the idle facade.
+		var resting := absf(ax) < 0.0001 and absf(ay) < 0.0001
+		_plate.pivot_offset = Vector2(960, 540)
+		if resting:
+			_plate.material = null
+			_plate.scale = Vector2(sc, sc)
+		else:
+			_plate.material = _plate_mat
+			_plate.scale = Vector2.ONE
+			_plate_mat.set_shader_parameter("ax", ax)
+			_plate_mat.set_shader_parameter("ay", ay)
+			_plate_mat.set_shader_parameter("rig_scale", sc)
 	var ang := 76.0 * doors
+	# Closed leaves are the texture itself. The hinge shader is the open swing.
+	if _west:
+		_west.material = null if absf(ang) < 0.05 else _west_mat
+	if _east:
+		_east.material = null if absf(ang) < 0.05 else _east_mat
 	if _west_mat:
 		_west_mat.set_shader_parameter("angle_deg", ang)
 	if _east_mat:

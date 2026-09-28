@@ -25,6 +25,16 @@ godot --headless --path Source.V2 --quit-after 2
 
 `ALL TESTS PASSED` is the success line. Golden numbers were dumped from the web engine. Godot `float` matches those quotients within `1e-12` for the RNG and `5e-4` / `5e-3` for stability and score. The FNV customer seed is an exact `uint32`.
 
+Sprite rectangles are the web logical boxes (`SCENE_ZONES`, `layout.ts`, `intro.css`, `scene.css`), not the PNG pixel size. `UiKit.sprite` sets `EXPAND_IGNORE_SIZE` before assigning the texture, then sets that layout size again. Full-screen layers use top-left anchors and an explicit 1920×1080. Stretched anchors (left ≠ right) were discarding a size set in `_ready` — the "non-equal opposite anchors" warning — so the gate plate collapsed and the workshop drew through it.
+
+A real run does not use `--shot` and does not need a warm `.godot/` cache. Delete `.godot/` if you want the same import a fresh checkout gets, then:
+
+```bash
+godot --path Source.V2 --resolution 1920x1080 --write-movie f.png --fixed-fps 10 --quit-after 40
+```
+
+Frame 39 is the idle gate (the 2.6 s boot has finished). The same command at `1280x720` and `2400x1080` letterboxes the 1920×1080 stage (`canvas_items` + `keep`), matching the web `fitStage`.
+
 Android, from the Godot editor: export the **Android** preset. A headless `--export-pack "Android"` pack includes the imported art (`door_west`, `customer_woman_cloth`, `mortar_back`, `cauldron_body`, piece sprites). This environment does not have the Android export templates installed, so a debug APK was not produced here. The pack is the check that the phone build will contain the textures. Windows git will check these files out as real files; there are no symlinks and no `.gdignore` on the art folder.
 
 ## Customer queue

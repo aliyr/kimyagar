@@ -46,6 +46,7 @@ func _run() -> void:
 	_format()
 	_rng()
 	_golden()
+	_layout()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -442,6 +443,32 @@ func _golden() -> void:
 			near(float(ev["score"]), float(case["score"]), "golden score", 5e-3)
 			if case.has("reaction"):
 				check(ev["reactionFa"] == case["reaction"], "golden reaction %s\n got %s\n exp %s" % [case.get("name", ""), ev["reactionFa"], case["reaction"]])
+
+
+func _layout() -> void:
+	var stage := Control.new()
+	UiKit.fill(stage)
+	check(stage.anchor_left == stage.anchor_right and stage.anchor_top == stage.anchor_bottom, "stage anchors are equal")
+	check(stage.size == Vector2(1920, 1080), "stage is 1920x1080 got %s" % stage.size)
+	var pestle := UiKit.sprite("mortar/v3/pestle_1.png", Rect2(10, 20, 100, 80))
+	check(pestle.size == Vector2(100, 80), "pestle keeps layout rect got %s" % pestle.size)
+	check(pestle.expand_mode == TextureRect.EXPAND_IGNORE_SIZE, "pestle ignores texture size")
+	var mortar := UiKit.sprite("mortar/v3/mortar_back.png", Rect2(290, 506, 250, 273))
+	check(mortar.size == Vector2(250, 273), "mortar zone got %s" % mortar.size)
+	var parchment := UiKit.sprite("gate/parchment.png", Rect2(1406, 868, 306, 173), "fill")
+	check(parchment.size == Vector2(306, 173), "parchment quote got %s" % parchment.size)
+	var plaque := UiKit.sprite("intro/plaque.png", Rect2(850, 805, 210, 97))
+	check(plaque.size == Vector2(210, 97), "plaque got %s" % plaque.size)
+	var cabinet := UiKit.sprite("shelf/side_cabinet.png", Rect2(10, 100, 270, 950))
+	check(cabinet.size == Vector2(270, 950), "cabinet zone got %s" % cabinet.size)
+	root.add_child(pestle)
+	check(pestle.size == Vector2(100, 80), "pestle stays laid out in the tree got %s" % pestle.size)
+	pestle.queue_free()
+	mortar.queue_free()
+	parchment.queue_free()
+	plaque.queue_free()
+	cabinet.queue_free()
+	stage.queue_free()
 
 
 func _customer(defs: Dictionary, id: String) -> Dictionary:

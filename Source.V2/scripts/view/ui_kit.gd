@@ -7,17 +7,22 @@ static var bold: Font
 static var extrabold: Font
 static var _cache := {}
 
+const STAGE := Vector2(1920.0, 1080.0)
+
 
 static func fill(node: Control) -> void:
-	# Anchors first. Godot keeps the current size by writing offsets, so zero them after.
-	node.anchor_left = 0.0
-	node.anchor_top = 0.0
-	node.anchor_right = 1.0
-	node.anchor_bottom = 1.0
-	node.offset_left = 0.0
-	node.offset_top = 0.0
-	node.offset_right = 0.0
-	node.offset_bottom = 0.0
+	# Logical stage, top-left anchors. Stretched anchors (left != right) make
+	# Godot throw away a size set in _ready, which is the "non-equal opposite
+	# anchors" warning and the reason a full-screen layer can collapse.
+	node.set_anchors_preset(PRESET_TOP_LEFT)
+	node.position = Vector2.ZERO
+	node.size = STAGE
+
+
+static func place(node: Control, rect: Rect2) -> void:
+	node.set_anchors_preset(PRESET_TOP_LEFT)
+	node.position = rect.position
+	node.size = rect.size
 
 
 static func ensure() -> void:
@@ -44,14 +49,19 @@ static func tex(rel: String) -> Texture2D:
 
 static func sprite(rel: String, rect: Rect2, fit: String = "contain") -> TextureRect:
 	var n := TextureRect.new()
-	n.texture = tex(rel)
-	n.position = rect.position
-	n.size = rect.size
+	# IGNORE_SIZE before the texture. Otherwise the PNG's pixel size is the
+	# minimum size, and assigning a smaller layout rect is clamped back up to it.
 	n.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	n.stretch_mode = TextureRect.STRETCH_SCALE if fit == "fill" else (
 		TextureRect.STRETCH_KEEP_ASPECT_COVERED if fit == "cover" else TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	)
 	n.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	n.custom_minimum_size = Vector2.ZERO
+	n.texture = tex(rel)
+	place(n, rect)
+	# Size again after the texture. A KEEP_SIZE minimum would have clamped it.
+	n.custom_minimum_size = Vector2.ZERO
+	n.size = rect.size
 	return n
 
 
@@ -68,7 +78,9 @@ static func label(text: String, rect: Rect2, size: int, color: Color, font: Font
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.text_direction = Control.TEXT_DIRECTION_RTL
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.clip_text = true
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place(l, rect)
 	return l
 
 
@@ -78,9 +90,11 @@ static func hit(rect: Rect2) -> Button:
 	b.size = rect.size
 	b.focus_mode = Control.FOCUS_NONE
 	b.flat = true
+	b.clip_text = true
 	var empty := StyleBoxEmpty.new()
 	for s in ["normal", "hover", "pressed", "focus"]:
 		b.add_theme_stylebox_override(s, empty)
+	place(b, rect)
 	return b
 
 
@@ -88,9 +102,8 @@ static func parchment_button(text: String, rect: Rect2) -> Button:
 	ensure()
 	var b := Button.new()
 	b.text = text
-	b.position = rect.position
-	b.size = rect.size
 	b.focus_mode = Control.FOCUS_NONE
+	b.clip_text = true
 	b.add_theme_font_override("font", medium)
 	b.add_theme_font_size_override("font_size", 22)
 	b.add_theme_color_override("font_color", Color("6e1f2e"))
@@ -106,6 +119,105 @@ static func parchment_button(text: String, rect: Rect2) -> Button:
 	b.add_theme_stylebox_override("normal", box)
 	b.add_theme_stylebox_override("hover", box)
 	b.add_theme_stylebox_override("pressed", box)
+	place(b, rect)
+	b.size = rect.size
+	return b
+
+
+## intro.css .intro__fresh — padding 5px 18px 7px, 19px medium, rotate is the caller's.
+static func fresh_button(text: String, rect: Rect2) -> Button:
+	ensure()
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.clip_text = false
+	b.add_theme_font_override("font", medium)
+	b.add_theme_font_size_override("font_size", 19)
+	b.add_theme_color_override("font_color", Color("6e1f2e"))
+	b.add_theme_color_override("font_hover_color", Color("4a2218"))
+	b.text_direction = Control.TEXT_DIRECTION_RTL
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("e1d0a4")
+	box.border_color = Color(110.0 / 255.0, 31.0 / 255.0, 46.0 / 255.0, 0.45)
+	box.set_border_width_all(1)
+	box.set_corner_radius_all(4)
+	box.content_margin_left = 18
+	box.content_margin_right = 18
+	box.content_margin_top = 5
+	box.content_margin_bottom = 7
+	box.shadow_color = Color(0, 0, 0, 0.45)
+	box.shadow_size = 3
+	box.shadow_offset = Vector2(0, 3)
+	b.add_theme_stylebox_override("normal", box)
+	var hover := box.duplicate() as StyleBoxFlat
+	hover.bg_color = Color("ead9b5")
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", box)
+	b.add_theme_stylebox_override("focus", box)
+	place(b, rect)
+	b.size = rect.size
+	return b
+
+
+## intro.css .intro__note-btn — dark wood, parchment type.
+static func note_button(text: String, rect: Rect2, danger: bool = false) -> Button:
+	ensure()
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.clip_text = false
+	b.add_theme_font_override("font", medium)
+	b.add_theme_font_size_override("font_size", 22)
+	b.add_theme_color_override("font_color", Color("e9d9b4"))
+	b.add_theme_color_override("font_hover_color", Color("f4e6c8"))
+	b.text_direction = Control.TEXT_DIRECTION_RTL
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("8a2a3c") if danger else Color("4a3018")
+	box.border_color = Color(140.0 / 255.0, 60.0 / 255.0, 75.0 / 255.0, 0.9) if danger else Color(110.0 / 255.0, 78.0 / 255.0, 48.0 / 255.0, 0.9)
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(8)
+	box.content_margin_left = 18
+	box.content_margin_right = 18
+	box.shadow_color = Color(0, 0, 0, 0.4)
+	box.shadow_size = 4
+	box.shadow_offset = Vector2(0, 4)
+	b.add_theme_stylebox_override("normal", box)
+	var hover := box.duplicate() as StyleBoxFlat
+	hover.bg_color = box.bg_color.lightened(0.12)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", box)
+	b.add_theme_stylebox_override("focus", box)
+	place(b, rect)
+	b.size = rect.size
+	return b
+
+
+## intro.css .intro__panel-close — round brass seal.
+static func seal_button(rect: Rect2) -> Button:
+	ensure()
+	var b := Button.new()
+	b.text = "×"
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_override("font", bold)
+	b.add_theme_font_size_override("font_size", 34)
+	b.add_theme_color_override("font_color", Color("2b1d12"))
+	b.add_theme_color_override("font_hover_color", Color("2b1d12"))
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("c4963a")
+	box.border_color = Color(58.0 / 255.0, 36.0 / 255.0, 16.0 / 255.0, 0.6)
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(int(minf(rect.size.x, rect.size.y) * 0.5))
+	box.shadow_color = Color(0, 0, 0, 0.5)
+	box.shadow_size = 4
+	box.shadow_offset = Vector2(0, 4)
+	b.add_theme_stylebox_override("normal", box)
+	var hover := box.duplicate() as StyleBoxFlat
+	hover.bg_color = Color("d9a94a")
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", box)
+	b.add_theme_stylebox_override("focus", box)
+	place(b, rect)
+	b.size = rect.size
 	return b
 
 

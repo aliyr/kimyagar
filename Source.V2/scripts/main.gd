@@ -29,9 +29,11 @@ func _ready() -> void:
 	workshop = WorkshopView.new()
 	workshop.name = "Workshop"
 	workshop.open_overlay.connect(func(id: String) -> void: Game.open_overlay_action(id))
+	workshop.z_index = 0
 	add_child(workshop)
 	gate = GateView.new()
 	gate.name = "Gate"
+	gate.z_index = 2
 	gate.entered.connect(_on_entered)
 	gate.open_settings.connect(func() -> void: Game.open_overlay_action("settings"))
 	add_child(gate)

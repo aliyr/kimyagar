@@ -262,11 +262,12 @@ func _build() -> void:
 	_work.add_child(_shadows)
 
 	_fire_rect = TextureRect.new()
-	_fire_rect.texture = _fire.texture
-	_fire_rect.position = _furnace.position
-	_fire_rect.size = _furnace.size
 	_fire_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_fire_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	_fire_rect.custom_minimum_size = Vector2.ZERO
+	_fire_rect.texture = _fire.texture
+	UiKit.place(_fire_rect, Rect2(_furnace.position, _furnace.size))
+	_fire_rect.size = _furnace.size
 	_fire_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_fire_rect.mouse_filter = MOUSE_FILTER_IGNORE
 	_hole_back = _painter(_draw_hole_back)
@@ -505,7 +506,7 @@ func _build_notebook() -> void:
 func _build_heat() -> void:
 	for i in 3:
 		var pos: Vector2 = HEAT_NOTCHES[i]
-		var b := UiKit.parchment_button(Content.HEAT[HEATS[i]], Rect2(pos.x, pos.y, 104, 52))
+		var b := UiKit.parchment_button(Content.HEAT[HEATS[i]], Rect2(pos.x, pos.y, 104, 60))
 		var heat_name: String = HEATS[i]
 		b.pressed.connect(func() -> void:
 			Game.set_heat(heat_name)
@@ -1067,6 +1068,7 @@ func _place_pestle() -> void:
 	var head := ZONE_MORTAR.position + Vector2(float(aim["head_x"]), float(aim["head_y"])) / 100.0 * ZONE_MORTAR.size
 	_pestle.visible = transfer_t < 0.0
 	_pestle.texture = UiKit.tex("mortar/v3/pestle_%d.png" % int(aim["frame"]))
+	_pestle.custom_minimum_size = Vector2.ZERO
 	_pestle.size = box
 	_pestle.pivot_offset = anchor * box
 	_pestle.position = head - anchor * box
