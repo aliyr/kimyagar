@@ -809,10 +809,30 @@ func _paint(pts: PackedVector2Array, color: Color) -> void:
 func _paint_tex(pts: PackedVector2Array, uvs: PackedVector2Array, tex: Texture2D, modulate: Color) -> void:
 	if _c == null or tex == null or pts.size() < 3 or uvs.size() != pts.size():
 		return
+	var clean := PackedVector2Array()
+	var clean_uv := PackedVector2Array()
+	for i in pts.size():
+		var p: Vector2 = pts[i]
+		if clean.is_empty() or clean[clean.size() - 1].distance_squared_to(p) > 0.04:
+			clean.append(p)
+			clean_uv.append(uvs[i])
+	if clean.size() >= 2 and clean[0].distance_squared_to(clean[clean.size() - 1]) < 0.04:
+		clean.remove_at(clean.size() - 1)
+		clean_uv.remove_at(clean_uv.size() - 1)
+	if clean.size() < 3:
+		return
+	var area := 0.0
+	for i in clean.size():
+		var a: Vector2 = clean[i]
+		var b: Vector2 = clean[(i + 1) % clean.size()]
+		area += a.x * b.y - b.x * a.y
+	# A clipped chip can collapse into a sliver. Godot's triangulator errors on it.
+	if absf(area) < 1.5:
+		return
 	var cols: PackedColorArray = PackedColorArray()
-	cols.resize(pts.size())
+	cols.resize(clean.size())
 	cols.fill(modulate)
-	_c.draw_polygon(pts, cols, uvs, tex)
+	_c.draw_polygon(clean, cols, clean_uv, tex)
 
 
 func _spin(local: Vector2, ang: float, center: Vector2) -> Vector2:

@@ -15,6 +15,12 @@ const ZONE_CUSTOMER := Rect2(1510, 248, 350, 512)
 const ZONE_NOTE := Rect2(1460, 24, 430, 150)
 const INNER := Rect2(28, 150, 214, 703)
 const SLOT_H := 158.0
+const EDGE_PAD := 10.0
+const JAR_W := 128.0
+const JAR_H := 136.0
+const BOARD_H := 30.0
+const JAR_LEFT := (214.0 - JAR_W) * 0.5
+const JAR_TOP := -4.0
 const HEAT_NOTCHES: Array = [Vector2(968, 1014), Vector2(968, 952), Vector2(968, 890)]
 const HEATS: Array = ["low", "medium", "high"]
 
@@ -36,7 +42,10 @@ var _mouth_r := Vector2.ZERO
 var _pot_base := Vector2.ZERO
 var _furnace := Rect2()
 var _fire: FireField
-var _fire_rect: TextureRect
+var _furnace_fx: Control
+var _stove_back: Control
+var _stove_front: Control
+var hold_camera := false
 var _liquid: Control
 var _spoon: Control
 var _body: TextureRect
@@ -175,8 +184,6 @@ func _layout_geometry() -> void:
 
 func _exit_tree() -> void:
 	_shadow_sprites.clear()
-	if _fire_rect:
-		_fire_rect.texture = null
 	if _fire:
 		_fire.texture = null
 		_fire._img = null
@@ -298,19 +305,16 @@ func _build() -> void:
 	UiKit.fill(_shadows)
 	_work.add_child(_shadows)
 
-	_fire_rect = TextureRect.new()
-	_fire_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_fire_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	_fire_rect.custom_minimum_size = Vector2.ZERO
-	_fire_rect.texture = _fire.texture
-	UiKit.place(_fire_rect, Rect2(_furnace.position, _furnace.size))
-	_fire_rect.size = _furnace.size
-	_fire_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	_fire_rect.mouse_filter = MOUSE_FILTER_IGNORE
 	_hole_back = _painter(_draw_hole_back)
 	UiKit.fill(_hole_back)
 	_work.add_child(_hole_back)
-	_work.add_child(_fire_rect)
+	_stove_back = _make_stove_flames(false)
+	_work.add_child(_stove_back)
+	_furnace_fx = preload("res://scripts/fx/furnace_canvas.gd").new()
+	_furnace_fx.setup(_fire)
+	UiKit.place(_furnace_fx, _furnace)
+	_furnace_fx.size = _furnace.size
+	_work.add_child(_furnace_fx)
 
 	_pot_pivot = Control.new()
 	_pot_pivot.position = _pot_base
@@ -351,6 +355,9 @@ func _build() -> void:
 	UiKit.fill(_hole_lip)
 	_hole_lip.z_index = 4
 	_work.add_child(_hole_lip)
+	_stove_front = _make_stove_flames(true)
+	_stove_front.z_index = 5
+	_work.add_child(_stove_front)
 
 	var pot_hit := UiKit.hit(ZONE_CAULDRON)
 	pot_hit.gui_input.connect(_cauldron_input)
@@ -376,10 +383,16 @@ func _build() -> void:
 	_discard_fx.z_index = 35
 	_work.add_child(_discard_fx)
 
+	# Pad so the rotated sheets and the soft shadow are not clipped into a cut corner.
+	var ledger_pad := 28.0
 	var papers := Control.new()
-	papers.position = Vector2(1296, 712)
-	papers.size = Vector2(136, 76)
+	papers.position = Vector2(1296.0 - ledger_pad, 712.0 - ledger_pad)
+	papers.size = Vector2(136.0 + ledger_pad * 2.0, 76.0 + ledger_pad * 2.0)
 	papers.mouse_filter = MOUSE_FILTER_IGNORE
+	papers.clip_contents = false
+	# Web ledger is z 45, above the counter (z 20). Otherwise the counter
+	# cuts the near corner of the sheets.
+	papers.z_index = 48
 	papers.draw.connect(_draw_ledger_sheets.bind(papers))
 	_work.add_child(papers)
 	papers.queue_redraw()
@@ -401,23 +414,32 @@ func _build() -> void:
 	_customer = UiKit.sprite("customer/customer_woman_elder.png", ZONE_CUSTOMER, "contain")
 	near.add_child(_customer)
 	near.add_child(UiKit.sprite("customer/counter.png", ZONE_COUNTER, "contain"))
-	var note_bg := Control.new()
-	note_bg.position = ZONE_NOTE.position
-	note_bg.size = ZONE_NOTE.size
-	note_bg.mouse_filter = MOUSE_FILTER_IGNORE
-	note_bg.draw.connect(_draw_note_paper.bind(note_bg))
-	near.add_child(note_bg)
-	note_bg.queue_redraw()
-	# .note__who is the small line; .note__summary is the bold order under it.
-	# Inset matches .note__content so the name is not cut off at the card edge.
-	_note_who = UiKit.label("", Rect2(1484, 42, 340, 28), 18, Color(0.231, 0.173, 0.075, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT)
-	_note_sum = UiKit.label("", Rect2(1484, 70, 340, 72), 22, Color("3b2c13"), UiKit.bold, HORIZONTAL_ALIGNMENT_RIGHT)
+	# goal/goal_note.png is the aged card. The pin is a child of the card so it
+	# cannot drift onto the customer when the near layer parallaxes.
+	var note := Control.new()
+	note.position = ZONE_NOTE.position
+	note.size = ZONE_NOTE.size
+	note.mouse_filter = MOUSE_FILTER_IGNORE
+	note.clip_contents = false
+	# drop-shadow(0 10px 18px rgba(0,0,0,0.6))
+	for shade_i in 3:
+		var dy := 6.0 + float(shade_i) * 6.0
+		var note_shade := UiKit.sprite("goal/goal_note.png", Rect2(0, dy, ZONE_NOTE.size.x, ZONE_NOTE.size.y), "cover")
+		note_shade.modulate = Color(0, 0, 0, 0.22 - float(shade_i) * 0.04)
+		note.add_child(note_shade)
+	note.add_child(UiKit.sprite("goal/goal_note.png", Rect2(Vector2.ZERO, ZONE_NOTE.size), "cover"))
+	# .note__content inset 16px 42px 14px. who is 20px, summary is 25px bold.
+	_note_who = UiKit.label("", Rect2(42, 16, 346, 28), 20, Color(0.231, 0.173, 0.075, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT)
+	_note_sum = UiKit.label("", Rect2(42, 46, 346, 78), 25, Color("3b2c13"), UiKit.bold, HORIZONTAL_ALIGNMENT_RIGHT)
 	_note_who.clip_text = false
 	_note_sum.clip_text = false
-	near.add_child(_note_who)
-	near.add_child(_note_sum)
-	var pin := _radial_dot(Rect2(1856, 10, 22, 22), Color(0.878, 0.25, 0.22, 1.0))
-	near.add_child(pin)
+	note.add_child(_note_who)
+	note.add_child(_note_sum)
+	var pin := _note_pin()
+	pin.position = Vector2(ZONE_NOTE.size.x - 42.0 - 26.0, -8.0)
+	pin.size = Vector2(26, 26)
+	note.add_child(pin)
+	near.add_child(note)
 	var note_hit := UiKit.hit(ZONE_NOTE)
 	note_hit.pressed.connect(func() -> void:
 		Sfx.paper()
@@ -523,7 +545,7 @@ func _build_cabinet() -> void:
 	var ings: Array = Game.defs["ingredients"]
 	for i in ings.size():
 		_add_jar(ings[i], i)
-	var empty_y := SLOT_H * ings.size()
+	var empty_y := EDGE_PAD + SLOT_H * ings.size()
 	var dust := ColorRect.new()
 	dust.position = Vector2(40, empty_y + 90)
 	dust.size = Vector2(130, 18)
@@ -532,28 +554,26 @@ func _build_cabinet() -> void:
 
 
 func _add_jar(ing: Dictionary, index: int) -> void:
-	var y := SLOT_H * index
-	var board := UiKit.sprite("shelf/shelf_board.png", Rect2(20, y + SLOT_H - 36, 174, 30), "contain")
+	# SideCabinetClassic: row at EDGE_PAD, board fill across the opening, jar seated
+	# on the board, plaque overlapping the jar (left/right 8, bottom -4, 28px).
+	var row_y := EDGE_PAD + SLOT_H * float(index)
+	var board := UiKit.sprite("shelf/shelf_board.png", Rect2(-4, row_y + SLOT_H - BOARD_H, INNER.size.x + 8.0, BOARD_H), "fill")
 	_cabinet_strip.add_child(board)
-	var jar := UiKit.sprite("cabinet/jar_%s.png" % str(ing["id"]), Rect2(43, y + 8, 128, 136), "contain")
+	var jar := UiKit.sprite("cabinet/jar_%s.png" % str(ing["id"]), Rect2(JAR_LEFT, row_y + JAR_TOP, JAR_W, JAR_H), "contain")
 	_cabinet_strip.add_child(jar)
-	# .cabinet .shelf-jar__label — parchment plaque on the jar's lower edge.
 	var plaque := Panel.new()
-	plaque.position = Vector2(6, y + 112)
-	plaque.size = Vector2(202, 28)
+	plaque.position = Vector2(JAR_LEFT + 8.0, row_y + JAR_TOP + JAR_H - 24.0)
+	plaque.size = Vector2(JAR_W - 16.0, 28)
 	plaque.mouse_filter = MOUSE_FILTER_IGNORE
 	var plate := StyleBoxFlat.new()
-	plate.bg_color = Color("e6d3a8")
-	plate.border_color = Color(0.55, 0.42, 0.24, 0.45)
-	plate.set_border_width_all(1)
+	plate.bg_color = Color("e4d0a8")
 	plate.set_corner_radius_all(5)
 	plate.shadow_color = Color(0, 0, 0, 0.55)
-	plate.shadow_size = 3
-	plate.shadow_offset = Vector2(0, 2)
+	plate.shadow_size = 4
+	plate.shadow_offset = Vector2(0, 3)
 	plaque.add_theme_stylebox_override("panel", plate)
 	_cabinet_strip.add_child(plaque)
-	var name := UiKit.label(str(ing["nameFa"]), Rect2(0, 0, 202, 28), 15, Color("33240f"))
-	name.clip_text = false
+	var name := UiKit.label(str(ing["nameFa"]), Rect2(0, 0, JAR_W - 16.0, 28), 17, Color("33240f"))
 	plaque.add_child(name)
 
 
@@ -585,14 +605,10 @@ func _build_heat() -> void:
 		notch.size = Vector2(104, 60)
 		notch.mouse_filter = MOUSE_FILTER_STOP
 		notch.set_meta("heat", heat_name)
+		notch.clip_contents = false
 		notch.draw.connect(_draw_notch.bind(notch))
 		notch.gui_input.connect(_on_notch_input.bind(heat_name))
 		_pin.add_child(notch)
-		var lab := UiKit.label(Content.HEAT[heat_name], Rect2(0, 34, 104, 26), 20, Color(0.91, 0.85, 0.71, 0.55))
-		lab.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.95))
-		lab.add_theme_constant_override("shadow_offset_y", 2)
-		notch.add_child(lab)
-		notch.set_meta("label", lab)
 		_notches.append(notch)
 		notch.queue_redraw()
 
@@ -612,10 +628,6 @@ func _sync_notches() -> void:
 	_heat_drawn = heat
 	for item in _notches:
 		var notch := item as Control
-		var on := str(notch.get_meta("heat")) == heat
-		var lab := notch.get_meta("label") as Label
-		if lab:
-			lab.add_theme_color_override("font_color", Color("f7e5b6") if on else Color(0.91, 0.85, 0.71, 0.55))
 		notch.queue_redraw()
 
 
@@ -624,8 +636,12 @@ func _tick_fire(dt: float) -> void:
 	var level: float = float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat, 0.7))
 	_fire.set_level(level, discard_t < 0.0)
 	_fire.update(dt)
-	if _fire_rect:
-		_fire_rect.texture = _fire.texture
+	if _furnace_fx and _furnace_fx.has_method("tick"):
+		_furnace_fx.tick(dt)
+	if _stove_back:
+		_stove_back.queue_redraw()
+	if _stove_front:
+		_stove_front.queue_redraw()
 	if _fire_glow:
 		var glow := 0.16 if heat == "low" else (0.42 if heat == "high" else 0.28)
 		_fire_glow.modulate.a = glow
@@ -1213,7 +1229,7 @@ func _tick_long_press() -> void:
 		return
 	_gesture["held"] = true
 	var local: Vector2 = _gesture["at"]
-	var index := int(floor((local.y - _scroll) / SLOT_H))
+	var index := int(floor((local.y - _scroll - EDGE_PAD) / SLOT_H))
 	var ings: Array = Game.defs["ingredients"]
 	if index < 0 or index >= ings.size():
 		return
@@ -1378,6 +1394,8 @@ func _tick_transfer(dt: float) -> void:
 				_mortar_parts.burst("ripple", Vector2(_transfer.land.x + float(i - 1) * 16.0, _transfer.land.y), {"color": "#" + col2.to_html(false)})
 	if not bool(pose.get("alive", false)):
 		transfer_t = -1.0
+	if _transfer_draw:
+		_transfer_draw.queue_redraw()
 
 
 func _tick_mortar(dt: float) -> void:
@@ -1544,7 +1562,7 @@ func _cabinet_input(ev: InputEvent) -> void:
 
 func _max_scroll() -> float:
 	var n: int = (Game.defs["ingredients"] as Array).size() + 1
-	return maxf(0.0, SLOT_H * n - INNER.size.y)
+	return maxf(0.0, EDGE_PAD * 2.0 + SLOT_H * float(n) - INNER.size.y)
 
 
 func _tap_jar(local: Vector2) -> void:
@@ -1560,7 +1578,7 @@ func _tap_jar(local: Vector2) -> void:
 			_mortar_parts.burst("spill", Vector2.ZERO, {"colors": colors})
 		return
 	var y := local.y - _scroll
-	var index := int(floor(y / SLOT_H))
+	var index := int(floor((y - EDGE_PAD) / SLOT_H))
 	var ings: Array = Game.defs["ingredients"]
 	if index < 0 or index >= ings.size():
 		return
@@ -1568,7 +1586,8 @@ func _tap_jar(local: Vector2) -> void:
 		Game.open_overlay_action("ingredient_detail", ings[index]["id"])
 		return
 	var id := str(ings[index]["id"])
-	var from := ZONE_CABINET.position + Vector2(43.0 + 64.0, INNER.position.y + _scroll + float(index) * SLOT_H + 76.0)
+	var row_y := EDGE_PAD + float(index) * SLOT_H
+	var from := ZONE_CABINET.position + INNER.position + Vector2(JAR_LEFT + JAR_W * 0.78, _scroll + row_y + JAR_TOP + JAR_H * 0.2)
 	_spawn_flight(id, from)
 	if not _pending_lands.is_empty():
 		_pending_lands[_pending_lands.size() - 1]["color"] = str(ings[index]["color"])
@@ -1694,6 +1713,8 @@ func _mortar_focus() -> Vector2:
 
 
 func _set_camera(focus: Vector2, zoom: float, ms: float, letterbox: bool, owner: String) -> void:
+	if hold_camera:
+		return
 	if _tilt_mode == "off" and owner != "pot":
 		return
 	_cam_owner = owner
@@ -1884,12 +1905,28 @@ func _build_ambience() -> void:
 
 func _draw_notch(n: Control) -> void:
 	var on := str(Game.brew.get("currentHeat", "medium")) == str(n.get_meta("heat"))
-	n.draw_rect(Rect2(15, 30, 74, 8), Color(0.32, 0.18, 0.07, 1.0))
+	# .notch::before — brass rail under the lever.
+	n.draw_rect(Rect2(14, 26, 76, 10), Color(0.24, 0.16, 0.06, 0.85))
+	n.draw_rect(Rect2(16, 26, 72, 5), Color(0.54, 0.38, 0.14, 1.0))
 	var ang := 0.0 if on else deg_to_rad(-28.0)
-	var col := Color("f0d48a") if on else Color("8a5f22")
-	n.draw_set_transform(Vector2(52, 38), ang, Vector2.ONE)
-	n.draw_rect(Rect2(-11, -36, 22, 36), col)
+	n.draw_set_transform(Vector2(52, 44), ang, Vector2.ONE)
+	if on:
+		n.draw_circle(Vector2(0, -22), 20, Color(1.0, 0.75, 0.35, 0.55))
+	var lever := _lever_texture(on)
+	n.draw_texture_rect(lever, Rect2(-13, -42, 26, 42), false)
 	n.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var text := str(Content.HEAT.get(str(n.get_meta("heat")), ""))
+	var font: Font = UiKit.medium if UiKit.medium != null else UiKit.regular
+	if font == null or text == "":
+		return
+	# .notch__label sits at the bottom of the 60px cell, beside the lever.
+	var col_text := Color("f7e5b6") if on else Color(233.0 / 255.0, 217.0 / 255.0, 180.0 / 255.0, 0.55)
+	var box := 128.0
+	var origin := Vector2(-12.0, 56.0)
+	n.draw_string(font, origin + Vector2(0, 2), text, HORIZONTAL_ALIGNMENT_CENTER, box, 21, Color(0, 0, 0, 0.75), 0, TextServer.DIRECTION_RTL)
+	if on:
+		n.draw_string(font, origin + Vector2(0, -1), text, HORIZONTAL_ALIGNMENT_CENTER, box, 21, Color(1.0, 0.67, 0.27, 0.55), 0, TextServer.DIRECTION_RTL)
+	n.draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_CENTER, box, 21, col_text, 0, TextServer.DIRECTION_RTL)
 
 
 func _draw_notebook(n: Control) -> void:
@@ -1901,31 +1938,69 @@ func _draw_notebook(n: Control) -> void:
 	n.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+var _lever_on: Texture2D
+var _lever_off: Texture2D
+
+
+func _lever_texture(on: bool) -> Texture2D:
+	if on and _lever_on != null:
+		return _lever_on
+	if not on and _lever_off != null:
+		return _lever_off
+	var w := 26
+	var h := 42
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var top := Color("fff2c8") if on else Color("b98d3d")
+	var mid := Color("dcae52") if on else Color("7a4e1c")
+	var bot := Color("8a5f22") if on else Color("4a3011")
+	for y in h:
+		var t := float(y) / float(h - 1)
+		var col := top.lerp(mid, minf(1.0, t / 0.52))
+		if t > 0.52:
+			col = mid.lerp(bot, (t - 0.52) / 0.48)
+		var inset := 0.0
+		if y < 8:
+			var dy := 8.0 - float(y)
+			inset = 8.0 - sqrt(maxf(0.0, 64.0 - dy * dy))
+		elif y > h - 5:
+			var dy := float(y) - float(h - 5)
+			inset = 4.0 - sqrt(maxf(0.0, 16.0 - dy * dy))
+		for x in w:
+			if float(x) < inset or float(x) > float(w - 1) - inset:
+				img.set_pixel(x, y, Color(0, 0, 0, 0))
+			else:
+				img.set_pixel(x, y, col)
+	var tex := ImageTexture.create_from_image(img)
+	if on:
+		_lever_on = tex
+	else:
+		_lever_off = tex
+	return tex
+
+
 func _draw_ledger_sheets(n: Control) -> void:
+	var pad := 28.0
 	var sheets: Array = [
 		{"rot": -5.0, "dy": 8.0, "a": 0.6},
 		{"rot": 3.0, "dy": 4.0, "a": 0.8},
 		{"rot": -1.5, "dy": 0.0, "a": 1.0},
 	]
+	# box-shadow: 0 6px 12px rgba(0,0,0,0.45), faked with a soft stack.
+	for i in 8:
+		var spread := 4.0 + float(i) * 2.2
+		var a := 0.07 * (1.0 - float(i) / 8.0)
+		n.draw_rect(Rect2(pad - spread * 0.2, pad + 6.0 + float(i) * 1.2, 136.0 + spread * 0.4, 76.0), Color(0, 0, 0, a))
 	for sheet in sheets:
-		n.draw_set_transform(Vector2(68, 38 + float(sheet["dy"])), deg_to_rad(float(sheet["rot"])), Vector2.ONE)
 		var alpha := float(sheet["a"])
-		n.draw_rect(Rect2(-66, -36, 132, 72), Color(0.93, 0.84, 0.68, alpha))
-		for k in 4:
-			var y := -16.0 + float(k) * 12.0
-			n.draw_line(Vector2(-50, y), Vector2(50, y), Color(0.4, 0.3, 0.16, 0.45 * alpha), 1.5)
+		var center := Vector2(pad + 68.0, pad + 38.0 + float(sheet["dy"]))
+		n.draw_set_transform(center, deg_to_rad(float(sheet["rot"])), Vector2.ONE)
+		n.draw_rect(Rect2(-68, -38, 136, 76), Color(0.937, 0.875, 0.729, alpha))
+		if alpha > 0.95:
+			var y := -24.0
+			while y < 28.0:
+				n.draw_line(Vector2(-52, y), Vector2(52, y), Color(90.0 / 255.0, 70.0 / 255.0, 40.0 / 255.0, 0.45), 2.0)
+				y += 15.0
 		n.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-func _draw_note_paper(n: Control) -> void:
-	var pts := PackedVector2Array([
-		Vector2(6, 12), Vector2(110, 2), Vector2(250, 8), Vector2(424, 0),
-		Vector2(430, 88), Vector2(418, 146), Vector2(260, 150), Vector2(90, 142), Vector2(0, 148),
-	])
-	n.draw_colored_polygon(pts, Color("e7d3aa"))
-	for k in 6:
-		var y := 28.0 + float(k) * 16.0
-		n.draw_line(Vector2(28, y), Vector2(390, y + 1.0), Color(0.45, 0.34, 0.18, 0.18), 1.0)
 
 
 func _draw_stove(c: Control, lip: bool) -> void:
@@ -1936,19 +2011,8 @@ func _draw_stove(c: Control, lip: bool) -> void:
 	if rx < 2.0:
 		return
 	if not lip:
-		var glow := 0.7
-		if _fire:
-			glow = 0.45 + _fire.intensity * 0.75
 		c.draw_set_transform(Vector2(cx, cy), 0.0, Vector2(rx, ry))
-		c.draw_circle(Vector2.ZERO, 1.0, Color(0.18, 0.06, 0.02, 1.0))
-		c.draw_circle(Vector2(-0.28, 0.08), 0.22, Color(1.0, 0.42, 0.08, 0.95 * glow))
-		c.draw_circle(Vector2(0.08, 0.16), 0.2, Color(1.0, 0.72, 0.28, 0.9 * glow))
-		c.draw_circle(Vector2(0.36, 0.02), 0.18, Color(0.9, 0.24, 0.05, 0.95 * glow))
-		c.draw_circle(Vector2(-0.05, -0.05), 0.16, Color(1.0, 0.55, 0.16, 0.8 * glow))
-		c.draw_circle(Vector2(0.22, -0.12), 0.12, Color(1.0, 0.85, 0.45, glow))
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		c.draw_set_transform(Vector2(cx, cy), 0.0, Vector2(rx * 0.85, ry * 0.65))
-		c.draw_circle(Vector2.ZERO, 1.0, Color(1.0, 0.45, 0.1, 0.28 * glow))
+		c.draw_circle(Vector2.ZERO, 1.0, Color(0.03, 0.012, 0.008, 1.0))
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		_ellipse_ring(c, cx, cy, rx, ry, PI * 1.05, PI * 1.95, Color(0.55, 0.4, 0.28, 0.7), 4.0)
 		_ellipse_ring(c, cx, cy, rx, ry, 0.15, PI - 0.15, Color(0.08, 0.04, 0.02, 0.85), 4.0)
@@ -1965,3 +2029,182 @@ func _ellipse_ring(c: Control, cx: float, cy: float, rx: float, ry: float, a0: f
 		pts.append(Vector2(cx + cos(a) * rx, cy + sin(a) * ry))
 	if pts.size() >= 2:
 		c.draw_polyline(pts, color, width, true)
+
+
+func _flame_level() -> float:
+	if bool(Game.brew.get("bottled", false)) or discard_t >= 0.0:
+		return 0.0
+	var heat := str(Game.brew.get("currentHeat", "medium"))
+	return float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat, 0.7))
+
+
+func _make_stove_flames(front: bool) -> Control:
+	var rx := _stove.z
+	var ry := _stove.w
+	var c := Control.new()
+	c.position = Vector2(_stove.x - rx, _stove.y - ry)
+	c.size = Vector2(rx * 2.0, ry * 2.0)
+	c.mouse_filter = MOUSE_FILTER_IGNORE
+	# Web stove tongues are source-over, clipped to the ellipse. Additive
+	# blend turned the crescent into one orange smear.
+	c.set_meta("front", front)
+	c.draw.connect(_draw_stove_flames.bind(c, front))
+	return c
+
+
+func _draw_stove_flames(c: Control, front: bool) -> void:
+	var level := _flame_level()
+	if level <= 0.01:
+		return
+	var w := c.size.x
+	var h := c.size.y
+	var tongues := 5 if front else 7
+	var base_y := h * (0.92 if front else 0.78)
+	for i in tongues:
+		var t := _clock * (2.2 + float(i) * 0.37) + float(i) * 1.3
+		var side := float(i) / float(tongues - 1)
+		var x := w * (0.16 + side * 0.68) + sin(t * 1.3) * w * 0.03
+		var edge := 0.72 + absf(side - 0.5) * 0.7
+		var height := h * (0.55 if front else 0.7) * level * edge * (0.75 + 0.25 * sin(t * 2.1))
+		_draw_tongue(c, x, base_y, w * (0.055 + level * 0.02), height, sin(t) * w * 0.04, level, front)
+
+
+func _draw_tongue(c: Control, cx: float, base_y: float, half: float, height: float, lean: float, level: float, front: bool) -> void:
+	if height < 2.0:
+		return
+	var tip := Vector2(cx + lean, base_y - height)
+	var left := Vector2(cx - half, base_y)
+	var right := Vector2(cx + half, base_y)
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var n := 6
+	for i in n + 1:
+		var u := float(i) / float(n)
+		pts.append(_cubic(left, Vector2(cx - half * 1.1, base_y - height * 0.45), Vector2(cx - half * 0.2, base_y - height * 0.75), tip, u))
+		cols.append(_tongue_color(1.0 - u, level))
+	for i in range(n, -1, -1):
+		var u := float(i) / float(n)
+		pts.append(_cubic(right, Vector2(cx + half * 1.05, base_y - height * 0.4), Vector2(cx + half * 0.25, base_y - height * 0.7), tip, u))
+		cols.append(_tongue_color(1.0 - u, level))
+	# Web clips every tongue to the stove ellipse. The front layer also keeps
+	# only the lower crescent, so the bases read as separate coals.
+	var clipped: Array = _clip_ellipse(pts, cols, c.size.x * 0.5, c.size.y * 0.5, c.size.x * 0.5, c.size.y * 0.48)
+	pts = clipped[0]
+	cols = clipped[1]
+	if front:
+		clipped = _clip_below(pts, cols, c.size.y * 0.48)
+		pts = clipped[0]
+		cols = clipped[1]
+	if pts.size() >= 3:
+		c.draw_polygon(pts, cols)
+
+
+func _clip_below(pts: PackedVector2Array, cols: PackedColorArray, y0: float) -> Array:
+	return _clip_plane(pts, cols, 0.0, 1.0, y0, true)
+
+
+func _clip_ellipse(pts: PackedVector2Array, cols: PackedColorArray, cx: float, cy: float, rx: float, ry: float) -> Array:
+	var out_p := pts
+	var out_c := cols
+	if rx < 1.0 or ry < 1.0:
+		return [out_p, out_c]
+	var steps := 16
+	for i in steps:
+		var a := TAU * float(i) / float(steps)
+		var bx := cx + cos(a) * rx
+		var by := cy + sin(a) * ry
+		var nx := cos(a) / rx
+		var ny := sin(a) / ry
+		var clipped: Array = _clip_plane(out_p, out_c, nx, ny, nx * bx + ny * by, false)
+		out_p = clipped[0]
+		out_c = clipped[1]
+	return [out_p, out_c]
+
+
+func _clip_plane(pts: PackedVector2Array, cols: PackedColorArray, nx: float, ny: float, limit: float, keep_above: bool) -> Array:
+	var out_p := PackedVector2Array()
+	var out_c := PackedColorArray()
+	var n := pts.size()
+	if n < 3:
+		return [out_p, out_c]
+	for i in n:
+		var j := (i + 1) % n
+		var a := pts[i]
+		var b := pts[j]
+		var ca: Color = cols[i]
+		var cb: Color = cols[j]
+		var da := nx * a.x + ny * a.y - limit
+		var db := nx * b.x + ny * b.y - limit
+		var ain := da >= 0.0 if keep_above else da <= 0.0
+		var bin := db >= 0.0 if keep_above else db <= 0.0
+		if ain:
+			out_p.append(a)
+			out_c.append(ca)
+		if ain != bin:
+			var denom := da - db
+			var t := 0.0 if absf(denom) < 0.0001 else da / denom
+			out_p.append(a.lerp(b, t))
+			out_c.append(ca.lerp(cb, t))
+	return [out_p, out_c]
+
+
+func _tongue_color(from_tip: float, level: float) -> Color:
+	var clear := Color(1.0, 0.94, 0.7, 0.0)
+	var gold := Color(1.0, 0.745, 0.275, 0.55 * level)
+	var orange := Color(0.941, 0.431, 0.118, 0.7 * level)
+	var red := Color(0.784, 0.196, 0.078, 0.35 * level)
+	if from_tip < 0.35:
+		return clear.lerp(gold, from_tip / 0.35)
+	if from_tip < 0.75:
+		return gold.lerp(orange, (from_tip - 0.35) / 0.4)
+	return orange.lerp(red, (from_tip - 0.75) / 0.25)
+
+
+func _cubic(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	var u := 1.0 - t
+	return p0 * u * u * u + p1 * 3.0 * u * u * t + p2 * 3.0 * u * t * t + p3 * t * t * t
+
+
+func _note_pin() -> TextureRect:
+	var n := 64
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var center := Vector2(n * 0.34, n * 0.30)
+	var edge := Color("6e1f2e")
+	var hot := Color("e0645c")
+	for y in n:
+		for x in n:
+			var p := Vector2(float(x) + 0.5, float(y) + 0.5)
+			var d := p.distance_to(Vector2(n * 0.5, n * 0.5)) / (float(n) * 0.5)
+			var shade := p.distance_to(center) / (float(n) * 0.72)
+			var col := hot.lerp(edge, clampf(shade, 0.0, 1.0))
+			var a := clampf(1.0 - smoothstep(0.72, 1.0, d), 0.0, 1.0)
+			# Soft contact shadow, offset down.
+			var sd := p.distance_to(Vector2(n * 0.5, n * 0.62)) / (float(n) * 0.5)
+			var sa := clampf(1.0 - smoothstep(0.55, 1.0, sd), 0.0, 1.0) * 0.55
+			if a < sa:
+				col = Color(0, 0, 0, 1)
+				a = sa
+			col.a = a
+			img.set_pixel(x, y, col)
+	var g := TextureRect.new()
+	g.texture = ImageTexture.create_from_image(img)
+	g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	g.stretch_mode = TextureRect.STRETCH_SCALE
+	g.mouse_filter = MOUSE_FILTER_IGNORE
+	g.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	return g
+
+
+func jump_transfer(at: float) -> void:
+	if not Game.transfer_mortar():
+		return
+	transfer_t = 0.0
+	_transfer_dropped = false
+	_transfer.begin(_mouth, _mouth_r)
+	var steps := int(maxf(at, 0.0) * 60.0)
+	for _i in steps:
+		_tick_transfer(1.0 / 60.0)
+	if _transfer_draw:
+		_transfer_draw.queue_redraw()
+	if _mortar_fx:
+		_mortar_fx.queue_redraw()

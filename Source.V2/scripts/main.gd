@@ -284,6 +284,7 @@ func _prepare_shot() -> void:
 	gate.freeze = true
 	gate.force_idle()
 	Game.start_fresh()
+	workshop.hold_camera = true
 	match _shot:
 		"gate":
 			phase = "gate"
@@ -309,6 +310,25 @@ func _prepare_shot() -> void:
 			Game.start_grinding()
 			Game.apply_grind_work(1.2)
 			_warm_workshop(0.85)
+		"mortar":
+			phase = "workshop"
+			gate.visible = false
+			Game.add_classic_unit("chamomile")
+			_warm_workshop(0.75)
+		"transfer":
+			phase = "workshop"
+			gate.visible = false
+			Game.add_classic_unit("chamomile")
+			Game.start_grinding()
+			Game.apply_grind_work(2.0)
+			_warm_workshop(0.35)
+			workshop.jump_transfer(2.35)
+		"boil-low":
+			_boil_shot("low")
+		"boil-medium":
+			_boil_shot("medium")
+		"boil-high":
+			_boil_shot("high")
 		"stir":
 			phase = "workshop"
 			gate.visible = false
@@ -329,7 +349,18 @@ func _prepare_shot() -> void:
 			Game.brew = b
 			Game.bottle_brew()
 			workshop.jump_pour("stream", 1.1)
-			_warm_workshop(0.4)
+			_warm_workshop(0.15)
+		"receive":
+			phase = "workshop"
+			gate.visible = false
+			var got: Dictionary = Alchemy.create_brew()
+			got = Alchemy.add_ingredient(got, "chamomile", 1.0, "fine", Game.defs)
+			got = Alchemy.set_heat(got, "low", Game.defs)
+			got = Alchemy.advance_time(got, 18.0, Game.defs)
+			got = Alchemy.stir(got, Game.defs)
+			Game.brew = got
+			Game.bottle_brew()
+			workshop.jump_pour("deliver", 2.25)
 		"result":
 			phase = "workshop"
 			gate.visible = false
@@ -378,6 +409,20 @@ func _prepare_shot() -> void:
 		Sfx.stop_ambience()
 		workshop._fire.set_level(0.7, true)
 		workshop._fire.warm()
+
+
+func _boil_shot(heat_name: String) -> void:
+	phase = "workshop"
+	gate.visible = false
+	var brew: Dictionary = Alchemy.create_brew()
+	brew = Alchemy.add_ingredient(brew, "chamomile", 1.0, "fine", Game.defs)
+	brew = Alchemy.set_heat(brew, heat_name, Game.defs)
+	brew = Alchemy.advance_time(brew, 14.0, Game.defs)
+	brew = Alchemy.stir(brew, Game.defs)
+	Game.brew = brew
+	workshop._spoon_angle = -0.35
+	workshop._stirring = true
+	_warm_workshop(1.6)
 
 
 func _warm_workshop(seconds: float) -> void:
