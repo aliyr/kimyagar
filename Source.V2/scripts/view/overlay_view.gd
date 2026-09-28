@@ -7,23 +7,40 @@ var _reveal := 0.0
 var force_reveal := false
 var _toast_left := 0.0
 var _toast: Label
+var _toast_bg: Panel
+var _was_reacting := false
 
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
 	UiKit.fill(self)
 	UiKit.ensure()
-	_toast = UiKit.label("", Rect2(560, 40, 800, 64), 22, Color("3a2410"), UiKit.bold)
+	_toast_bg = Panel.new()
+	_toast_bg.name = "ToastBg"
+	_toast_bg.mouse_filter = MOUSE_FILTER_IGNORE
+	_toast_bg.visible = false
+	var pill := StyleBoxFlat.new()
+	pill.bg_color = Color("f6e7c4")
+	pill.border_color = Color("b8862f")
+	pill.set_border_width_all(1)
+	pill.set_corner_radius_all(28)
+	pill.shadow_color = Color(0, 0, 0, 0.35)
+	pill.shadow_size = 10
+	pill.shadow_offset = Vector2(0, 6)
+	_toast_bg.add_theme_stylebox_override("panel", pill)
+	add_child(_toast_bg)
+	_toast = UiKit.label("", Rect2(560, 980, 800, 48), 18, Color("2b1d12"), UiKit.medium)
+	_toast.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_toast.visible = false
-	var bg := ColorRect.new()
-	bg.color = Color("e9d9b4")
-	bg.position = _toast.position
-	bg.size = _toast.size
-	bg.mouse_filter = MOUSE_FILTER_IGNORE
-	bg.name = "ToastBg"
-	add_child(bg)
 	add_child(_toast)
-	bg.visible = false
+
+
+func prime_toast(elapsed: float) -> void:
+	_toast_left = elapsed
+
+
+func prime_reveal(elapsed: float) -> void:
+	_reveal = elapsed
 
 
 func advance(dt: float) -> void:
@@ -32,24 +49,42 @@ func advance(dt: float) -> void:
 		_reveal += dt
 	else:
 		_reveal = 0.0
-	if id != _built:
+	var reacting := _in_reaction()
+	if id != _built or reacting != _was_reacting:
+		_was_reacting = reacting
 		_built = id
 		_rebuild(id)
 	_sync_toast(dt)
+	var bubble := get_node_or_null("ReactionBubble")
+	if bubble:
+		bubble.visible = _reveal >= 0.3
+
+
+func _in_reaction() -> bool:
+	return str(Game.open_overlay) == "result" and Game.evaluation != null and _reveal < 2.2 and not force_reveal
 
 
 func _sync_toast(dt: float) -> void:
-	var bg := get_node_or_null("ToastBg")
 	if Game.discovery_queue.is_empty():
 		_toast.visible = false
-		if bg:
-			bg.visible = false
+		_toast_bg.visible = false
 		return
 	var first: Dictionary = Game.discovery_queue[0]
-	_toast.text = str(first.get("textFa", first.get("nameFa", "")))
+	var text := str(first.get("textFa", first.get("nameFa", "")))
+	_toast.text = text
+	var font: Font = UiKit.medium if UiKit.medium != null else UiKit.regular
+	var tw := 640.0
+	if font != null:
+		tw = font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, 18).x
+	var w := clampf(tw + 52.0, 280.0, 880.0)
+	var h := 52.0 if tw + 52.0 <= 880.0 else 78.0
+	var at := Vector2((1920.0 - w) * 0.5, 1080.0 - 26.0 - h)
+	_toast_bg.position = at
+	_toast_bg.size = Vector2(w, h)
+	_toast.position = at
+	_toast.size = Vector2(w, h)
 	_toast.visible = true
-	if bg:
-		bg.visible = true
+	_toast_bg.visible = true
 	_toast_left += dt
 	if _toast_left > 1.8:
 		_toast_left = 0.0
@@ -65,6 +100,9 @@ func _rebuild(id: String) -> void:
 		c.queue_free()
 	mouse_filter = MOUSE_FILTER_IGNORE
 	if id == "":
+		return
+	if id == "result" and _in_reaction():
+		_build_reaction()
 		return
 	mouse_filter = MOUSE_FILTER_STOP
 	var scrim := ColorRect.new()
@@ -201,12 +239,96 @@ func _detail(panel: ColorRect) -> void:
 		add_child(UiKit.label(Content.UI["unknownSecret"], Rect2(panel.position.x + 40, y, 540, 60), 20, Color("5c4310")))
 
 
+func _build_reaction() -> void:
+	# ResultScreen reaction window: speech bubble beside the customer, and a
+	# thin caption at the bottom. The parchment panel stays hidden.
+	var c: Dictionary = Game.current_customer()
+	var name := str(c.get("nameFa", ""))
+	var text := str(Game.evaluation.get("reactionFa", ""))
+	var band := str(Game.evaluation.get("band", ""))
+	var sad := band != "excellent" and band != "good"
+	var font: Font = UiKit.regular if UiKit.regular != null else ThemeDB.fallback_font
+	var text_h := 80.0
+	if font != null:
+		text_h = font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_RIGHT, 380.0, 26, -1, 3, 3, TextServer.DIRECTION_RTL).y
+	var box_h := maxf(140.0, 14.0 + 34.0 + 8.0 + text_h + 22.0)
+	var bubble := Control.new()
+	bubble.name = "ReactionBubble"
+	bubble.mouse_filter = MOUSE_FILTER_IGNORE
+	bubble.position = Vector2(1020, 176)
+	bubble.size = Vector2(420, box_h)
+	bubble.visible = _reveal >= 0.3
+	bubble.set_meta("who", name)
+	bubble.set_meta("body", text)
+	bubble.set_meta("sad", sad)
+	bubble.draw.connect(_draw_bubble.bind(bubble))
+	add_child(bubble)
+	var caption := "واکنش %s…" % name
+	var cap_font: Font = UiKit.regular if UiKit.regular != null else font
+	var tw := 240.0
+	if cap_font != null:
+		tw = cap_font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+	var pw := tw + 56.0
+	var ph := 36.0
+	var pill := Control.new()
+	pill.name = "ReactionWait"
+	pill.mouse_filter = MOUSE_FILTER_IGNORE
+	pill.position = Vector2((1920.0 - pw) * 0.5, 1080.0 - 22.0 - ph)
+	pill.size = Vector2(pw, ph)
+	pill.set_meta("caption", caption)
+	pill.draw.connect(_draw_wait.bind(pill))
+	add_child(pill)
+
+
+func _draw_bubble(bubble: Control) -> void:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("ead9b4")
+	box.border_color = Color(184.0 / 255.0, 134.0 / 255.0, 47.0 / 255.0, 0.6)
+	box.set_border_width_all(2)
+	box.corner_radius_top_left = 20
+	box.corner_radius_top_right = 20
+	box.corner_radius_bottom_right = 8
+	box.corner_radius_bottom_left = 20
+	box.shadow_color = Color(0, 0, 0, 0.5)
+	box.shadow_size = 16
+	box.shadow_offset = Vector2(0, 10)
+	box.draw(bubble.get_canvas_item(), Rect2(Vector2.ZERO, bubble.size))
+	var y := bubble.size.y - 22.0
+	var tail := PackedVector2Array([
+		Vector2(bubble.size.x - 4.0, y - 12.0),
+		Vector2(bubble.size.x + 18.0, y + 2.0),
+		Vector2(bubble.size.x - 4.0, y + 10.0),
+	])
+	bubble.draw_colored_polygon(tail, Color(184.0 / 255.0, 134.0 / 255.0, 47.0 / 255.0, 0.85))
+	var who := str(bubble.get_meta("who", ""))
+	var body := str(bubble.get_meta("body", ""))
+	var sad := bool(bubble.get_meta("sad", false))
+	var name_font: Font = UiKit.bold if UiKit.bold != null else UiKit.regular
+	var body_font: Font = UiKit.regular
+	if name_font != null and who != "":
+		var name_color := Color("4a3a56") if sad else Color("6e1f2e")
+		bubble.draw_string(name_font, Vector2(20, 36), who, HORIZONTAL_ALIGNMENT_RIGHT, 380, 22, name_color, 0, TextServer.DIRECTION_RTL)
+	if body_font != null and body != "":
+		bubble.draw_multiline_string(body_font, Vector2(20, 72), body, HORIZONTAL_ALIGNMENT_RIGHT, 380, 26, -1, Color("2b1d12"), 3, 3, TextServer.DIRECTION_RTL)
+
+
+func _draw_wait(pill: Control) -> void:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(18.0 / 255.0, 11.0 / 255.0, 6.0 / 255.0, 0.6)
+	box.border_color = Color(184.0 / 255.0, 134.0 / 255.0, 47.0 / 255.0, 0.45)
+	box.set_border_width_all(1)
+	box.set_corner_radius_all(18)
+	box.draw(pill.get_canvas_item(), Rect2(Vector2.ZERO, pill.size))
+	# RTL flex puts the gold dot at the start, on the right.
+	var dot := Vector2(pill.size.x - 18.0, pill.size.y * 0.5)
+	pill.draw_circle(dot, 4.0, Color("d8b45a"))
+	var caption := str(pill.get_meta("caption", ""))
+	var font: Font = UiKit.regular
+	if font != null and caption != "":
+		pill.draw_string(font, Vector2(10, 24), caption, HORIZONTAL_ALIGNMENT_RIGHT, pill.size.x - 36.0, 15, Color("f4e2b4"), 0, TextServer.DIRECTION_RTL)
+
+
 func _result(panel: ColorRect) -> void:
-	if Game.evaluation != null and _reveal < 2.2 and not force_reveal:
-		var c: Dictionary = Game.current_customer()
-		add_child(UiKit.label("واکنش %s…" % str(c.get("nameFa", "")), Rect2(660, 980, 600, 40), 20, Color("e9d9b4")))
-		panel.visible = false
-		return
 	if Game.evaluation != null:
 		var c2: Dictionary = Game.current_customer()
 		add_child(UiKit.label(str(c2.get("nameFa", "")), Rect2(panel.position.x + 36, panel.position.y + 24, 540, 36), 26, Color("4a2f16"), UiKit.bold, HORIZONTAL_ALIGNMENT_RIGHT))

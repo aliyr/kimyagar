@@ -27,6 +27,8 @@ const HEATS: Array = ["low", "medium", "high"]
 var behind_gate := true
 var pour := ""
 var pour_t := 0.0
+## When set, the bottle stays where jump_pour left it (reaction shots).
+var hold_pour := false
 var transfer_t := -1.0
 var _transfer_dropped := false
 var discard_t := -1.0
@@ -1118,12 +1120,13 @@ func _draw_stream(c: Control) -> void:
 	for i in 25:
 		var t := float(i) / 24.0
 		pts.append(_stream_point(rim, c1, mid, c2, mouth, t))
+	# classic-stations.css: glow 26px, core 14px, sheen 3px.
 	var glow := Color(col.r, col.g, col.b, 0.35)
-	var sheen := Color(1.0, 1.0, 1.0, 0.45)
+	var sheen := Color(1.0, 1.0, 1.0, 0.55)
 	if pts.size() >= 2:
-		c.draw_polyline(pts, glow, 16.0, true)
-		c.draw_polyline(pts, col, 7.0, true)
-		c.draw_polyline(pts, sheen, 2.0, true)
+		c.draw_polyline(pts, glow, 26.0, true)
+		c.draw_polyline(pts, col, 14.0, true)
+		c.draw_polyline(pts, sheen, 3.0, true)
 
 
 func _draw_pieces(c: Control) -> void:
@@ -1293,6 +1296,9 @@ func _tick_pour(dt: float) -> void:
 		_cauldron_angle = 0.0
 		if _pour_bottle:
 			_pour_bottle.visible = false
+		return
+	if hold_pour:
+		_place_pour_bottle()
 		return
 	if not Game.brew["bottled"]:
 		pour = ""
@@ -1879,28 +1885,58 @@ func _build_ambience() -> void:
 	_fire_glow.material = add
 	_fire_glow.z_index = 2
 	_camera.add_child(_fire_glow)
+	# .amb-rays sit under the cabinet and mortar. A solid additive shaft on
+	# top of _work washed the jars; the web shafts are a soft edge-fade and
+	# the furniture covers them.
 	var rays := Control.new()
 	rays.mouse_filter = MOUSE_FILTER_IGNORE
-	rays.z_index = 2
+	# Same z as the background rig, which is already behind _work. A positive
+	# z_index here sorts the shafts above the cabinet and mortar.
+	rays.z_index = 0
 	UiKit.fill(rays)
-	var ray_mat := CanvasItemMaterial.new()
-	ray_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	rays.material = ray_mat
-	_camera.add_child(rays)
+	_bg_rig.add_child(rays)
+	var shaft_tex := _shaft_texture()
 	var shafts := [
-		{"x": -60.0, "w": 300.0, "rot": 19.0, "a": 0.09},
-		{"x": 210.0, "w": 190.0, "rot": 21.0, "a": 0.06},
-		{"x": 470.0, "w": 240.0, "rot": 17.0, "a": 0.045},
+		{"x": -60.0, "w": 300.0, "rot": 19.0, "a": 0.9},
+		{"x": 210.0, "w": 190.0, "rot": 21.0, "a": 0.6},
+		{"x": 470.0, "w": 240.0, "rot": 17.0, "a": 0.45},
 	]
 	for shaft in shafts:
-		var s := ColorRect.new()
-		s.color = Color(1.0, 0.86, 0.62, float(shaft["a"]))
+		var s := TextureRect.new()
+		s.texture = shaft_tex
+		s.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		s.stretch_mode = TextureRect.STRETCH_SCALE
+		s.mouse_filter = MOUSE_FILTER_IGNORE
 		s.position = Vector2(float(shaft["x"]), -200)
 		s.size = Vector2(float(shaft["w"]), 1600)
 		s.pivot_offset = Vector2(float(shaft["w"]) * 0.5, 0)
 		s.rotation_degrees = float(shaft["rot"])
-		s.mouse_filter = MOUSE_FILTER_IGNORE
+		s.modulate = Color(1, 1, 1, float(shaft["a"]))
 		rays.add_child(s)
+
+
+func _shaft_texture() -> Texture2D:
+	# classic-ambience.css .amb-rays__shaft — horizontal fade, peak alpha 0.13.
+	var w := 128
+	var img := Image.create(w, 4, false, Image.FORMAT_RGBA8)
+	var c0 := Color(1.0, 214.0 / 255.0, 150.0 / 255.0, 0.0)
+	var c1 := Color(1.0, 222.0 / 255.0, 166.0 / 255.0, 0.08)
+	var c2 := Color(1.0, 234.0 / 255.0, 190.0 / 255.0, 0.13)
+	for x in w:
+		var t := float(x) / float(w - 1)
+		var col := c0
+		if t < 0.42:
+			col = c0.lerp(c1, t / 0.42)
+		elif t < 0.52:
+			col = c1.lerp(c2, (t - 0.42) / 0.10)
+		else:
+			col = c2.lerp(c0, (t - 0.52) / 0.48)
+		# Straight alpha on this renderer is composited like a premultiplied
+		# source, which turned the pale shaft into a solid wedge. Store rgb*a.
+		col = Color(col.r * col.a, col.g * col.a, col.b * col.a, col.a)
+		for y in 4:
+			img.set_pixel(x, y, col)
+	return ImageTexture.create_from_image(img)
 
 
 func _draw_notch(n: Control) -> void:

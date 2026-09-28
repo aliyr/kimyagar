@@ -11,7 +11,7 @@ var _workshop_vp: SubViewport
 var _plate: SubViewportContainer
 var _chrome: CanvasLayer
 var _plate_frames := 0
-var _gear: Button
+var _gear: BaseButton
 var _back: Button
 var _v2: Button
 var _shot := ""
@@ -134,11 +134,17 @@ func _scan_args(args: PackedStringArray) -> void:
 
 
 func _build_chrome() -> void:
-	_gear = Button.new()
-	_gear.text = "⚙"
-	_gear.position = Vector2(12, 10)
-	_gear.size = Vector2(40, 40)
+	# settings-button.css — 40×40 circle at (12, 10). The node is larger so the
+	# drop shadow is not clipped; the disc itself stays on that rect.
+	_gear = TextureButton.new()
+	_gear.texture_normal = _settings_gear_texture()
+	_gear.ignore_texture_size = true
+	_gear.stretch_mode = TextureButton.STRETCH_SCALE
+	_gear.position = Vector2(4, 2)
+	_gear.custom_minimum_size = Vector2.ZERO
+	_gear.size = Vector2(56, 56)
 	_gear.focus_mode = Control.FOCUS_NONE
+	_gear.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_gear.pressed.connect(func() -> void:
 		Sfx.unlock()
 		Game.open_overlay_action("settings")
@@ -151,6 +157,62 @@ func _build_chrome() -> void:
 	_back.pressed.connect(_go_gate)
 	_chrome.add_child(_v2)
 	_chrome.add_child(_back)
+
+
+func _settings_gear_texture() -> Texture2D:
+	# 56px canvas: 40px disc centered so it lands on screen (12, 10) when the
+	# button sits at (4, 2). settings-button.css radial + 20px stroked gear.
+	var n := 56
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var center := Vector2(28.0, 28.0)
+	var radius := 20.0
+	var ink := Color(233.0 / 255.0, 217.0 / 255.0, 180.0 / 255.0, 0.82)
+	for y in n:
+		for x in n:
+			var p := Vector2(float(x) + 0.5, float(y) + 0.5)
+			var d := p.distance_to(center)
+			var col := Color(0, 0, 0, 0)
+			var shadow_d := p.distance_to(center + Vector2(0, 2))
+			if shadow_d > radius and shadow_d < radius + 7.0:
+				var k := 1.0 - (shadow_d - radius) / 7.0
+				col = Color(0, 0, 0, 0.40 * k * k)
+			if d <= radius:
+				var hx := center.x - radius + 0.35 * radius * 2.0
+				var hy := center.y - radius + 0.30 * radius * 2.0
+				var hd := clampf(p.distance_to(Vector2(hx, hy)) / (radius * 1.55), 0.0, 1.0)
+				var inner := Color(80.0 / 255.0, 52.0 / 255.0, 24.0 / 255.0, 1.0)
+				var outer := Color(16.0 / 255.0, 10.0 / 255.0, 6.0 / 255.0, 1.0)
+				col = inner.lerp(outer, hd)
+				if d > radius - 1.15:
+					var edge := clampf((d - (radius - 1.15)) / 1.15, 0.0, 1.0)
+					col = col.lerp(Color(233.0 / 255.0, 217.0 / 255.0, 180.0 / 255.0, 1.0), edge * 0.35)
+				col.a = 0.8
+				if _gear_ink(p - center):
+					col = Color(ink.r, ink.g, ink.b, 0.82 * 0.8)
+			if col.a > 0.004:
+				img.set_pixel(x, y, col)
+	return ImageTexture.create_from_image(img)
+
+
+func _gear_ink(local: Vector2) -> bool:
+	# ViewBox 24 mapped onto a 20px icon. Stroke ~1.6.
+	var u := local * (24.0 / 20.0)
+	var r := u.length()
+	if r < 0.4:
+		return false
+	var tooth := cos(atan2(u.y, u.x) * 8.0)
+	var edge := 7.55 + 2.55 * clampf((tooth + 0.15) / 1.15, 0.0, 1.0)
+	var stroke := 1.25
+	var hole := 3.35
+	if absf(r - hole) <= stroke * 0.55:
+		return true
+	if r > hole + stroke and absf(r - edge) <= stroke * 0.55:
+		return true
+	# Sides of each tooth, between the valley and the tip.
+	if r > 7.3 and r < edge - 0.2 and absf(tooth) < 0.22:
+		return true
+	return false
 
 
 func _corner_pill(text: String, rect: Rect2) -> Button:
@@ -332,35 +394,34 @@ func _prepare_shot() -> void:
 		"stir":
 			phase = "workshop"
 			gate.visible = false
+			# Ready chamomile, spoon still in the pot: the bottle hint is up,
+			# matching a finished stir on the web.
 			var brew: Dictionary = Alchemy.create_brew()
 			brew = Alchemy.add_ingredient(brew, "chamomile", 1.0, "fine", Game.defs)
-			brew = Alchemy.advance_time(brew, 12.0, Game.defs)
+			brew = Alchemy.advance_time(brew, 16.0, Game.defs)
 			brew = Alchemy.stir(brew, Game.defs)
 			Game.brew = brew
 			workshop._spoon_angle = -0.2
 			workshop._stirring = true
-			_warm_workshop(1.6)
+			_warm_workshop(0.35)
 		"bottle":
 			phase = "workshop"
 			gate.visible = false
+			# Chamomile, cooked and stirred: yellow-green liquor and the restful toast.
 			var b: Dictionary = Alchemy.create_brew()
-			b = Alchemy.add_ingredient(b, "mint", 1.0, "fine", Game.defs)
+			b = Alchemy.add_ingredient(b, "chamomile", 1.0, "fine", Game.defs)
 			b = Alchemy.advance_time(b, 16.0, Game.defs)
+			b = Alchemy.stir(b, Game.defs)
 			Game.brew = b
 			Game.bottle_brew()
 			workshop.jump_pour("stream", 1.1)
-			_warm_workshop(0.15)
-		"receive":
-			phase = "workshop"
-			gate.visible = false
-			var got: Dictionary = Alchemy.create_brew()
-			got = Alchemy.add_ingredient(got, "chamomile", 1.0, "fine", Game.defs)
-			got = Alchemy.set_heat(got, "low", Game.defs)
-			got = Alchemy.advance_time(got, 18.0, Game.defs)
-			got = Alchemy.stir(got, Game.defs)
-			Game.brew = got
-			Game.bottle_brew()
-			workshop.jump_pour("deliver", 2.25)
+			# Toast has been up since the click; the stream is 1.1s into the pour.
+			overlays.prime_toast(1.05)
+			_warm_workshop(0.12)
+		"receive", "receive-reject":
+			_receive_shot("chamomile")
+		"receive-accept":
+			_receive_shot("saffron")
 		"result":
 			phase = "workshop"
 			gate.visible = false
@@ -407,22 +468,46 @@ func _prepare_shot() -> void:
 			tilt.hold_pose(0.62, -0.38)
 	if phase == "workshop":
 		Sfx.stop_ambience()
-		workshop._fire.set_level(0.7, true)
+		var heat_name := str(Game.brew.get("currentHeat", "medium"))
+		var fire_level := float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat_name, 0.7))
+		workshop._fire.set_level(fire_level, true)
 		workshop._fire.warm()
 
 
 func _boil_shot(heat_name: String) -> void:
 	phase = "workshop"
 	gate.visible = false
+	# Stirred, but still extracting, so neither the stir hint nor the bottle
+	# hint is up. The pestle stays in its empty-mortar lean beside the bowl.
 	var brew: Dictionary = Alchemy.create_brew()
 	brew = Alchemy.add_ingredient(brew, "chamomile", 1.0, "fine", Game.defs)
 	brew = Alchemy.set_heat(brew, heat_name, Game.defs)
-	brew = Alchemy.advance_time(brew, 14.0, Game.defs)
+	brew = Alchemy.advance_time(brew, 5.0, Game.defs)
 	brew = Alchemy.stir(brew, Game.defs)
 	Game.brew = brew
-	workshop._spoon_angle = -0.35
-	workshop._stirring = true
-	_warm_workshop(1.6)
+	_warm_workshop(0.8)
+
+
+func _receive_shot(ingredient_id: String) -> void:
+	phase = "workshop"
+	gate.visible = false
+	var got: Dictionary = Alchemy.create_brew()
+	got = Alchemy.add_ingredient(got, ingredient_id, 1.0, "fine", Game.defs)
+	got = Alchemy.advance_time(got, 18.0, Game.defs)
+	got = Alchemy.stir(got, Game.defs)
+	Game.brew = got
+	Game.bottle_brew()
+	# The pour outlasts the discovery toast, so the reaction stands alone.
+	Game.discovery_queue = []
+	workshop.jump_pour("deliver", 2.69)
+	workshop._cauldron_angle = 0.0
+	if workshop._pot_pivot:
+		workshop._pot_pivot.rotation = 0.0
+	workshop.hold_pour = true
+	Game.open_overlay_action("result")
+	Game.deliver()
+	overlays.prime_reveal(0.85)
+	_warm_workshop(0.05)
 
 
 func _warm_workshop(seconds: float) -> void:
