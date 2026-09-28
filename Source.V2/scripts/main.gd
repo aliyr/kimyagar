@@ -101,10 +101,9 @@ func _ready() -> void:
 
 
 func _relock_plate() -> void:
+	# The container owns the viewport size while stretch is on.
 	if _plate:
 		_plate.size = Vector2(1920, 1080)
-	if _workshop_vp:
-		_workshop_vp.size = Vector2i(1920, 1080)
 
 
 func _exit_tree() -> void:
