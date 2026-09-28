@@ -22,6 +22,7 @@ var _auto_dropped := false
 var _enabled := true
 var lock_pose := false
 var held := false
+var pose_forced := false
 var hold_px := 0.0
 var hold_py := 0.0
 
@@ -36,6 +37,10 @@ func _ready() -> void:
 
 func set_enabled(on: bool) -> void:
 	_enabled = on
+	if pose_forced:
+		px = hold_px
+		py = hold_py
+		return
 	if not on:
 		px = 0.0
 		py = 0.0
@@ -47,6 +52,15 @@ func hold_pose(nx: float, ny: float) -> void:
 	hold_py = ny
 	px = nx
 	py = ny
+
+
+## Debug pose (`--tilt=`). Keeps dimensional mode on so headless and movie
+## captures exercise the same perspective shaders the pointer and the gyro use.
+func force_pose(nx: float, ny: float) -> void:
+	pose_forced = true
+	hold_pose(nx, ny)
+	if mode == "off" or mode == "flat":
+		mode = "lite"
 
 
 func _process(dt: float) -> void:
@@ -137,6 +151,8 @@ func _probe_frame() -> void:
 
 
 func _drop() -> void:
+	if pose_forced:
+		return
 	_auto_dropped = true
 	if mode == "full":
 		mode = "lite"

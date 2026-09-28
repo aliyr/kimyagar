@@ -4,21 +4,41 @@ extends SceneTree
 var fails := 0
 var ran := false
 var game
+var _shade_phase := 0
+var _shade_views: Array = []
 
 
 func _process(_dt: float) -> bool:
-	if ran:
+	if not ran:
+		ran = true
+		game = root.get_node("Game")
+		_run()
+		if DisplayServer.get_name() == "headless":
+			print("SKIP tilt shade render (headless renderer)")
+			_finish()
+			return true
+		_shade_setup()
 		return false
-	ran = true
-	game = root.get_node("Game")
-	_run()
+	_shade_phase += 1
+	# The viewport draws after _process, so the first two ticks only wait.
+	if _shade_phase < 3:
+		return false
+	_shade_check()
+	_finish()
+	return true
+
+
+func _finish() -> void:
+	for vp in _shade_views:
+		if vp is Node and is_instance_valid(vp):
+			(vp as Node).free()
+	_shade_views.clear()
 	if fails == 0:
 		print("ALL TESTS PASSED")
 		quit(0)
 	else:
 		print("FAILED %d" % fails)
 		quit(1)
-	return true
 
 
 func check(cond: bool, msg: String) -> void:
@@ -345,6 +365,41 @@ func _tilt() -> void:
 	near(flat_hit.x, 1060.0, "flat scale", 0.02)
 	var off_hit := TiltMath.unproject_layer({"px": 0.5, "py": 0.5}, 100.0, 80.0, 36.0, "off")
 	near(off_hit.x, 100.0, "off x")
+	var flag: Variant = TiltMath.pose_from_flag("--tilt=0.6,-0.3")
+	check(flag is Vector2, "tilt flag type")
+	if flag is Vector2:
+		var forced: Vector2 = flag
+		near(forced.x, 0.6, "tilt flag x")
+		near(forced.y, -0.3, "tilt flag y")
+	check(TiltMath.pose_from_flag("--tilt=nope") == null, "tilt flag bad")
+	check(TiltMath.pose_from_flag("--tilt=0.6") == null, "tilt flag one")
+	check(TiltMath.pose_from_flag("--hour=17") == null, "tilt flag other")
+	# Loaded at runtime so this script does not compile TiltDriver before autoloads exist.
+	var driver_script: GDScript = load("res://scripts/tilt/tilt_driver.gd")
+	check(driver_script != null and driver_script.can_instantiate(), "tilt driver compiles")
+	var driver: Node = driver_script.new()
+	root.add_child(driver)
+	driver.mode = "flat"
+	driver.force_pose(0.6, -0.3)
+	near(float(driver.px), 0.6, "forced px")
+	near(float(driver.py), -0.3, "forced py")
+	check(str(driver.mode) == "lite", "forced mode lifts flat")
+	driver.set_enabled(false)
+	near(float(driver.px), 0.6, "forced pose survives disable")
+	driver._drop()
+	check(str(driver.mode) == "lite", "forced mode stays dimensional")
+	root.remove_child(driver)
+	driver.free()
+	for shader_path in ["res://shaders/rig_perspective.gdshader", "res://shaders/door_leaf.gdshader"]:
+		var src := FileAccess.get_file_as_string(shader_path)
+		var frag_at := src.find("void fragment()")
+		check(frag_at >= 0, "fragment " + shader_path)
+		var frag := src.substr(frag_at)
+		check(src.find("varying vec4 modulate_color") >= 0, "varying " + shader_path)
+		check(src.find("void vertex()") >= 0, "vertex " + shader_path)
+		check(frag.find("modulate_color") >= 0, "sample uses vertex modulate " + shader_path)
+		check(frag.find("vec4 tint = COLOR") < 0, "no fragment tint copy " + shader_path)
+		check(frag.find("texture(TEXTURE") >= 0, "samples once " + shader_path)
 	var rest := DiscardMotion.pot_pose(0.0)
 	near(float(rest["x"]), 847.0, "pot rest x")
 	near(float(rest["scale"]), 1.0, "pot rest scale")
@@ -541,3 +596,114 @@ func _customer(defs: Dictionary, id: String) -> Dictionary:
 
 func _cmp_num(a, b, msg: String) -> void:
 	near(float(a), float(b), msg, 5e-4)
+
+
+## GPU check: with `--tilt=0.6,-0.3` uniforms on, the backdrop stays within 3
+## points of the same sprite drawn without the shader. Headless skips this.
+func _shade_setup() -> void:
+	var bg: Texture2D = load("res://assets/art/background/shop_background.png")
+	var grey_img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
+	grey_img.fill(Color8(128, 128, 128, 255))
+	var grey := ImageTexture.create_from_image(grey_img)
+	var pose := Vector2(0.6, -0.3)
+	var rig := ShaderMaterial.new()
+	rig.shader = load("res://shaders/rig_perspective.gdshader")
+	rig.set_shader_parameter("ax", deg_to_rad(-pose.y * 2.0))
+	rig.set_shader_parameter("ay", deg_to_rad(pose.x * 2.2))
+	rig.set_shader_parameter("rig_scale", 1.06)
+	rig.set_shader_parameter("perspective", 1400.0)
+	rig.set_shader_parameter("scene_size", Vector2(320, 180))
+	rig.set_shader_parameter("depth_offset", pose * 18.0)
+	var ident := ShaderMaterial.new()
+	ident.shader = load("res://shaders/rig_perspective.gdshader")
+	ident.set_shader_parameter("ax", 0.0)
+	ident.set_shader_parameter("ay", 0.0)
+	ident.set_shader_parameter("rig_scale", 1.0)
+	ident.set_shader_parameter("perspective", 1400.0)
+	ident.set_shader_parameter("scene_size", Vector2(320, 180))
+	ident.set_shader_parameter("depth_offset", Vector2.ZERO)
+	var door := ShaderMaterial.new()
+	door.shader = load("res://shaders/door_leaf.gdshader")
+	door.set_shader_parameter("angle_deg", 18.0)
+	door.set_shader_parameter("hinge", 0.0)
+	door.set_shader_parameter("perspective", 1500.0)
+	door.set_shader_parameter("leaf_size", Vector2(128, 128))
+	door.set_shader_parameter("leaf_origin", Vector2.ZERO)
+	door.set_shader_parameter("persp_origin", Vector2(64, 64))
+	_shade_views = [
+		_shade_view(bg, null, Vector2i(320, 180)),
+		_shade_view(bg, rig, Vector2i(320, 180)),
+		_shade_view(bg, ident, Vector2i(320, 180)),
+		_shade_view(grey, rig, Vector2i(128, 128)),
+		_shade_view(grey, door, Vector2i(128, 128)),
+	]
+
+
+func _shade_view(tex: Texture2D, mat: Material, size: Vector2i) -> SubViewport:
+	var vp := SubViewport.new()
+	vp.size = size
+	vp.transparent_bg = false
+	vp.disable_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var rect := TextureRect.new()
+	rect.texture = tex
+	rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.position = Vector2.ZERO
+	rect.size = Vector2(size)
+	rect.material = mat
+	vp.add_child(rect)
+	root.add_child(vp)
+	return vp
+
+
+func _shade_check() -> void:
+	var plain := _shade_mean(_shade_views[0], 0.2)
+	var tilted := _shade_mean(_shade_views[1], 0.2)
+	var ident := _shade_mean(_shade_views[2], 0.2)
+	var grey_rig := _shade_mean(_shade_views[3], 0.25)
+	var grey_door := _shade_mean(_shade_views[4], 0.25)
+	print("tilt shade bg plain ", _rgb_text(plain), " tilted ", _rgb_text(tilted), " ident ", _rgb_text(ident), " grey rig ", _rgb_text(grey_rig), " grey door ", _rgb_text(grey_door))
+	_near_rgb(ident, plain, "identity shader background")
+	_near_rgb(tilted, plain, "tilted background")
+	_near_rgb(grey_rig, Vector3(128, 128, 128), "tilted grey backdrop")
+	_near_rgb(grey_door, Vector3(128, 128, 128), "tilted grey door")
+
+
+func _shade_mean(vp: SubViewport, inset: float) -> Vector3:
+	var tex := vp.get_texture()
+	if tex == null:
+		return Vector3(-1, -1, -1)
+	var img := tex.get_image()
+	if img == null or img.is_empty():
+		return Vector3(-1, -1, -1)
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var x0 := int(float(w) * inset)
+	var y0 := int(float(h) * inset)
+	var x1 := int(float(w) * (1.0 - inset))
+	var y1 := int(float(h) * (1.0 - inset))
+	var acc := Vector3.ZERO
+	var n := 0
+	for y in range(y0, y1):
+		for x in range(x0, x1):
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			acc += Vector3(c.r, c.g, c.b)
+			n += 1
+	if n == 0:
+		return Vector3(-1, -1, -1)
+	return acc / float(n) * 255.0
+
+
+func _near_rgb(got: Vector3, exp: Vector3, msg: String) -> void:
+	var d := (got - exp).abs()
+	check(d.x <= 3.0 and d.y <= 3.0 and d.z <= 3.0, "%s got %s expected %s" % [msg, _rgb_text(got), _rgb_text(exp)])
+
+
+func _rgb_text(c: Vector3) -> String:
+	return "%d,%d,%d" % [int(round(c.x)), int(round(c.y)), int(round(c.z))]

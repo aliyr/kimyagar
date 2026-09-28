@@ -124,6 +124,21 @@ static func screen_tilt(beta: float, gamma: float, base_beta: float, base_gamma:
 	}
 
 
+## `--tilt=0.6,-0.3` after `--`. Null when the flag is absent or not two numbers.
+static func pose_from_flag(arg: String) -> Variant:
+	if not arg.begins_with("--tilt="):
+		return null
+	var body := arg.substr("--tilt=".length())
+	var parts := body.split(",")
+	if parts.size() != 2:
+		return null
+	var xs := parts[0].strip_edges()
+	var ys := parts[1].strip_edges()
+	if not xs.is_valid_float() or not ys.is_valid_float():
+		return null
+	return Vector2(float(xs), float(ys))
+
+
 static func pointer_tilt(client_x: float, client_y: float, width: float, height: float) -> Dictionary:
 	var w := width if width > 0.0 else 1.0
 	var h := height if height > 0.0 else 1.0

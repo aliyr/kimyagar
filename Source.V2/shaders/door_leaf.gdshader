@@ -10,8 +10,15 @@ uniform vec2 leaf_size = vec2(304.0, 543.0);
 uniform vec2 leaf_origin = vec2(0.0);
 uniform vec2 persp_origin = vec2(304.0, 271.5);
 
+// Fragment COLOR already contains the texture. Take the modulate from the
+// vertex stage so the swinging leaf is not squared darker.
+varying vec4 modulate_color;
+
+void vertex() {
+	modulate_color = COLOR;
+}
+
 void fragment() {
-	vec4 tint = COLOR;
 	highp float th = radians(angle_deg);
 	highp float c = cos(th);
 	highp float s = sin(th);
@@ -34,6 +41,6 @@ void fragment() {
 	if (ok < 0.5 || u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
 		COLOR = vec4(0.0);
 	} else {
-		COLOR = texture(TEXTURE, vec2(u, v)) * tint;
+		COLOR = texture(TEXTURE, vec2(u, v)) * modulate_color;
 	}
 }

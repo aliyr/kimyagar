@@ -12,6 +12,12 @@ uniform float perspective = 1400.0;
 uniform vec2 scene_size = vec2(1920.0, 1080.0);
 uniform vec2 depth_offset = vec2(0.0);
 
+// Godot 4's canvas_item fragment() COLOR already includes the texture sample.
+// Multiplying texture() by that COLOR squares the backdrop (a 0x80 grey becomes
+// 0x40) as soon as dimensional tilt attaches this shader. The vertex COLOR is
+// only the modulate.
+varying vec4 modulate_color;
+
 vec3 rot_x(float a, vec3 p) {
 	float c = cos(a);
 	float s = sin(a);
@@ -28,8 +34,11 @@ vec3 invert_rig(vec3 p) {
 	return rot_y(-ay, rot_x(-ax, p));
 }
 
+void vertex() {
+	modulate_color = COLOR;
+}
+
 void fragment() {
-	vec4 tint = COLOR;
 	highp vec2 center = scene_size * 0.5;
 	vec2 screen = UV * scene_size;
 	float sx = screen.x - center.x;
@@ -47,6 +56,6 @@ void fragment() {
 	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
 		COLOR = vec4(0.0);
 	} else {
-		COLOR = texture(TEXTURE, uv) * tint;
+		COLOR = texture(TEXTURE, uv) * modulate_color;
 	}
 }

@@ -16,6 +16,7 @@ var _back: Button
 var _v2: Button
 var _shot := ""
 var _shot_out := ""
+var _tilt_pose: Variant = null
 var _start_workshop := false
 var _shot_frames := 0
 var _shot_done := false
@@ -49,6 +50,9 @@ func _ready() -> void:
 	tilt = TiltDriver.new()
 	tilt.name = "Tilt"
 	add_child(tilt)
+	if _tilt_pose is Vector2:
+		var forced: Vector2 = _tilt_pose
+		tilt.force_pose(forced.x, forced.y)
 	# The workshop is a picture under the gate. Its sprites live in their own
 	# viewport, so a child z_index cannot paint over the facade.
 	_plate = SubViewportContainer.new()
@@ -128,6 +132,10 @@ func _scan_args(args: PackedStringArray) -> void:
 			var h = Content.hour_from_flag(arg)
 			if h != null:
 				Settings.hour_override = h
+		elif arg.begins_with("--tilt="):
+			var parsed: Variant = TiltMath.pose_from_flag(arg)
+			if parsed is Vector2:
+				_tilt_pose = parsed
 		elif arg == "--workshop":
 			_start_workshop = true
 		elif arg == "--profile":

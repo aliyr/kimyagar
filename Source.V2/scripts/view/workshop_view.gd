@@ -315,10 +315,9 @@ func _build() -> void:
 	_bg_rig.pivot_offset = Vector2(960, 540)
 	_bg_rig.mouse_filter = MOUSE_FILTER_IGNORE
 	_camera.add_child(_bg_rig)
-	# Cover, like the web ArtLayer. The perspective shader is only attached while
-	# the rig is actually rotating: sampling this PNG in a canvas shader on the
-	# compatibility renderer writes linear values and the wall drops to a third
-	# of the web brightness.
+	# Cover, like the web ArtLayer. The perspective shader is attached only while
+	# the rig is rotating (pointer, gyro, or `--tilt=`). It samples the backdrop
+	# once and tints by the vertex modulate.
 	_bg = UiKit.sprite("background/shop_background.png", Rect2(0, 0, 1920, 1080), "cover")
 	_bg_mat = ShaderMaterial.new()
 	_bg_mat.shader = load("res://shaders/rig_perspective.gdshader")
