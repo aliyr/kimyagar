@@ -3,6 +3,8 @@ extends Node
 
 const RATE := 44100
 const MASTER := 0.55
+const QUANTUM := 128
+const MAX_MIX_FRAMES := 4096
 
 var _player: AudioStreamPlayer
 var _play: AudioStreamGeneratorPlayback
@@ -26,6 +28,10 @@ var _wind: Dictionary
 var _later: Array = []
 var _noise: PackedFloat32Array = PackedFloat32Array()
 var _audio_n := 0
+var prof_mix_us := 0
+var prof_mix_frames := 0
+var _acc := PackedFloat32Array()
+var _out := PackedVector2Array()
 
 
 func _ready() -> void:
@@ -163,22 +169,7 @@ func _process(delta: float) -> void:
 		if _ambience and _chime_wait <= 0.0:
 			_chime()
 			_chime_wait = 7.0 + _rng.randf() * 12.0
-	var need := _play.get_frames_available()
-	if need <= 0:
-		return
-	for _i in need:
-		var s := 0.0
-		var alive: Array = []
-		for v in _voices:
-			v["age"] = float(v["age"]) + 1.0 / float(RATE)
-			if not v.get("loop", false) and float(v["age"]) >= float(v["dur"]):
-				continue
-			s += _sample(v)
-			alive.append(v)
-		_voices = alive
-		s *= _master
-		s = clampf(s, -1.0, 1.0)
-		_play.push_frame(Vector2(s, s))
+	_mix_available()
 
 
 func _approach(v: Dictionary, delta: float, tau: float) -> void:
@@ -221,75 +212,217 @@ func _build_noise() -> void:
 		_noise[i] = _rng.randf() * 2.0 - 1.0
 
 
-func _noise_at(v: Dictionary) -> float:
-	if _noise.is_empty():
-		return _rng.randf() * 2.0 - 1.0
-	var rate := float(v.get("rate", 1.0))
-	var cursor := float(v.get("cursor", 0.0))
-	var n := _noise.size()
-	var i0 := int(floor(cursor)) % n
-	var i1 := (i0 + 1) % n
-	var frac: float = cursor - floor(cursor)
-	v["cursor"] = fposmod(cursor + rate, float(n))
-	return lerpf(_noise[i0], _noise[i1], frac)
+func _mix_available() -> void:
+	var available := _play.get_frames_available()
+	if available <= 0:
+		prof_mix_us = 0
+		prof_mix_frames = 0
+		return
+	# A hitch used to mix the whole 0.2 s backlog in one GDScript loop and then
+	# miss the next frame too. Cap the work; the rest drains over later frames.
+	var need := available if available < MAX_MIX_FRAMES else MAX_MIX_FRAMES
+	var mix_t0 := Time.get_ticks_usec()
+	if _acc.size() != need:
+		_acc.resize(need)
+	for i in need:
+		_acc[i] = 0.0
+	var offset := 0
+	while offset < need:
+		var n := QUANTUM if offset + QUANTUM <= need else need - offset
+		var count := _voices.size()
+		for vi in count:
+			_mix_voice(_voices[vi] as Dictionary, offset, n)
+		offset += n
+	_audio_n += need
+	if _audio_n > 2000000000:
+		_audio_n = 0
+	_cull_voices()
+	if _out.size() != need:
+		_out.resize(need)
+	var master := _master
+	for i in need:
+		var sample := clampf(_acc[i] * master, -1.0, 1.0)
+		_out[i] = Vector2(sample, sample)
+	_play.push_buffer(_out)
+	prof_mix_us = int(Time.get_ticks_usec() - mix_t0)
+	prof_mix_frames = need
 
 
-func _sample(v: Dictionary) -> float:
-	_audio_n += 1
-	var sample_t := float(_audio_n) / float(RATE)
-	var env := _env(v)
-	var x := 0.0
-	if v["kind"] == "noise":
-		if not v.get("loop", false):
+func _cull_voices() -> void:
+	var alive: Array = []
+	var dropped := false
+	for v in _voices:
+		if bool(v.get("loop", false)) or float(v["age"]) < float(v["dur"]):
+			alive.append(v)
+		else:
+			dropped = true
+	if dropped:
+		_voices = alive
+
+
+func _mix_voice(v: Dictionary, offset: int, n: int) -> void:
+	var looping := bool(v.get("loop", false))
+	var age := float(v["age"])
+	var dur := float(v["dur"])
+	var step := 1.0 / float(RATE)
+	var gain := float(v["gain"])
+	if looping and gain < 0.0008:
+		v["age"] = age + float(n) * step
+		var nse := _noise.size()
+		if nse > 0:
+			v["cursor"] = fposmod(float(v.get("cursor", 0.0)) + float(v.get("rate", 1.0)) * float(n), float(nse))
+		return
+	if not looping and age >= dur:
+		return
+	if not looping and age + float(n) * step <= 0.0:
+		v["age"] = age + float(n) * step
+		return
+	_retune(v, age, n, offset)
+	if str(v["kind"]) == "noise":
+		_mix_noise(v, offset, n, age, dur, looping, gain, step)
+	else:
+		_mix_tone(v, offset, n, age, dur, looping, gain, step)
+	v["age"] = age + float(n) * step
+
+
+func _retune(v: Dictionary, age: float, n: int, offset: int) -> void:
+	var looping := bool(v.get("loop", false))
+	var mid_age := age + float(n) * 0.5 / float(RATE)
+	if str(v["kind"]) == "noise":
+		if not looping:
 			var nf0 := float(v["freq0"])
 			var nf1 := float(v["freq1"])
-			if nf0 != nf1 and float(v["age"]) >= 0.0:
-				var nu := clampf(float(v["age"]) / maxf(float(v["dur"]), 0.0001), 0.0, 1.0)
+			if nf0 != nf1 and mid_age >= 0.0:
+				var nu := clampf(mid_age / maxf(float(v["dur"]), 0.0001), 0.0, 1.0)
 				v["freq"] = nf0 * pow(nf1 / maxf(nf0, 1.0), nu)
 				_design(v)
 		elif float(v.get("lfo_hz", 0.0)) > 0.0:
+			var sample_t := (float(_audio_n + offset) + float(n) * 0.5) / float(RATE)
 			v["freq"] = float(v["freq0"]) + float(v["lfo_depth"]) * sin(sample_t * TAU * float(v["lfo_hz"]))
 			_design(v)
-		x = _noise_at(v)
-	else:
-		var f0 := float(v["f0"])
-		var f1 := float(v["f1"])
-		var dur := maxf(float(v["dur"]), 0.0001)
-		var age := maxf(float(v["age"]), 0.0)
-		var freq := f0
-		if str(v.get("env", "")) == "meow":
-			var base := float(v.get("base", f0))
-			var mid_t := dur * 0.35
-			if age < mid_t:
-				freq = (base * 0.8) * pow(1.35 / 0.8, clampf(age / mid_t, 0.0, 1.0))
-			else:
-				freq = (base * 1.35) * pow(0.7 / 1.35, clampf((age - mid_t) / maxf(dur - mid_t, 0.001), 0.0, 1.0))
-			var fcut := 1400.0
-			var cut_t := dur * 0.4
-			if age < cut_t:
-				fcut = 1400.0 * pow(2600.0 / 1400.0, age / cut_t)
-			else:
-				fcut = 2600.0 * pow(900.0 / 2600.0, clampf((age - cut_t) / maxf(dur - cut_t, 0.001), 0.0, 1.0))
-			v["freq"] = fcut
-			v["ready"] = false
+		elif not bool(v.get("ready", false)):
+			_design(v)
+		return
+	if str(v.get("env", "")) == "meow":
+		var d := maxf(float(v["dur"]), 0.0001)
+		var a := maxf(mid_age, 0.0)
+		var cut_t := d * 0.4
+		var fcut := 1400.0
+		if a < cut_t:
+			fcut = 1400.0 * pow(2600.0 / 1400.0, a / cut_t)
 		else:
-			var u := clampf(age / dur, 0.0, 1.0)
-			freq = f0 * pow(f1 / maxf(f0, 1.0), u) if f1 != f0 else f0
-		v["phase"] = float(v["phase"]) + freq / float(RATE)
-		var ph := float(v["phase"])
-		match str(v["osc"]):
-			"triangle":
-				x = 1.0 - 4.0 * absf(fmod(ph, 1.0) - 0.5)
-			"sawtooth":
-				x = 2.0 * fmod(ph, 1.0) - 1.0
-			_:
-				x = sin(ph * TAU)
-	if not v.get("ready", false):
+			fcut = 2600.0 * pow(900.0 / 2600.0, clampf((a - cut_t) / maxf(d - cut_t, 0.001), 0.0, 1.0))
+		v["freq"] = fcut
 		_design(v)
-	var y := float(v["b0"]) * x + float(v["z1"])
-	v["z1"] = float(v["b1"]) * x - float(v["a1"]) * y + float(v["z2"])
-	v["z2"] = float(v["b2"]) * x - float(v["a2"]) * y
-	return y * env
+	elif not bool(v.get("ready", false)):
+		_design(v)
+
+
+func _mix_noise(v: Dictionary, offset: int, n: int, age: float, dur: float, looping: bool, gain: float, step: float) -> void:
+	var b0 := float(v["b0"])
+	var b1 := float(v["b1"])
+	var b2 := float(v["b2"])
+	var a1 := float(v["a1"])
+	var a2 := float(v["a2"])
+	var z1 := float(v["z1"])
+	var z2 := float(v["z2"])
+	var cursor := float(v.get("cursor", 0.0))
+	var rate := float(v.get("rate", 1.0))
+	var noise := _noise
+	var nse := noise.size()
+	var nsef := float(nse)
+	var env_name := str(v.get("env", ""))
+	for i in n:
+		var sample_age := age + float(i) * step
+		var x := 0.0
+		if nse > 0:
+			var i0 := int(floor(cursor)) % nse
+			var frac: float = cursor - floor(cursor)
+			var i1 := (i0 + 1) % nse
+			x = lerpf(noise[i0], noise[i1], frac)
+			cursor = fposmod(cursor + rate, nsef)
+		var play := looping or (sample_age >= 0.0 and sample_age < dur)
+		if play:
+			var y := b0 * x + z1
+			z1 = b1 * x - a1 * y + z2
+			z2 = b2 * x - a2 * y
+			var e := gain if looping else _env_oneshot(gain, dur, sample_age, env_name, "noise")
+			_acc[offset + i] = _acc[offset + i] + y * e
+	v["z1"] = z1
+	v["z2"] = z2
+	v["cursor"] = cursor
+
+
+func _mix_tone(v: Dictionary, offset: int, n: int, age: float, dur: float, looping: bool, gain: float, step: float) -> void:
+	var b0 := float(v["b0"])
+	var b1 := float(v["b1"])
+	var b2 := float(v["b2"])
+	var a1 := float(v["a1"])
+	var a2 := float(v["a2"])
+	var z1 := float(v["z1"])
+	var z2 := float(v["z2"])
+	var phase := float(v["phase"])
+	var f0 := float(v["f0"])
+	var f1 := float(v["f1"])
+	var env_name := str(v.get("env", ""))
+	var osc := str(v["osc"])
+	var base := float(v.get("base", f0))
+	var meow := env_name == "meow"
+	for i in n:
+		var sample_age := age + float(i) * step
+		var used_age := sample_age if sample_age > 0.0 else 0.0
+		var freq := f0
+		if meow:
+			var mid_t := dur * 0.35
+			if used_age < mid_t:
+				freq = (base * 0.8) * pow(1.35 / 0.8, clampf(used_age / maxf(mid_t, 0.0001), 0.0, 1.0))
+			else:
+				freq = (base * 1.35) * pow(0.7 / 1.35, clampf((used_age - mid_t) / maxf(dur - mid_t, 0.001), 0.0, 1.0))
+		else:
+			var u := clampf(used_age / maxf(dur, 0.0001), 0.0, 1.0)
+			freq = f0 * pow(f1 / maxf(f0, 1.0), u) if f1 != f0 else f0
+		phase += freq / float(RATE)
+		var x := 0.0
+		match osc:
+			"triangle":
+				x = 1.0 - 4.0 * absf(fmod(phase, 1.0) - 0.5)
+			"sawtooth":
+				x = 2.0 * fmod(phase, 1.0) - 1.0
+			_:
+				x = sin(phase * TAU)
+		var y := b0 * x + z1
+		z1 = b1 * x - a1 * y + z2
+		z2 = b2 * x - a2 * y
+		var play := looping or (sample_age >= 0.0 and sample_age < dur)
+		if play:
+			var e := gain if looping else _env_oneshot(gain, dur, sample_age, env_name, "tone")
+			_acc[offset + i] = _acc[offset + i] + y * e
+	v["z1"] = z1
+	v["z2"] = z2
+	v["phase"] = phase
+
+
+func _env_oneshot(g: float, dur: float, age: float, env_name: String, kind: String) -> float:
+	if age < 0.0:
+		return 0.0
+	dur = maxf(dur, 0.001)
+	if kind == "noise":
+		return g * pow(0.0001 / maxf(g, 0.0001), clampf(age / dur, 0.0, 1.0))
+	if env_name == "meow":
+		var g1 := 0.11
+		if age < 0.05:
+			return 0.0001 * pow(g1 / 0.0001, age / 0.05)
+		if age < dur * 0.6:
+			return g1
+		var u := clampf((age - dur * 0.6) / maxf(dur * 0.4, 0.001), 0.0, 1.0)
+		return g1 * pow(0.0001 / g1, u)
+	var atk := 0.012
+	if dur <= atk:
+		return g * pow(0.0001 / maxf(g, 0.0001), clampf(age / dur, 0.0, 1.0))
+	if age < atk:
+		return 0.0001 * pow(maxf(g, 0.0001) / 0.0001, age / atk)
+	var u2 := clampf((age - atk) / (dur - atk), 0.0, 1.0)
+	return g * pow(0.0001 / maxf(g, 0.0001), u2)
 
 
 func _design(v: Dictionary) -> void:
@@ -364,34 +497,6 @@ func _voice(opts: Dictionary) -> void:
 		"env": str(opts.get("env", "")),
 		"base": float(opts.get("base", freq)),
 	})
-
-
-func _env(v: Dictionary) -> float:
-	var g := float(v["gain"])
-	if v.get("loop", false):
-		return g
-	var dur := maxf(float(v["dur"]), 0.001)
-	var age := float(v["age"])
-	if age < 0.0:
-		return 0.0
-	if str(v.get("kind")) == "noise":
-		return g * pow(0.0001 / maxf(g, 0.0001), clampf(age / dur, 0.0, 1.0))
-	if str(v.get("env", "")) == "meow":
-		var a := dur
-		var g1 := 0.11
-		if age < 0.05:
-			return 0.0001 * pow(g1 / 0.0001, age / 0.05)
-		if age < a * 0.6:
-			return g1
-		var u := clampf((age - a * 0.6) / maxf(a * 0.4, 0.001), 0.0, 1.0)
-		return g1 * pow(0.0001 / g1, u)
-	var atk := 0.012
-	if dur <= atk:
-		return g * pow(0.0001 / maxf(g, 0.0001), clampf(age / dur, 0.0, 1.0))
-	if age < atk:
-		return 0.0001 * pow(maxf(g, 0.0001) / 0.0001, age / atk)
-	var u2 := clampf((age - atk) / (dur - atk), 0.0, 1.0)
-	return g * pow(0.0001 / maxf(g, 0.0001), u2)
 
 
 func noise_burst(dur: float, type: String, freq: float, gain: float, q: float = 0.8, freq_end = null) -> void:

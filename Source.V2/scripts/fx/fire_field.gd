@@ -11,6 +11,7 @@ var level := 0.7
 var intensity := 0.0
 var heat: PackedFloat32Array
 var _acc := 0.0
+var _painted_i := -1.0
 var _rng: KimRng
 var texture: ImageTexture
 var _img: Image
@@ -44,10 +45,14 @@ func update(dt: float) -> void:
 	var diff := target - intensity
 	intensity += signf(diff) * minf(step, absf(diff))
 	_acc += dt
+	var painted := false
 	while _acc >= TICK:
 		_acc -= TICK
 		_tick()
-	_paint()
+		painted = true
+	if painted or absf(intensity - _painted_i) > 0.02:
+		_paint()
+		_painted_i = intensity
 
 
 func _tick() -> void:

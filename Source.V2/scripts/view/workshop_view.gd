@@ -26,6 +26,7 @@ var _transfer_dropped := false
 var discard_t := -1.0
 var _stain := false
 var _stirring := false
+var _heat_drawn := ""
 var _spoon_angle := -0.4
 var _grind_sfx := 0.0
 var _bubble_t := 0.0
@@ -478,6 +479,7 @@ func _build_mortar() -> void:
 	_mortar_fx.z_index = 3
 	_work.add_child(_mortar_fx)
 	_mortar_front = UiKit.sprite("mortar/v3/mortar_front.png", ZONE_MORTAR, "contain")
+	_mortar_front.name = "MortarFront"
 	_mortar_front.z_index = 5
 	_work.add_child(_mortar_front)
 	_pestle = UiKit.sprite("mortar/v3/pestle_1.png", Rect2(), "contain")
@@ -595,6 +597,9 @@ func _on_notch_input(ev: InputEvent, heat_name: String) -> void:
 
 func _sync_notches() -> void:
 	var heat := str(Game.brew.get("currentHeat", "medium"))
+	if heat == _heat_drawn:
+		return
+	_heat_drawn = heat
 	for item in _notches:
 		var notch := item as Control
 		var on := str(notch.get_meta("heat")) == heat
@@ -668,20 +673,25 @@ func _sync_hint() -> void:
 
 
 func _sync_liquid() -> void:
-	if _liquid:
-		_liquid.queue_redraw()
-	if _spoon:
-		_spoon.queue_redraw()
-	if _stream:
-		_stream.queue_redraw()
-	if _mortar_fx:
+	var parts_busy := _mortar_parts != null and _mortar_parts.busy()
+	var mortar_on := Game.mortar != null or transfer_t >= 0.0 or not _flights.is_empty() or parts_busy
+	if _pile != null and not _pile.residue().is_empty():
+		mortar_on = true
+	if _mortar_fx and mortar_on:
 		_mortar_fx.queue_redraw()
-	if _mortar_over:
+	if _mortar_over and (parts_busy or transfer_t >= 0.0):
 		_mortar_over.queue_redraw()
-	if _shadows:
-		_shadows.queue_redraw()
-	if _smoke:
+	if _stream and pour != "":
+		_stream.queue_redraw()
+	if _smoke and _haze > 0.01:
 		_smoke.queue_redraw()
+	var entries: Array = Game.brew["entries"]
+	var brewing := (not entries.is_empty()) or pour != "" or _stirring or discard_t >= 0.0
+	if brewing:
+		if _fx:
+			_fx.queue_redraw()
+		if _fx_back:
+			_fx_back.queue_redraw()
 	_place_pestle()
 	if _bottle:
 		_bottle.visible = pour == "" and discard_t < 0.0
@@ -708,6 +718,8 @@ func _bake_shadows() -> void:
 		_shadow_sprite(1364.0, 782.0, 74.8, 12.0, 0.4),
 		_shadow_sprite(1664.6, 1076.0, 285.6, 26.0, 0.55),
 	]
+	if _shadows:
+		_shadows.queue_redraw()
 
 
 func _shadow_sprite(cx: float, cy: float, rx: float, ry: float, strength: float) -> Dictionary:

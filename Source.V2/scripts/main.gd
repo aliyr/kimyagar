@@ -7,6 +7,10 @@ var workshop: WorkshopView
 var gate: GateView
 var overlays: OverlayView
 var debug: DebugPanel
+var _workshop_vp: SubViewport
+var _plate: SubViewportContainer
+var _chrome: CanvasLayer
+var _plate_frames := 0
 var _gear: Button
 var _back: Button
 var _shot := ""
@@ -18,6 +22,21 @@ var _keys := ""
 var _booted := false
 var _probe_t := 0.0
 var _probed := false
+var _profile := false
+var _prof_stage := 0
+var _prof_left := 45
+var _prof_name := "warmup"
+var _prof_n := 0
+var _prof_frame_ms := 0.0
+var _prof_process_ms := 0.0
+var _prof_physics_ms := 0.0
+var _prof_draws := 0.0
+var _prof_objects := 0.0
+var _prof_fps := 0.0
+var _prof_audio_us := 0.0
+var _prof_audio_frames := 0.0
+var _prof_worst_ms := 0.0
+var _prof_tex := 0.0
 
 
 func _ready() -> void:
@@ -29,24 +48,47 @@ func _ready() -> void:
 	tilt = TiltDriver.new()
 	tilt.name = "Tilt"
 	add_child(tilt)
+	# The workshop is a picture under the gate. Its sprites live in their own
+	# viewport, so a child z_index cannot paint over the facade.
+	_plate = SubViewportContainer.new()
+	_plate.name = "WorkshopPlate"
+	_plate.stretch = true
+	_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiKit.fill(_plate)
+	_plate.size = Vector2(1920, 1080)
+	_workshop_vp = SubViewport.new()
+	_workshop_vp.name = "WorkshopViewport"
+	_workshop_vp.disable_3d = true
+	_workshop_vp.transparent_bg = false
+	_workshop_vp.size = Vector2i(1920, 1080)
+	_workshop_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_workshop_vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
+	_plate.add_child(_workshop_vp)
+	add_child(_plate)
 	workshop = WorkshopView.new()
 	workshop.name = "Workshop"
 	workshop.open_overlay.connect(func(id: String) -> void: Game.open_overlay_action(id))
-	workshop.z_index = 0
-	add_child(workshop)
+	_workshop_vp.add_child(workshop)
+	var gate_layer := CanvasLayer.new()
+	gate_layer.name = "GateLayer"
+	gate_layer.layer = 1
+	add_child(gate_layer)
 	gate = GateView.new()
 	gate.name = "Gate"
-	gate.z_index = 2
 	gate.entered.connect(_on_entered)
 	gate.open_settings.connect(func() -> void: Game.open_overlay_action("settings"))
-	add_child(gate)
+	gate_layer.add_child(gate)
+	_chrome = CanvasLayer.new()
+	_chrome.name = "ChromeLayer"
+	_chrome.layer = 2
+	add_child(_chrome)
 	_build_chrome()
 	overlays = OverlayView.new()
 	overlays.name = "Overlays"
-	add_child(overlays)
+	_chrome.add_child(overlays)
 	debug = DebugPanel.new()
 	debug.name = "Debug"
-	add_child(debug)
+	_chrome.add_child(debug)
 	if _shot != "":
 		_prepare_shot()
 	else:
@@ -54,7 +96,15 @@ func _ready() -> void:
 		if _start_workshop:
 			_open_workshop_now()
 	_booted = true
+	call_deferred("_relock_plate")
 	print("viewport ", get_viewport().get_visible_rect().size, " window ", DisplayServer.window_get_size())
+
+
+func _relock_plate() -> void:
+	if _plate:
+		_plate.size = Vector2(1920, 1080)
+	if _workshop_vp:
+		_workshop_vp.size = Vector2i(1920, 1080)
 
 
 func _exit_tree() -> void:
@@ -71,6 +121,8 @@ func _parse_args() -> void:
 			Settings.hour_override = int(arg.substr("--hour=".length()))
 		elif arg == "--workshop":
 			_start_workshop = true
+		elif arg == "--profile":
+			_profile = true
 
 
 func _build_chrome() -> void:
@@ -83,7 +135,7 @@ func _build_chrome() -> void:
 		Sfx.unlock()
 		Game.open_overlay_action("settings")
 	)
-	add_child(_gear)
+	_chrome.add_child(_gear)
 	# scene.css .classic-corner-links .gate-return — dark pill, bottom inline-end.
 	_back = Button.new()
 	_back.text = Content.UI["gateReturn"]
@@ -111,7 +163,7 @@ func _build_chrome() -> void:
 	UiKit.place(_back, Rect2(14, 1038, 84, 30))
 	_back.size = Vector2(84, 30)
 	_back.pressed.connect(_go_gate)
-	add_child(_back)
+	_chrome.add_child(_back)
 
 
 func _process(dt: float) -> void:
@@ -124,7 +176,10 @@ func _process(dt: float) -> void:
 		tilt.set_enabled(gate.phase == "idle")
 	else:
 		tilt.set_enabled(not Game.is_paused())
-	workshop.advance(dt, tilt, phase == "workshop")
+	_sync_plate(at_gate)
+	var frozen := _workshop_vp != null and _workshop_vp.render_target_update_mode == SubViewport.UPDATE_DISABLED
+	if not frozen:
+		workshop.advance(dt, tilt, phase == "workshop")
 	if at_gate:
 		workshop.set_dusk(gate.dusk_opacity() if gate.phase == "entering" else 1.0)
 		gate.visible = true
@@ -137,10 +192,25 @@ func _process(dt: float) -> void:
 	overlays.advance(dt)
 	debug.refresh("phase %s tilt %s" % [phase, tilt.describe()])
 	_probe_t += dt
-	if not _probed and _probe_t >= 3.2:
+	if not _profile and not _probed and _probe_t >= 3.2:
 		_probed = true
 		_print_grade_probe()
 	_capture_shot()
+	if _profile:
+		_profile_tick(dt)
+
+
+func _sync_plate(at_gate: bool) -> void:
+	if _workshop_vp == null:
+		return
+	_plate_frames += 1
+	var covered := at_gate and gate.doors < 0.02 and gate.phase != "opening" and gate.phase != "entering"
+	if covered and _plate_frames >= 2:
+		_workshop_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	else:
+		_workshop_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	if _plate:
+		_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE if at_gate else Control.MOUSE_FILTER_STOP
 
 
 func _open_workshop_now() -> void:
@@ -316,6 +386,100 @@ func _print_grade_probe() -> void:
 	print("grade adapter=\"%s\" hour=%d time=%s phase=%s path=%s hue=%.1f bright=%.2f tint_op=%.2f sky_px=%s brick_px=%s" % [
 		adapter, hour_n, gate.time_name, phase, gate.grade_path, gate.grade_hue, gate.grade_bright, gate.grade_tint_op, sky_s, brick_s
 	])
+
+
+func _profile_reset(name: String, frames: int) -> void:
+	_prof_name = name
+	_prof_left = frames
+	_prof_n = 0
+	_prof_frame_ms = 0.0
+	_prof_process_ms = 0.0
+	_prof_physics_ms = 0.0
+	_prof_draws = 0.0
+	_prof_objects = 0.0
+	_prof_fps = 0.0
+	_prof_audio_us = 0.0
+	_prof_audio_frames = 0.0
+	_prof_worst_ms = 0.0
+	_prof_tex = 0.0
+
+
+func _profile_sample(dt: float) -> void:
+	var frame_ms := dt * 1000.0
+	_prof_n += 1
+	_prof_frame_ms += frame_ms
+	_prof_process_ms += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	_prof_physics_ms += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	_prof_draws += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+	_prof_objects += Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
+	_prof_fps += Performance.get_monitor(Performance.TIME_FPS)
+	_prof_tex = Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)
+	_prof_audio_us += float(Sfx.prof_mix_us)
+	_prof_audio_frames += float(Sfx.prof_mix_frames)
+	if frame_ms > _prof_worst_ms:
+		_prof_worst_ms = frame_ms
+
+
+func _profile_emit() -> void:
+	var n := maxi(_prof_n, 1)
+	print("PROFILE phase=%s n=%d fps=%.1f frame_ms=%.2f process_ms=%.2f physics_ms=%.2f draws=%.1f objects=%.1f tex_mb=%.1f audio_us=%.0f audio_frames=%.0f worst_ms=%.2f" % [
+		_prof_name,
+		_prof_n,
+		_prof_fps / float(n),
+		_prof_frame_ms / float(n),
+		_prof_process_ms / float(n),
+		_prof_physics_ms / float(n),
+		_prof_draws / float(n),
+		_prof_objects / float(n),
+		_prof_tex / (1024.0 * 1024.0),
+		_prof_audio_us / float(n),
+		_prof_audio_frames / float(n),
+		_prof_worst_ms,
+	])
+
+
+func _profile_tick(dt: float) -> void:
+	if _prof_stage == 0 and _prof_n == 0 and _prof_left == 45:
+		Settings.mark_intro_seen()
+		gate.force_idle()
+		Sfx.unlock()
+		Sfx.start_ambience()
+	if _prof_stage > 0:
+		_profile_sample(dt)
+	if _prof_stage == 2 and phase == "workshop" and _prof_n >= 8:
+		_prof_left = 1
+	_prof_left -= 1
+	if _prof_left > 0:
+		return
+	if _prof_stage > 0:
+		_profile_emit()
+	_prof_stage += 1
+	match _prof_stage:
+		1:
+			_profile_reset("gate_idle", 90)
+		2:
+			gate.begin_enter()
+			_profile_reset("transition", 150)
+		3:
+			if phase != "workshop":
+				_open_workshop_now()
+			_profile_reset("workshop_idle", 90)
+		4:
+			Game.add_classic_unit("chamomile")
+			Game.start_grinding()
+			_profile_reset("grind", 90)
+		5:
+			Game.apply_grind_work(4.0)
+			var brew: Dictionary = Alchemy.create_brew()
+			brew = Alchemy.add_ingredient(brew, "chamomile", 1.0, "fine", Game.defs)
+			brew = Alchemy.advance_time(brew, 16.0, Game.defs)
+			Game.brew = brew
+			Game.bottle_brew()
+			workshop.jump_pour("tilt", 0.0)
+			_profile_reset("pour", 90)
+		_:
+			print("PROFILE done")
+			get_tree().quit(0)
 
 
 func _capture_shot() -> void:

@@ -807,9 +807,9 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 		_sign.rotation_degrees = 0.0
 	_hit_px = px
 	_hit_py = py
-	if _sky_fx:
+	if _sky_fx and bool(sky.get("fireflies", false)) and not freeze:
 		_sky_fx.queue_redraw()
-	if _dust_fx:
+	if _dust_fx and not freeze and (phase == "idle" or phase == "opening"):
 		_dust_fx.queue_redraw()
 	if tilt == null or busy or tilt.mode == "off":
 		_hit_mode = "off"

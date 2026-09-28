@@ -62,6 +62,10 @@ func update(dt: float) -> void:
 	_step(dt)
 
 
+func busy() -> bool:
+	return not _particles.is_empty() or _aroma_i > 0.0 or _flash_t0 >= 0.0 or _wipe_t0 >= 0.0 or not _sweeps.is_empty()
+
+
 func burst(kind: String, at: Vector2 = Vector2.ZERO, opts: Dictionary = {}) -> void:
 	match kind:
 		"strike":

@@ -47,6 +47,7 @@ func _run() -> void:
 	_rng()
 	_golden()
 	_layout()
+	_layers()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -469,6 +470,60 @@ func _layout() -> void:
 	plaque.free()
 	cabinet.free()
 	stage.free()
+
+
+func _layers() -> void:
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var gate: CanvasItem = main.get_node("GateLayer/Gate") as CanvasItem
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	var plate: CanvasItem = main.get_node("WorkshopPlate") as CanvasItem
+	var chrome: CanvasLayer = main.get_node("ChromeLayer") as CanvasLayer
+	var gate_canvas := gate.get_canvas_layer_node()
+	check(gate_canvas != null, "gate has a canvas layer")
+	check(chrome.layer > gate_canvas.layer, "chrome draws above the gate")
+	var plate_canvas := plate.get_canvas_layer_node()
+	var plate_layer := -1
+	if plate_canvas != null:
+		plate_layer = plate_canvas.layer
+	check(plate_layer < gate_canvas.layer, "workshop plate is below the gate got %d vs %d" % [plate_layer, gate_canvas.layer])
+	var mortar: CanvasItem = _find_canvas(workshop, "MortarFront")
+	check(mortar != null, "mortar front exists")
+	mortar.z_as_relative = false
+	mortar.z_index = 4096
+	_assert_below_gate(mortar, gate, gate_canvas)
+	_walk_below(workshop, gate, gate_canvas)
+	check(mortar.get_viewport() != gate.get_viewport(), "mortar is not in the gate viewport")
+	root.remove_child(main)
+	main.free()
+
+
+func _walk_below(node: Node, gate: CanvasItem, gate_canvas: CanvasLayer) -> void:
+	if node is CanvasItem:
+		_assert_below_gate(node as CanvasItem, gate, gate_canvas)
+	for child in node.get_children():
+		_walk_below(child, gate, gate_canvas)
+
+
+func _assert_below_gate(item: CanvasItem, gate: CanvasItem, gate_canvas: CanvasLayer) -> void:
+	var item_canvas := item.get_canvas_layer_node()
+	check(item_canvas != gate_canvas, "workshop sprite %s is not on the gate layer" % item.name)
+	if item.get_viewport() == gate.get_viewport():
+		var item_layer := -1
+		if item_canvas != null:
+			item_layer = item_canvas.layer
+		check(item_layer < gate_canvas.layer, "workshop sprite %s layer %d is below the gate" % [item.name, item_layer])
+
+
+func _find_canvas(node: Node, wanted: String) -> CanvasItem:
+	if node is CanvasItem and str(node.name) == wanted:
+		return node as CanvasItem
+	for child in node.get_children():
+		var found: CanvasItem = _find_canvas(child, wanted)
+		if found != null:
+			return found
+	return null
 
 
 func _customer(defs: Dictionary, id: String) -> Dictionary:

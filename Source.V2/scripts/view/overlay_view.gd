@@ -216,7 +216,7 @@ func _result(panel: ColorRect) -> void:
 		_action(panel, 620, Content.UI["nextCustomer"], func() -> void: Game.next_customer())
 		_action(panel, 680, Content.UI["retry"], func() -> void:
 			Game.close_overlay()
-			var shop := get_parent().get_node_or_null("Workshop")
+			var shop := get_tree().root.find_child("Workshop", true, false)
 			if shop and shop.has_method("begin_discard"):
 				shop.begin_discard()
 			else:
