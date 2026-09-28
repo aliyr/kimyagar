@@ -59,7 +59,7 @@ var _dust_fx: Control
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
-	set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(self)
 	UiKit.ensure()
 	var hour = Settings.hour_override
 	if hour == null:
@@ -103,7 +103,7 @@ func begin_enter() -> void:
 func _build() -> void:
 	_rig = Control.new()
 	_rig.mouse_filter = MOUSE_FILTER_IGNORE
-	_rig.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_rig)
 	_rig.pivot_offset = Vector2(960, 540)
 	add_child(_rig)
 	_sky_layer = _depth_host()
@@ -119,7 +119,7 @@ func _build() -> void:
 	_sky_layer.add_child(_sky_fx)
 	_sky = ColorRect.new()
 	_sky.mouse_filter = MOUSE_FILTER_IGNORE
-	_sky.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_sky)
 	_sky.size = sky_layer.size
 	var grad := Gradient.new()
 	grad.set_color(0, Color(sky["skyA"]))
@@ -133,7 +133,7 @@ func _build() -> void:
 	gt.fill_to = Vector2(0.5, 1)
 	var sky_tex := TextureRect.new()
 	sky_tex.texture = gt
-	sky_tex.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(sky_tex)
 	sky_tex.mouse_filter = MOUSE_FILTER_IGNORE
 	sky_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	sky_tex.stretch_mode = TextureRect.STRETCH_SCALE
@@ -225,12 +225,12 @@ func _build() -> void:
 	_build_pin()
 	_veil = ColorRect.new()
 	_veil.color = Color("030204")
-	_veil.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_veil)
 	_veil.mouse_filter = MOUSE_FILTER_IGNORE
 	_veil.visible = phase == "boot"
 	add_child(_veil)
 	_panel_layer = Control.new()
-	_panel_layer.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_panel_layer)
 	_panel_layer.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_panel_layer)
 	_refresh_plaque()
@@ -239,7 +239,7 @@ func _build() -> void:
 func _depth_host() -> Control:
 	var n := Control.new()
 	n.mouse_filter = MOUSE_FILTER_IGNORE
-	n.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(n)
 	_rig.add_child(n)
 	return n
 
@@ -264,7 +264,7 @@ func _wrap_rig() -> void:
 	add_child(_vp)
 	_vp.add_child(_rig)
 	_plate = TextureRect.new()
-	_plate.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_plate)
 	_plate.mouse_filter = MOUSE_FILTER_IGNORE
 	_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_plate.stretch_mode = TextureRect.STRETCH_SCALE
@@ -409,7 +409,7 @@ func _refresh_panel() -> void:
 	_panel_layer.mouse_filter = MOUSE_FILTER_STOP
 	var scrim := ColorRect.new()
 	scrim.color = Color(0.024, 0.012, 0.008, 0.58)
-	scrim.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(scrim)
 	scrim.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed:
 			panel = ""
@@ -552,7 +552,7 @@ func _open_settings() -> void:
 func _fx_host(fn: Callable) -> Control:
 	var n: Control = preload("res://scripts/view/draw_host.gd").new()
 	n.mouse_filter = MOUSE_FILTER_IGNORE
-	n.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(n)
 	n.paint = fn
 	return n
 

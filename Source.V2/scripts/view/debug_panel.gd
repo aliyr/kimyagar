@@ -8,7 +8,7 @@ var _btn: Button
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
-	set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(self)
 	_btn = Button.new()
 	_btn.text = "dbg"
 	_btn.position = Vector2(1884, 1050)

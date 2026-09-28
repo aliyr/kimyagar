@@ -36,25 +36,33 @@ Commit `8e46647` (“Shuffle the customer queue…”) only reordered `customers
 - **Art.** Real files, imported, loaded as resources, present in the Android pack.
 - **Cauldron.** `ClassicBrewSim` steps chips, blooms, vortex, spoon follow, splashes (the classic splash table), chip-depth dissolve (`SINK_EASE`), steam, bubbles, soot, respawn squash, and liquid color (`strengthFor`, saturate 1.35, water blend, heat darken, ready glint, `burntLiquid`). The goat-head spoon uses the `classicSpoon.ts` geometry and stays in the pot until bottling. The painter draws those layers, clipped to the mouth.
 - **Mortar.** `MortarPile` is the constraint pile (spawn, contain, strike split, hold volume, dust, pestle beat and aim). Strikes call `grindStrike` with that strike’s fineness and hit count. `MortarParticles` draws dust, sparks, puffs, spills, aroma, residue, and the powder mound. Scooping the pile is what drops into the pot; `bake_chips_for` is only the fallback when there is no scoop.
-- **Audio.** `sfx.gd` and the gate bed follow `sfx.ts` / `ambience.ts`: oscillator type, frequencies, exponential envelopes, noise bursts, biquad type / frequency / Q, durations, bubble and crackle rates, meow sawtooth, sparkle and success notes, rumble 150 Hz Q 0.9 and roar 300 Hz. Master gain is 0.55.
-- **Doors and tilt.** Door leaves use an inverse `rotateY` shader (perspective 1500, ±76°). The gate rig and the workshop backdrop use the CSS order `scale(1.06) rotateX rotateY` at perspective 1400, with depths 18 / 36 / 60 on the gate and 18 / 2 / 12 on the workshop backdrop, work, and near layers. Flat mode keeps the scale and the 2D parallax and drops the 3D angles. Off is identity.
-- **Other FX that are in.** Furnace fire automaton, contact-shadow ellipses, burnt-smoke puff timing, ingredient flight into the mortar (lands, then `addClassicUnit`), brush sweep when residue or a pile is present, jar-full spill, bottling tilt and a stream into the bottle.
+- **Audio.** `sfx.gd` and the gate bed follow `sfx.ts` / `ambience.ts`: oscillator type, frequencies, exponential envelopes, noise bursts, biquad type / frequency / Q, durations, bubble and crackle rates, meow sawtooth, sparkle and success notes, rumble 150 Hz Q 0.9 and roar 300 Hz. Master gain is 0.55. Noise voices play one 1.5 s white-noise buffer. Bursts use playback rate 0.8–1.2 and loops 0.9–1.1. Sweeping noise, the loop LFOs, and the meow cutoff are redesigned per sample.
+- **Doors and tilt.** Door leaves use an inverse `rotateY` shader (perspective 1500, ±76°). The gate rig and the workshop backdrop use the CSS order `scale(1.06) rotateX rotateY` at perspective 1400, with depths 18 / 36 / 60 on the gate and 18 / 2 / 12 on the workshop backdrop, work, and near layers. Flat mode keeps the scale and the 2D parallax and drops the 3D angles. Off is identity. Gate taps go through `unproject_layer` at the same depth as the art (the cat, knocker, and settings lantern). Pin controls stay on normal picking.
+- **Spoon transfer.** The goat-head spoon flies the web quadratic from the mortar, through the stir and scoop, and pours into the mouth. Chips ride in the bowl (`scoop_under` / `scoop_rest`) and fall on the pour. The ingredients are added when the pour lands, which is the web `onDrop`, not at the start of the tilt.
+- **Discard.** `DiscardMotion` flies the pot, spills the gobs, and paints the wall blobs, drips, and gloss from `discardMotion.ts` / `DiscardWallFx`.
+- **Bottling stream.** The pour is the web path: quadratic from the rim through `(rim.x + 22, rim.y + 4)` to the midpoint, then the reflected control into the bottle mouth. Glow, core, and sheen are 16 / 7 / 2 px.
+- **Camera.** Customer enter (1.16), pour (1.22), deliver (1.14), and grind (1.3, 650 ms, return 500 ms after grinding stops) match `Cinematic.tsx` and `MortarStation`. Letterbox is only on the cinematic shots. The first time the workshop appears, the enter shot is skipped so a cold open stays wide. A later customer change does zoom.
+- **Ingredient flight.** Quadratic bezier, 4–7 pieces, the web sine-hash scatter, 300 ms with a 22 ms stagger, then the land.
+- **Cracked chips.** A cracked piece, or any piece with generation above 0, is drawn with `MortarPile.clip_polygon` so the nick is missing from the sprite.
+- **Bucket.** It sits on the pin layer, so it does not parallax. It still zooms with the camera, same as the web pins inside `.scene-camera`.
+- **Painter.** The interior, liquid, highlight, and fire glow are `radial_disc.gdshader` fills. Bubbles keep the glass-dome profile and a smooth radial texture. Drops sample the teardrop cubics.
+- **Other FX.** Contact shadows are baked radials with a small box blur. Burnt smoke uses the CSS puff polygon. The gate sign swings on the 12 s ease-in-out cycle unless a screenshot freezes it. Night skies get fireflies; the lantern gets dust. The stove has a hole under the pot and a front lip.
 
 ## What is still different
 
-These are the remaining gaps. They are listed so a 98% claim stays honest.
+These are the leftovers after the gap list above. They are small next to the scene, and they are visible if you look for them.
 
-- **Spoon transfer.** The wait before the ingredients hit the pot matches `SpoonTransfer` (`0.32 + 1.6 + 0.7 + 0.88 * 0.46`). The flying goat-head spoon, the chips sitting in its bowl, and the pour-out of that bowl are not drawn. The pestle hides during the transfer.
-- **Discard.** The cauldron still follows a bezier off the top of the frame. `DiscardWallFx` / `discardMotion.ts` (wall blobs, drips, gloss) are not ported.
-- **Bottling stream.** The pour is a straight line from the tilted rim to the bottle mouth, not the shaped stream in `BottlingSequence`.
-- **Mortar chips.** Solved positions, sprites, dust dots, hop, and a soft tint are drawn. The web `clip-path` nick on cracked chips is not applied, so a cracked piece stays a full sprite.
-- **Ingredient flight.** Five pieces, 300 ms, 22 ms stagger, land then add. The web path is a quadratic bezier with 4–7 pieces and a small landing scatter.
-- **Cinematic camera.** The grind zoom (`setCamera` on the mortar) is not ported.
-- **Shadows, smoke, intro.** Contact shadows are stacked ellipses, not a 6 px blur. Burnt smoke uses the CSS timing but circles instead of the blob `clip-path`. Intro fireflies, dust, sign swing, and the stove hole are not matched.
-- **Tilt hits.** The perspective shader moves the gate picture. The click controls stay on the unprojected layout, so during a strong tilt a tap and the art can disagree. Screenshots are taken at rest.
-- **Bucket parallax.** The bucket is in the work layer (depth 2). On the web it is pinned, with no parallax.
-- **Audio residuals.** Noise is white, generated per sample; the web plays a short buffer at `playbackRate` 0.8–1.2 and lets the filter shape it. Loop biquads and the meow filter update per frame, not per sample. Godot has no autoplay lock, so the gate bed can start as soon as the scene does. A machine with only the dummy audio driver stays silent.
-- **Painter residuals.** Radial fills are banded ellipses. Bubbles and flying drops are not the web’s glass dome and teardrop beziers. That is visible if you compare a frame of the pot side by side.
+- **Discard shapes.** The impact gloss is a circle. The web ring is an ellipse (`60 + p * 150` by `34 + p * 80`) for the first 0.22 s. Spatter and tendrils are triangles, not the canvas teardrop curves. Blob outlines are sampled quadratics, and the first three blobs share one rotation range.
+- **Contact shadow.** Three box-blur passes of radius 1 on a baked radial, not `filter: blur(6px)`. The shadow is softer than a hard ellipse and still a bit tighter than the CSS blur.
+- **Bubbles and drops.** The dome and the teardrop controls match the web. Bubbles are a 96² radial texture, not a shader per bubble. Drops are an 18-step polyline of the cubics, not a true canvas bezier.
+- **Liquid wall shadow.** It is drawn on the back canvas, then the interior disc covers it.
+- **Mortar dust randomness.** `MortarParticles` still uses `KimRng`. The web particle sim uses its own LCG. Chip scatter and ingredient flight use the web sine hash.
+- **Audio leftovers.** The noise buffer is generated once. The web builds a buffer per burst; playback rate and the filter still vary per voice here. Gain targets ease per frame. There is no browser autoplay lock, so the gate bed can start with the scene. The dummy audio driver in this environment stays silent (`ERR_CANT_OPEN`).
+- **Intro motion.** Fireflies follow `sky.fireflies`, which is night only. Hour 17 is dusk, so the gate shots do not show them. Dust and the sign swing are hidden or held at 0° while a screenshot freezes the gate.
+- **Reduced motion.** Skipping cinematic shots follows tilt mode `off`. The web uses `prefers-reduced-motion`.
+- **Enter camera.** It does not play for the first customer already on screen. It plays when the customer changes.
+- **Gradients.** The radial shader and the bubble textures are smooth, and they are not pixel-identical to `createRadialGradient`.
+- **Android.** `--export-pack "Android"` contains the art (`door_west`, `customer_woman_cloth`, `mortar_back`, `cauldron_body`, `pieces/flower`) plus the new scripts. This machine has no Android export templates, so there is no debug APK.
 
 ## Out of scope
 

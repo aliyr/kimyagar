@@ -11,7 +11,7 @@ var _toast: Label
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
-	set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(self)
 	UiKit.ensure()
 	_toast = UiKit.label("", Rect2(560, 40, 800, 64), 22, Color("3a2410"), UiKit.bold)
 	_toast.visible = false
@@ -69,7 +69,7 @@ func _rebuild(id: String) -> void:
 	mouse_filter = MOUSE_FILTER_STOP
 	var scrim := ColorRect.new()
 	scrim.color = Color(18.0 / 255.0, 10.0 / 255.0, 6.0 / 255.0, 0.62)
-	scrim.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(scrim)
 	scrim.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and id != "result":
 			Game.close_overlay()

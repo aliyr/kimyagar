@@ -8,6 +8,18 @@ static var extrabold: Font
 static var _cache := {}
 
 
+static func fill(node: Control) -> void:
+	# Anchors first. Godot keeps the current size by writing offsets, so zero them after.
+	node.anchor_left = 0.0
+	node.anchor_top = 0.0
+	node.anchor_right = 1.0
+	node.anchor_bottom = 1.0
+	node.offset_left = 0.0
+	node.offset_top = 0.0
+	node.offset_right = 0.0
+	node.offset_bottom = 0.0
+
+
 static func ensure() -> void:
 	if regular != null:
 		return

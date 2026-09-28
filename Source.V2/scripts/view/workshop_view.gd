@@ -137,7 +137,7 @@ const _PUFFS: Array = [
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
-	set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(self)
 	UiKit.ensure()
 	_layout_geometry()
 	_fire = FireField.new()
@@ -231,15 +231,15 @@ func set_dusk(opacity: float) -> void:
 
 func _build() -> void:
 	_camera = Control.new()
-	_camera.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_camera)
 	_camera.mouse_filter = MOUSE_FILTER_IGNORE
 	_camera.clip_contents = true
 	add_child(_camera)
 	_pin = Control.new()
-	_pin.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_pin)
 	_pin.mouse_filter = MOUSE_FILTER_IGNORE
 	_bg_rig = Control.new()
-	_bg_rig.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_bg_rig)
 	_bg_rig.pivot_offset = Vector2(960, 540)
 	_bg_rig.mouse_filter = MOUSE_FILTER_IGNORE
 	_camera.add_child(_bg_rig)
@@ -251,14 +251,14 @@ func _build() -> void:
 
 	_work = Control.new()
 	_work.mouse_filter = MOUSE_FILTER_IGNORE
-	_work.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_work)
 	_camera.add_child(_work)
 	_wall = _painter(_draw_wall)
-	_wall.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_wall)
 	_work.add_child(_wall)
 	_work.add_child(UiKit.sprite("table/work_table.png", ZONE_TABLE, "contain"))
 	_shadows = _painter(_draw_shadows)
-	_shadows.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_shadows)
 	_work.add_child(_shadows)
 
 	_fire_rect = TextureRect.new()
@@ -270,7 +270,7 @@ func _build() -> void:
 	_fire_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_fire_rect.mouse_filter = MOUSE_FILTER_IGNORE
 	_hole_back = _painter(_draw_hole_back)
-	_hole_back.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_hole_back)
 	_work.add_child(_hole_back)
 	_work.add_child(_fire_rect)
 
@@ -294,7 +294,7 @@ func _build() -> void:
 	_pot_pivot.add_child(_spoon)
 
 	_fx_back = _painter(_draw_brew_back)
-	_fx_back.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_fx_back)
 	_fx_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_work.add_child(_fx_back)
 	_brew_painter.disc_interior = _radial_disc()
@@ -306,11 +306,11 @@ func _build() -> void:
 	_work.add_child(_brew_painter.disc_highlight)
 	_work.add_child(_brew_painter.disc_glow)
 	_fx = _painter(_draw_brew_front)
-	_fx.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_fx)
 	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_work.add_child(_fx)
 	_hole_lip = _painter(_draw_hole_lip)
-	_hole_lip.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_hole_lip)
 	_hole_lip.z_index = 4
 	_work.add_child(_hole_lip)
 
@@ -324,17 +324,17 @@ func _build() -> void:
 	_pour_bottle.visible = false
 	_work.add_child(_pour_bottle)
 	_stream = _painter(_draw_stream)
-	_stream.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_stream)
 	_work.add_child(_stream)
 
 	_build_mortar()
 	_build_cabinet()
 	_transfer_draw = _painter(_draw_transfer)
-	_transfer_draw.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_transfer_draw)
 	_transfer_draw.z_index = 40
 	_work.add_child(_transfer_draw)
 	_discard_fx = _painter(_draw_discard_flight)
-	_discard_fx.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_discard_fx)
 	_discard_fx.z_index = 35
 	_work.add_child(_discard_fx)
 
@@ -351,7 +351,7 @@ func _build() -> void:
 
 	_near = Control.new()
 	_near.mouse_filter = MOUSE_FILTER_IGNORE
-	_near.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_near)
 	_camera.add_child(_near)
 	_camera.add_child(_pin)
 	var bucket_art := UiKit.sprite("table/bucket.png", Rect2(590, 958, 96, 112), "contain")
@@ -388,18 +388,18 @@ func _build() -> void:
 	_camera.add_child(_ghost)
 
 	_smoke = _painter(_draw_smoke)
-	_smoke.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_smoke)
 	_smoke.mouse_filter = MOUSE_FILTER_IGNORE
 	_camera.add_child(_smoke)
 
 	_dusk = ColorRect.new()
 	_dusk.color = Color(8.0 / 255.0, 5.0 / 255.0, 3.0 / 255.0, 0.86)
-	_dusk.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_dusk)
 	_dusk.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_dusk)
 
 	_vignette = ColorRect.new()
-	_vignette.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_vignette)
 	_vignette.mouse_filter = MOUSE_FILTER_IGNORE
 	var shade := ShaderMaterial.new()
 	shade.shader = load("res://shaders/vignette.gdshader")
@@ -436,7 +436,7 @@ func _build_mortar() -> void:
 	_pestle.z_index = 2
 	_work.add_child(_pestle)
 	_mortar_over = _painter(_draw_mortar_fx)
-	_mortar_over.set_anchors_preset(PRESET_FULL_RECT)
+	UiKit.fill(_mortar_over)
 	_mortar_over.z_index = 6
 	_work.add_child(_mortar_over)
 	_build_brush()
@@ -1515,6 +1515,8 @@ func jump_pour(phase_name: String, t: float) -> void:
 
 func jump_pot_closeup() -> void:
 	_set_camera(Vector2(_mouth.x, _mouth.y + 20.0), 1.45, 0.01, false, "pot")
+	_cam_zoom = _cam_to
+	_cam_focus = _cam_focus_to
 	_cam_t = _cam_dur
 	_apply_camera()
 

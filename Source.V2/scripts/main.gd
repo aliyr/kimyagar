@@ -216,7 +216,7 @@ func _prepare_shot() -> void:
 			d = Alchemy.add_ingredient(d, "ginger", 1.0, "crushed", Game.defs)
 			Game.brew = d
 			workshop.begin_discard()
-			workshop.discard_t = 0.28
+			workshop.discard_t = 0.70
 		"pot":
 			phase = "workshop"
 			gate.visible = false
