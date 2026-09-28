@@ -24,11 +24,19 @@ var _clock := 0.0
 var _creak := 0.0
 
 var _rig: Control
+var _sky_layer: Control
+var _mid_layer: Control
+var _front_layer: Control
+var _vp: SubViewport
+var _plate: TextureRect
+var _plate_mat: ShaderMaterial
 var _sky: ColorRect
 var _facade: TextureRect
 var _facade_mat: ShaderMaterial
 var _west: TextureRect
 var _east: TextureRect
+var _west_mat: ShaderMaterial
+var _east_mat: ShaderMaterial
 var _glow: ColorRect
 var _sign: Control
 var _passer: TextureRect
@@ -92,12 +100,15 @@ func _build() -> void:
 	_rig.set_anchors_preset(PRESET_FULL_RECT)
 	_rig.pivot_offset = Vector2(960, 540)
 	add_child(_rig)
+	_sky_layer = _depth_host()
+	_mid_layer = _depth_host()
+	_front_layer = _depth_host()
 
 	var sky_layer := Control.new()
 	sky_layer.mouse_filter = MOUSE_FILTER_IGNORE
 	sky_layer.position = Vector2(-24, -24)
 	sky_layer.size = Vector2(1968, 470)
-	_rig.add_child(sky_layer)
+	_sky_layer.add_child(sky_layer)
 	_sky = ColorRect.new()
 	_sky.mouse_filter = MOUSE_FILTER_IGNORE
 	_sky.set_anchors_preset(PRESET_FULL_RECT)
@@ -128,11 +139,13 @@ func _build() -> void:
 	doors.size = Vector2(608, 543)
 	doors.mouse_filter = MOUSE_FILTER_IGNORE
 	doors.clip_contents = true
-	_rig.add_child(doors)
+	_mid_layer.add_child(doors)
 	_west = UiKit.sprite("gate/door_west.png", Rect2(0, 0, 304, 543), "fill")
-	_west.pivot_offset = Vector2(0, 271)
+	_west_mat = _door_mat(0.0, Vector2(0, 0))
+	_west.material = _west_mat
 	_east = UiKit.sprite("gate/door_east.png", Rect2(304, 0, 304, 543), "fill")
-	_east.pivot_offset = Vector2(304, 271)
+	_east_mat = _door_mat(1.0, Vector2(304, 0))
+	_east.material = _east_mat
 	doors.add_child(_west)
 	doors.add_child(_east)
 	_glow = ColorRect.new()
@@ -147,26 +160,26 @@ func _build() -> void:
 	_facade_mat.shader = load("res://shaders/facade_grade.gdshader")
 	_apply_sky_shader()
 	_facade.material = _facade_mat
-	_rig.add_child(_facade)
+	_mid_layer.add_child(_facade)
 
 	_add_window_glow(192)
 	_add_window_glow(1430)
 
 	var lantern := UiKit.sprite("intro/lantern.png", Rect2(560, 330, 130, 373), "contain")
-	_rig.add_child(lantern)
+	_front_layer.add_child(lantern)
 	var halo := ColorRect.new()
 	halo.position = Vector2(560 - 160, 330 + 30)
 	halo.size = Vector2(450, 450)
 	halo.color = Color(1, 0.75, 0.4, 0.18 * float(sky["lanternStrength"]))
 	halo.mouse_filter = MOUSE_FILTER_IGNORE
-	_rig.add_child(halo)
+	_front_layer.add_child(halo)
 
 	_sign = Control.new()
 	_sign.position = Vector2(680, -30)
 	_sign.size = Vector2(560, 360)
 	_sign.pivot_offset = Vector2(280, 0)
 	_sign.mouse_filter = MOUSE_FILTER_IGNORE
-	_rig.add_child(_sign)
+	_front_layer.add_child(_sign)
 	_sign.add_child(UiKit.sprite("gate/sign.png", Rect2(0, 0, 560, 315), "fill"))
 	var logo := UiKit.label(Content.UI["gameTitle"], Rect2(30, 88, 500, 120), 78, Color("e6bd6a"), UiKit.extrabold)
 	logo.add_theme_color_override("font_shadow_color", Color(0.2, 0.1, 0.02, 0.9))
@@ -177,26 +190,26 @@ func _build() -> void:
 	_passer = UiKit.sprite("gate/customer_shadow.png", Rect2(1500, 230, 280, 780), "contain")
 	_passer.modulate = Color(0.22, 0.22, 0.22, 0)
 	_passer.pivot_offset = Vector2(140, 780)
-	_rig.add_child(_passer)
+	_front_layer.add_child(_passer)
 
 	_cat_sleep = UiKit.sprite("intro/cat_sleep.png", Rect2(700, 922, 200, 110), "contain")
 	_cat_awake = UiKit.sprite("intro/cat_awake.png", Rect2(700, 922, 200, 110), "contain")
 	_cat_awake.modulate.a = 0
-	_rig.add_child(_cat_sleep)
-	_rig.add_child(_cat_awake)
+	_mid_layer.add_child(_cat_sleep)
+	_mid_layer.add_child(_cat_awake)
 	var cat_hit := UiKit.hit(Rect2(700, 922, 200, 110))
 	cat_hit.pressed.connect(_poke_cat)
 	add_child(cat_hit)
 
 	_knocker = UiKit.sprite("intro/knocker.png", Rect2(908, 640, 94, 131), "contain")
 	_knocker.pivot_offset = Vector2(47, 18)
-	_rig.add_child(_knocker)
+	_mid_layer.add_child(_knocker)
 	var knock_hit := UiKit.hit(Rect2(908, 620, 110, 160))
 	knock_hit.pressed.connect(begin_enter)
 	add_child(knock_hit)
 
 	var settings := UiKit.sprite("intro/lantern.png", Rect2(1764, 328, 80, 208), "contain")
-	_rig.add_child(settings)
+	_mid_layer.add_child(settings)
 	add_child(UiKit.label(Content.UI["settings"], Rect2(1724, 530, 160, 28), 17, Color(0.91, 0.85, 0.71, 0.86)))
 	var set_hit := UiKit.hit(Rect2(1764, 328, 80, 230))
 	set_hit.pressed.connect(func() -> void:
@@ -205,6 +218,7 @@ func _build() -> void:
 	)
 	add_child(set_hit)
 
+	_wrap_rig()
 	_build_pin()
 	_veil = ColorRect.new()
 	_veil.color = Color("030204")
@@ -219,13 +233,53 @@ func _build() -> void:
 	_refresh_plaque()
 
 
+func _depth_host() -> Control:
+	var n := Control.new()
+	n.mouse_filter = MOUSE_FILTER_IGNORE
+	n.set_anchors_preset(PRESET_FULL_RECT)
+	_rig.add_child(n)
+	return n
+
+
+func _door_mat(hinge: float, origin: Vector2) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/door_leaf.gdshader")
+	mat.set_shader_parameter("hinge", hinge)
+	mat.set_shader_parameter("leaf_origin", origin)
+	mat.set_shader_parameter("angle_deg", 0.0)
+	return mat
+
+
+func _wrap_rig() -> void:
+	remove_child(_rig)
+	_vp = SubViewport.new()
+	_vp.size = Vector2i(1920, 1080)
+	_vp.transparent_bg = true
+	_vp.disable_3d = true
+	_vp.handle_input_locally = false
+	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(_vp)
+	_vp.add_child(_rig)
+	_plate = TextureRect.new()
+	_plate.set_anchors_preset(PRESET_FULL_RECT)
+	_plate.mouse_filter = MOUSE_FILTER_IGNORE
+	_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_plate.stretch_mode = TextureRect.STRETCH_SCALE
+	_plate.texture = _vp.get_texture()
+	_plate_mat = ShaderMaterial.new()
+	_plate_mat.shader = load("res://shaders/rig_perspective.gdshader")
+	_plate.material = _plate_mat
+	add_child(_plate)
+	move_child(_plate, 0)
+
+
 func _add_window_glow(x: float) -> void:
 	var g := ColorRect.new()
 	g.position = Vector2(x, 390)
 	g.size = Vector2(300, 400)
 	g.color = Color(1, 0.69, 0.34, 0.16 * float(sky["lanternStrength"]))
 	g.mouse_filter = MOUSE_FILTER_IGNORE
-	_rig.add_child(g)
+	_mid_layer.add_child(g)
 
 
 func _apply_sky_shader() -> void:
@@ -483,18 +537,33 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 	if _rig == null:
 		return
 	var busy := phase == "opening" or phase == "entering"
-	var sc := 1.0 if busy or tilt == null else tilt.rig_scale()
-	_rig.scale = Vector2(sc, sc)
-	if tilt != null and not busy and tilt.mode != "off" and tilt.mode != "flat":
-		_rig.rotation_degrees = tilt.px * 2.2
-	else:
-		_rig.rotation_degrees = 0.0
-	var ang := deg_to_rad(76.0 * doors)
-	var sx := cos(ang)
-	if _west:
-		_west.scale = Vector2(sx, 1)
-	if _east:
-		_east.scale = Vector2(sx, 1)
+	var tilting := tilt != null and not busy and tilt.mode != "off"
+	var px := 0.0
+	var py := 0.0
+	if tilting:
+		px = tilt.px
+		py = tilt.py
+	if _sky_layer:
+		_sky_layer.position = Vector2(px, py) * 18.0
+	if _mid_layer:
+		_mid_layer.position = Vector2(px, py) * 36.0
+	if _front_layer:
+		_front_layer.position = Vector2(px, py) * 60.0
+	if _plate_mat:
+		var flat := tilt == null or busy or tilt.mode == "off" or tilt.mode == "flat"
+		var ax := 0.0 if flat else deg_to_rad(-py * 2.0)
+		var ay := 0.0 if flat else deg_to_rad(px * 2.2)
+		var sc := 1.0
+		if tilt != null and not busy and tilt.mode != "off":
+			sc = tilt.rig_scale()
+		_plate_mat.set_shader_parameter("ax", ax)
+		_plate_mat.set_shader_parameter("ay", ay)
+		_plate_mat.set_shader_parameter("rig_scale", sc)
+	var ang := 76.0 * doors
+	if _west_mat:
+		_west_mat.set_shader_parameter("angle_deg", ang)
+	if _east_mat:
+		_east_mat.set_shader_parameter("angle_deg", -ang)
 	if _glow:
 		_glow.color.a = doors * 0.35
 	if _sign and not freeze and not busy:

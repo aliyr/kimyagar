@@ -166,6 +166,7 @@ func _prepare_shot() -> void:
 			Game.add_classic_unit("chamomile")
 			Game.start_grinding()
 			Game.apply_grind_work(1.2)
+			_warm_workshop(0.85)
 		"stir":
 			phase = "workshop"
 			gate.visible = false
@@ -176,6 +177,7 @@ func _prepare_shot() -> void:
 			Game.brew = brew
 			workshop._spoon_angle = -0.2
 			workshop._stirring = true
+			_warm_workshop(1.6)
 		"bottle":
 			phase = "workshop"
 			gate.visible = false
@@ -185,6 +187,7 @@ func _prepare_shot() -> void:
 			Game.brew = b
 			Game.bottle_brew()
 			workshop.jump_pour("stream", 1.1)
+			_warm_workshop(0.4)
 		"result":
 			phase = "workshop"
 			gate.visible = false
@@ -218,6 +221,14 @@ func _prepare_shot() -> void:
 		Sfx.stop_ambience()
 		workshop._fire.set_level(0.7, true)
 		workshop._fire.warm()
+
+
+func _warm_workshop(seconds: float) -> void:
+	var steps := int(seconds * 60.0)
+	for _i in steps:
+		if not Game.is_paused():
+			Game.tick(1.0 / 60.0)
+		workshop.advance(1.0 / 60.0, tilt, true)
 
 
 func _capture_shot() -> void:

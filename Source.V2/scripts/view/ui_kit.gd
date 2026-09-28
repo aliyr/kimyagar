@@ -20,13 +20,14 @@ static func ensure() -> void:
 static func tex(rel: String) -> Texture2D:
 	if _cache.has(rel):
 		return _cache[rel]
-	var path := ProjectSettings.globalize_path("res://assets/art/" + rel)
-	var img := Image.load_from_file(path)
-	if img == null:
+	var path := "res://assets/art/" + rel
+	if not ResourceLoader.exists(path):
 		return null
-	var t := ImageTexture.create_from_image(img)
-	_cache[rel] = t
-	return t
+	var loaded: Texture2D = load(path) as Texture2D
+	if loaded == null:
+		return null
+	_cache[rel] = loaded
+	return loaded
 
 
 static func sprite(rel: String, rect: Rect2, fit: String = "contain") -> TextureRect:

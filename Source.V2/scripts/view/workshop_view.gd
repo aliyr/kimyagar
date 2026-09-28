@@ -54,6 +54,9 @@ var _dusk: ColorRect
 var _vignette: ColorRect
 var _ghost: TextureRect
 var _bg_rig: Control
+var _bg: TextureRect
+var _bg_mat: ShaderMaterial
+var _near: Control
 var _work: Control
 var _cabinet_strip: Control
 var _scroll := 0.0
@@ -61,6 +64,35 @@ var _gesture := {}
 var _last_customer := ""
 var _clock := 0.0
 var _fine_played := false
+var _pile: MortarPile
+var _mortar_parts: MortarParticles
+var _mortar_over: Control
+var _mortar_front: TextureRect
+var _held_chips: Array = []
+var _pending_lands: Array = []
+var _brush_t := -1.0
+var _shake_t := -1.0
+var _brush: Control
+var _brew: ClassicBrewSim
+var _brew_painter: ClassicBrewPainter
+var _fx: Control
+var _known := {}
+var _brew_acc := 0.0
+var _stir_delay := -1.0
+var _sparkled := false
+var _shadows: Control
+var _smoke: Control
+var _haze := 0.0
+var _flights: Array = []
+const _PUFFS: Array = [
+	{"dx": -60.0, "delay": 0.0, "dur": 6.2, "size": 260.0, "drift": -140.0},
+	{"dx": 40.0, "delay": 0.9, "dur": 6.8, "size": 300.0, "drift": 120.0},
+	{"dx": -20.0, "delay": 1.9, "dur": 5.9, "size": 240.0, "drift": -60.0},
+	{"dx": 90.0, "delay": 2.6, "dur": 7.1, "size": 320.0, "drift": 190.0},
+	{"dx": -110.0, "delay": 3.4, "dur": 6.4, "size": 280.0, "drift": -220.0},
+	{"dx": 15.0, "delay": 4.3, "dur": 6.9, "size": 340.0, "drift": 40.0},
+	{"dx": 65.0, "delay": 5.1, "dur": 6.1, "size": 250.0, "drift": 150.0},
+]
 
 
 func _ready() -> void:
@@ -69,6 +101,11 @@ func _ready() -> void:
 	UiKit.ensure()
 	_layout_geometry()
 	_fire = FireField.new()
+	_brew = ClassicBrewSim.new(7)
+	_brew_painter = ClassicBrewPainter.new()
+	_pile = MortarPile.new()
+	_pile.struck.connect(_on_mortar_strike)
+	_mortar_parts = _pile.make_particles()
 	_build()
 
 
@@ -95,18 +132,22 @@ func set_behind(on: bool) -> void:
 func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	_clock += dt
 	if _bg_rig:
-		var sc := 1.0
-		if live and tilt != null:
-			sc = tilt.rig_scale()
-		_bg_rig.scale = Vector2(sc, sc)
-		if live and tilt != null and tilt.mode != "off" and tilt.mode != "flat":
-			_bg_rig.rotation_degrees = float(tilt.px) * 2.2
-			if _work:
-				_work.position = Vector2(tilt.px, tilt.py) * 2.0
-		else:
-			_bg_rig.rotation_degrees = 0
-			if _work:
-				_work.position = Vector2.ZERO
+		var px := 0.0
+		var py := 0.0
+		var use := live and tilt != null and tilt.mode != "off"
+		if use:
+			px = tilt.px
+			py = tilt.py
+		if _work:
+			_work.position = Vector2(px, py) * 2.0
+		if _near:
+			_near.position = Vector2(px, py) * 12.0
+		if _bg_mat:
+			var dimensional := use and tilt.mode != "flat"
+			_bg_mat.set_shader_parameter("ax", deg_to_rad(-py * 2.0) if dimensional else 0.0)
+			_bg_mat.set_shader_parameter("ay", deg_to_rad(px * 2.2) if dimensional else 0.0)
+			_bg_mat.set_shader_parameter("rig_scale", tilt.rig_scale() if use else 1.0)
+			_bg_mat.set_shader_parameter("depth_offset", Vector2(px, py) * 18.0)
 	if not live:
 		if _dusk:
 			_dusk.visible = true
@@ -114,10 +155,11 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	if _dusk:
 		_dusk.visible = false
 	_tick_fire(dt)
+	_tick_mortar(dt)
+	_sync_brew(dt)
 	_tick_transfer(dt)
 	_tick_pour(dt)
 	_tick_discard(dt)
-	_tick_grind_audio(dt)
 	_tick_long_press()
 	_sync_customer()
 	_sync_note()
@@ -125,6 +167,10 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	_sync_liquid()
 	if _vignette:
 		_vignette.visible = Game.is_paused()
+	var burnt: bool = Game.overprocessed() and not bool(Game.brew["bottled"]) and discard_t < 0.0
+	var haze_target := 1.0 if burnt else 0.0
+	_haze = move_toward(_haze, haze_target, dt / 4.0)
+	_tick_flights(dt)
 	var heat := str(Game.brew["currentHeat"])
 	var level: float = float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat, 0.7))
 	var filled := not (Game.brew["entries"] as Array).is_empty()
@@ -144,13 +190,20 @@ func _build() -> void:
 	_bg_rig.pivot_offset = Vector2(960, 540)
 	_bg_rig.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_bg_rig)
-	_bg_rig.add_child(UiKit.sprite("background/shop_background.png", Rect2(0, 0, 1920, 1080), "fill"))
+	_bg = UiKit.sprite("background/shop_background.png", Rect2(0, 0, 1920, 1080), "fill")
+	_bg_mat = ShaderMaterial.new()
+	_bg_mat.shader = load("res://shaders/rig_perspective.gdshader")
+	_bg.material = _bg_mat
+	_bg_rig.add_child(_bg)
 
 	_work = Control.new()
 	_work.mouse_filter = MOUSE_FILTER_IGNORE
 	_work.set_anchors_preset(PRESET_FULL_RECT)
 	add_child(_work)
 	_work.add_child(UiKit.sprite("table/work_table.png", ZONE_TABLE, "contain"))
+	_shadows = _painter(_draw_shadows)
+	_shadows.set_anchors_preset(PRESET_FULL_RECT)
+	_work.add_child(_shadows)
 
 	_fire_rect = TextureRect.new()
 	_fire_rect.texture = _fire.texture
@@ -180,6 +233,10 @@ func _build() -> void:
 	_spoon.position = _mouth - _pot_base - Vector2(160, 160)
 	_spoon.size = Vector2(320, 320)
 	_pot_pivot.add_child(_spoon)
+
+	_fx = _painter(_draw_brew)
+	_fx.set_anchors_preset(PRESET_FULL_RECT)
+	_work.add_child(_fx)
 
 	var pot_hit := UiKit.hit(ZONE_CAULDRON)
 	pot_hit.gui_input.connect(_cauldron_input)
@@ -212,10 +269,11 @@ func _build() -> void:
 	paper_hit.pressed.connect(func() -> void: open_overlay.emit("process_history"))
 	_work.add_child(paper_hit)
 
-	var near := Control.new()
-	near.mouse_filter = MOUSE_FILTER_IGNORE
-	near.set_anchors_preset(PRESET_FULL_RECT)
-	add_child(near)
+	_near = Control.new()
+	_near.mouse_filter = MOUSE_FILTER_IGNORE
+	_near.set_anchors_preset(PRESET_FULL_RECT)
+	add_child(_near)
+	var near := _near
 	_customer = UiKit.sprite("customer/customer_woman_elder.png", ZONE_CUSTOMER, "contain")
 	near.add_child(_customer)
 	near.add_child(UiKit.sprite("customer/counter.png", ZONE_COUNTER, "contain"))
@@ -242,6 +300,11 @@ func _build() -> void:
 	_ghost.z_index = 8
 	add_child(_ghost)
 
+	_smoke = _painter(_draw_smoke)
+	_smoke.set_anchors_preset(PRESET_FULL_RECT)
+	_smoke.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(_smoke)
+
 	_dusk = ColorRect.new()
 	_dusk.color = Color(8.0 / 255.0, 5.0 / 255.0, 3.0 / 255.0, 0.86)
 	_dusk.set_anchors_preset(PRESET_FULL_RECT)
@@ -259,16 +322,26 @@ func _build() -> void:
 
 
 func _build_mortar() -> void:
-	_work.add_child(UiKit.sprite("mortar/v3/mortar_back.png", ZONE_MORTAR, "contain"))
+	var back := UiKit.sprite("mortar/v3/mortar_back.png", ZONE_MORTAR, "contain")
+	back.z_index = 0
+	_work.add_child(back)
 	_mortar_fx = _painter(_draw_pieces)
 	_mortar_fx.position = ZONE_MORTAR.position
 	_mortar_fx.size = ZONE_MORTAR.size
+	_mortar_fx.z_index = 3
 	_work.add_child(_mortar_fx)
-	_work.add_child(UiKit.sprite("mortar/v3/mortar_front.png", ZONE_MORTAR, "contain"))
+	_mortar_front = UiKit.sprite("mortar/v3/mortar_front.png", ZONE_MORTAR, "contain")
+	_mortar_front.z_index = 5
+	_work.add_child(_mortar_front)
 	_pestle = UiKit.sprite("mortar/v3/pestle_1.png", Rect2(), "contain")
-	_pestle.visible = false
+	_pestle.visible = true
 	_pestle.z_index = 2
 	_work.add_child(_pestle)
+	_mortar_over = _painter(_draw_mortar_fx)
+	_mortar_over.set_anchors_preset(PRESET_FULL_RECT)
+	_mortar_over.z_index = 6
+	_work.add_child(_mortar_over)
+	_build_brush()
 	_grind_label = UiKit.label("", Rect2(ZONE_MORTAR.position.x - 30, ZONE_MORTAR.position.y + ZONE_MORTAR.size.y + 4, ZONE_MORTAR.size.x + 60, 36), 22, Color("f3e6c4"), UiKit.bold)
 	_work.add_child(_grind_label)
 	var hit := UiKit.hit(ZONE_MORTAR.grow(20))
@@ -379,6 +452,9 @@ func _sync_note() -> void:
 func _sync_hint() -> void:
 	if _hint == null:
 		return
+	if _shake_t > 0.0:
+		_hint.text = "جا ندارد!"
+		return
 	if Game.overprocessed() and not Game.brew["bottled"]:
 		_hint.text = Content.UI["burntHint"]
 	if _grind_label:
@@ -405,6 +481,12 @@ func _sync_liquid() -> void:
 		_stream.queue_redraw()
 	if _mortar_fx:
 		_mortar_fx.queue_redraw()
+	if _mortar_over:
+		_mortar_over.queue_redraw()
+	if _shadows:
+		_shadows.queue_redraw()
+	if _smoke:
+		_smoke.queue_redraw()
 	_place_pestle()
 	if _bottle:
 		_bottle.visible = pour == "" and discard_t < 0.0
@@ -417,42 +499,259 @@ func _painter(fn: Callable) -> Control:
 	return n
 
 
-func _draw_liquid(c: Control) -> void:
-	var entries: Array = Game.brew["entries"]
-	if entries.is_empty() or Game.brew["bottled"] or discard_t >= 0.0:
-		return
-	var col := LiquidColor.mix(entries, str(Game.brew["currentHeat"]), _clock)
-	var pts := PackedVector2Array()
-	var center := _liquid.size * 0.5
-	for i in 40:
-		var a := TAU * float(i) / 40.0
-		pts.append(center + Vector2(cos(a), sin(a)) * center)
-	c.draw_colored_polygon(pts, col)
-	var boil: int = int({"low": 1, "medium": 3, "high": 6}.get(str(Game.brew["currentHeat"]), 2))
-	for i in boil:
-		var p := center + Vector2(sin(_clock * 3.0 + float(i)) * center.x * 0.45, cos(_clock * 4.0 + float(i) * 1.7) * center.y * 0.35)
-		c.draw_circle(p, 3.0 + float(i % 2), Color(1, 1, 1, 0.35))
+func _draw_shadows(c: Control) -> void:
+	_soft_ellipse(c, 415.0, 763.0, 110.0, 22.0, 0.6)
+	_soft_ellipse(c, 1212.5, 772.0, 62.5, 12.0, 0.5)
+	_soft_ellipse(c, 1364.0, 782.0, 74.8, 12.0, 0.4)
+	_soft_ellipse(c, 1664.6, 1076.0, 285.6, 26.0, 0.55)
 
 
-func _draw_spoon(c: Control) -> void:
+func _soft_ellipse(c: Control, cx: float, cy: float, rx: float, ry: float, strength: float) -> void:
+	var xf := Transform2D(Vector2(rx, 0), Vector2(0, ry), Vector2(cx, cy))
+	c.draw_set_transform_matrix(xf)
+	for i in 5:
+		var t := float(i) / 4.0
+		var rad := lerpf(0.42, 1.05, t)
+		var a := strength * lerpf(0.55, 0.0, t)
+		c.draw_circle(Vector2.ZERO, rad, Color(10.0 / 255.0, 6.0 / 255.0, 2.0 / 255.0, a))
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+func _draw_smoke(c: Control) -> void:
+	if _haze > 0.01:
+		c.draw_rect(Rect2(0, 0, 1920, 420), Color(64.0 / 255.0, 58.0 / 255.0, 56.0 / 255.0, 0.55 * _haze))
+		c.draw_circle(Vector2(860, 40), 520, Color(70.0 / 255.0, 64.0 / 255.0, 62.0 / 255.0, 0.28 * _haze))
+	if _haze < 0.05:
+		return
+	for puff in _PUFFS:
+		var dur := float(puff["dur"])
+		var local := fposmod(_clock - float(puff["delay"]), dur)
+		var u := local / dur
+		var alpha := 0.0
+		if u < 0.12:
+			alpha = lerpf(0.0, 0.85, u / 0.12)
+		elif u < 0.55:
+			alpha = lerpf(0.85, 0.6, (u - 0.12) / 0.43)
+		else:
+			alpha = lerpf(0.6, 0.0, (u - 0.55) / 0.45)
+		var scale := lerpf(0.25, 3.1, u * u)
+		var drift := float(puff["drift"]) * u
+		var rise := -760.0 * u
+		var sz := float(puff["size"]) * 0.22 * scale
+		var at := _mouth + Vector2(float(puff["dx"]) + drift, rise)
+		c.draw_circle(at, sz, Color(90.0 / 255.0, 84.0 / 255.0, 82.0 / 255.0, alpha * _haze))
+
+
+func _tick_flights(dt: float) -> void:
+	if not _flights.is_empty():
+		var keep: Array = []
+		for flight in _flights:
+			flight["t"] = float(flight["t"]) + dt
+			if float(flight["t"]) < 0.34:
+				keep.append(flight)
+		_flights = keep
+	if _pending_lands.is_empty():
+		return
+	var waiting: Array = []
+	for land in _pending_lands:
+		land["left"] = float(land["left"]) - dt
+		if float(land["left"]) > 0.0:
+			waiting.append(land)
+			continue
+		if Game.open_overlay != null or Game.result != null:
+			continue
+		var landed_id := str(land["id"])
+		Game.add_classic_unit(landed_id)
+		Game.start_grinding()
+		Sfx.jar_drop()
+		if _mortar_parts:
+			_mortar_parts.burst("land", Vector2.ZERO, {"color": str(land["color"])})
+	_pending_lands = waiting
+
+
+func _spawn_flight(ingredient_id: String, from: Vector2) -> void:
+	var kind := MortarPile.kind_for(ingredient_id)
+	var count := MortarPile.sprite_count(kind)
+	var target := ZONE_MORTAR.position + Vector2(0.5016, 0.3359) * ZONE_MORTAR.size
+	for i in 5:
+		_flights.append({
+			"t": -0.12 - float(i) * 0.022,
+			"from": from,
+			"to": target,
+			"kind": kind,
+			"sprite": 1 + (i % maxi(1, count)),
+			"sx": randf_range(-18.0, 36.0),
+			"sy": randf_range(-10.0, 14.0),
+			"spin": randf_range(-2.4, 2.4),
+		})
+
+
+func _draw_liquid(_c: Control) -> void:
+	pass
+
+
+func _draw_spoon(_c: Control) -> void:
+	pass
+
+
+func _draw_brew(c: Control) -> void:
+	if _brew == null or _brew_painter == null:
+		return
+	if not _brew.pot_visible():
+		return
+	if discard_t >= 0.0:
+		return
+	if bool(Game.brew["bottled"]) and pour == "":
+		return
+	_brew_painter.draw(c, _brew, _mouth, _mouth_r.x, _mouth_r.y)
+
+
+func _sync_brew(dt: float) -> void:
+	if _brew == null or not live_brew():
+		return
+	var bottled: bool = bool(Game.brew["bottled"])
+	var heat_name := str(Game.brew.get("currentHeat", "medium"))
+	var level := 0.0 if bottled else float({"low": 0.4, "medium": 0.75, "high": 1.0}.get(heat_name, 0.75))
+	_brew.set_heat_level(level)
+	_brew.set_burnt(Game.overprocessed() and not bottled)
+	var ready: bool = Game.all_ready()
+	if ready and not _sparkled and not bottled:
+		_sparkled = true
+		Sfx.sparkle()
+	if not ready:
+		_sparkled = false
+	_brew.set_done(ready and not bottled)
+	var tuning: Dictionary = Game.defs["tuning"]
+	var ready_at := float(tuning.get("ready", 1.0))
 	var entries: Array = Game.brew["entries"]
-	var show: bool = (not entries.is_empty() and not Game.brew["bottled"] and pour == "") or transfer_t >= 0.0
-	if transfer_t >= 0.0:
-		return
-	if not show:
-		return
-	var ang := _spoon_angle
-	if not _stirring:
-		ang = -0.6 + sin(_clock * 0.7) * 0.08
-	var origin := _spoon.size * 0.5
-	var bowl := origin + Vector2(cos(ang), sin(ang)) * _mouth_r.x * 0.55
-	var handle := bowl + Vector2(cos(ang - 1.2), sin(ang - 1.2)) * 90.0
-	c.draw_line(bowl, handle, Color("b8862f"), 8.0)
-	c.draw_circle(bowl, 16.0, Color("d4a24a"))
-	c.draw_circle(bowl, 9.0, Color("8a5a1e"))
+	var per := {}
+	for entry in entries:
+		var p := clampf(float(entry["exposure"]) / maxf(0.001, ready_at), 0.0, 1.0)
+		var id := str(entry["ingredientId"])
+		if per.has(id):
+			per[id] = minf(float(per[id]), p)
+		else:
+			per[id] = p
+	for id in per.keys():
+		_brew.set_ingredient_progress(str(id), float(per[id]))
+	_brew.set_pour_tilt(11.0 if pour == "tilt" or pour == "stream" else 0.0)
+	if entries.is_empty():
+		if not _known.is_empty():
+			_brew.reset()
+			_brew.set_heat_level(level)
+			_known = {}
+	else:
+		var fresh: Array = []
+		for entry in entries:
+			var eid := str(entry["id"])
+			if not _known.has(eid):
+				fresh.append(entry)
+				_known[eid] = true
+		for entry in fresh:
+			var ing_id := str(entry["ingredientId"])
+			var tint := _ingredient_color(ing_id)
+			var poured: Array = _take_poured(ing_id)
+			if poured.is_empty() and _pile != null:
+				poured = _pile.bake_chips_for(ing_id, float(entry["quantity"]), _entry_work(entry), "#" + tint.to_html(false))
+			if poured.is_empty():
+				poured = _fallback_chips(ing_id, float(entry["quantity"]), _entry_work(entry), tint)
+			_brew.drop_chips({
+				"id": ing_id,
+				"tint": tint,
+				"strength": ClassicBrewSim.strength_for(ing_id),
+				"quantity": float(entry["quantity"]),
+			}, poured)
+		if not fresh.is_empty():
+			_stir_delay = 0.9 + float(fresh.size() - 1) * 0.35
+	if _stir_delay >= 0.0:
+		_stir_delay -= dt
+		if _stir_delay < 0.0:
+			_brew.stir()
+			Game.stir()
+	if _stirring:
+		_brew.set_spoon_follow(_spoon_angle)
+	elif not _gesture.is_empty() and not bool(_gesture.get("moved", false)):
+		pass
+	else:
+		_brew.set_spoon_follow(null)
+	_brew.set_fire_glow(_fire.intensity if _fire != null else 0.0)
+	_brew_acc += dt
+	var steps := 0
+	while _brew_acc >= 1.0 / 60.0 and steps < 5:
+		_brew.update(1.0 / 60.0)
+		_brew_acc -= 1.0 / 60.0
+		steps += 1
+		var impact: float = _brew.take_landing()
+		if impact > 0.0:
+			Sfx.cauldron_land(clampf(impact / 2200.0, 0.15, 1.0))
+		if _brew.take_fill_start():
+			Sfx.water_fill(0.95)
+	if pour == "" and _pot_pivot and discard_t < 0.0:
+		var sq: Vector2 = _brew.squash()
+		_pot_pivot.position = _pot_base + Vector2(0, _brew.spawn_y)
+		_pot_pivot.rotation_degrees = _brew.tilt + _brew.rock
+		_pot_pivot.scale = sq
+	if _body:
+		_body.modulate = Color(1, 1, 1, 1).lerp(Color(0.35, 0.3, 0.28), _brew.soot)
+		_body.visible = _brew.pot_visible()
+
+
+func live_brew() -> bool:
+	return true
+
+
+func _ingredient_color(id: String) -> Color:
+	for ing in Game.defs["ingredients"]:
+		if str(ing["id"]) == id:
+			return Color(str(ing["color"]))
+	return Color(ClassicBrewSim.flat_tint(id))
+
+
+func _entry_work(entry: Dictionary) -> float:
+	var state := str(entry.get("grindState", "whole"))
+	var unit := float({"whole": 0.0, "coarse": 1.0, "crushed": 2.2, "fine": 3.6}.get(state, 0.0))
+	return unit * float(entry["quantity"])
+
+
+func _fallback_chips(id: String, qty: float, work: float, color: Color) -> Array:
+	var kind := _kind(id)
+	var norm := work / maxf(qty, 0.001)
+	var t := clampf(norm / 3.6, 0.0, 1.0)
+	var n := clampi(int(round(qty * lerpf(4.0, 7.0, t))), 1, 10)
+	var rng := KimRng.new(KimRng.seed_for_customer(id, int(qty)))
+	var out: Array = []
+	for i in n:
+		var w := lerpf(18.0, 7.0, t) * rng.range(0.8, 1.2)
+		var h := w * rng.range(0.55, 1.35)
+		out.append({
+			"w": w, "h": h, "kind": kind,
+			"sprite": 1 + int(rng.next() * 7.0) % 7,
+			"color": color, "crush": t,
+			"generation": 0 if t < 0.75 else 1,
+			"nick": rng.next(), "rot": rng.range(0.0, 360.0),
+			"ingredient_id": id,
+		})
+	return out
 
 
 func _draw_stream(c: Control) -> void:
+	for flight in _flights:
+		var ft := float(flight["t"])
+		if ft < 0.0:
+			continue
+		var u := clampf(ft / 0.3, 0.0, 1.0)
+		var from: Vector2 = flight["from"]
+		var to: Vector2 = flight["to"]
+		var spread := Vector2(float(flight["sx"]), float(flight["sy"])) * (1.0 - u)
+		var arc := Vector2(0, -70.0 * sin(u * PI))
+		var at := from.lerp(to, u * u * (3.0 - 2.0 * u)) + spread + arc
+		var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(flight["kind"]), int(flight["sprite"])])
+		if tex == null:
+			continue
+		var px := lerpf(40.0, 28.0, u)
+		c.draw_set_transform(at, float(flight["spin"]) * ft, Vector2.ONE)
+		c.draw_texture_rect(tex, Rect2(-px * 0.5, -px * 0.5, px, px), false)
+		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if pour != "stream":
 		return
 	var col := LiquidColor.mix(Game.brew["entries"], str(Game.brew["currentHeat"]), _clock)
@@ -462,35 +761,42 @@ func _draw_stream(c: Control) -> void:
 
 
 func _draw_pieces(c: Control) -> void:
-	var mortar = Game.mortar
-	if mortar == null:
+	if _pile == null:
 		return
-	var portions: Array = mortar["portions"] if mortar.get("portions") != null else [{
-		"ingredientId": mortar["ingredientId"],
-		"quantity": mortar["quantity"],
-		"grindWork": float(mortar["grindWork"]) * float(mortar["quantity"]),
-	}]
-	var zone := ZONE_MORTAR.size
-	var floor := Vector2(0.5016, 0.3609) * zone
-	var rng := KimRng.new(KimRng.seed_for_customer(str(portions[0]["ingredientId"]), int(portions.size())))
-	var n := 0
-	for portion in portions:
-		var kind := _kind(str(portion["ingredientId"]))
-		var work := float(portion["grindWork"]) / maxf(0.001, float(portion["quantity"]))
-		var t := clampf(work / 3.6, 0.0, 1.0)
-		var count := int(round(float(portion["quantity"]) * lerpf(3.0, 7.0, t)))
-		var size_px := lerpf(36.0, 14.0, t)
-		for i in count:
-			var ang := rng.next() * TAU
-			var rad := sqrt(rng.next()) * zone.x * 0.22
-			var at := floor + Vector2(cos(ang) * rad, sin(ang) * rad * 0.35)
-			var frame := 1 + int(rng.next() * 7.0) % 7
-			var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [kind, frame])
-			if tex == null:
-				continue
-			var r := Rect2(at - Vector2(size_px, size_px) * 0.5, Vector2(size_px, size_px))
-			c.draw_texture_rect(tex, r, false)
-			n += 1
+	var aim: Dictionary = _pile.pestle()
+	var shown: Array = _pile.chips()
+	if _mortar_parts:
+		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue())
+	var box: Dictionary = _pile.bowl()
+	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * ZONE_MORTAR.size
+	var bw := float(box["width"]) / 100.0 * ZONE_MORTAR.size.x
+	var bh := float(box["height"]) / 100.0 * ZONE_MORTAR.size.y
+	for chip in shown:
+		var k := float(chip["draw_k"])
+		var w := float(chip["w"]) / 100.0 * bw * k
+		var h := float(chip["h"]) / 100.0 * bh * k
+		var hop := float(chip["hop"])
+		var center := origin + Vector2(float(chip["x"]) / 100.0 * bw, float(chip["y"]) / 100.0 * bh)
+		center.y -= hop * 9.0
+		var sc := 1.0 + hop * 0.08
+		if str(chip["kind"]) == "dust":
+			var col: Color = chip["color"]
+			c.draw_circle(center, maxf(w, h) * 0.5 * sc, Color(col.r, col.g, col.b, 0.9))
+			continue
+		var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(chip["kind"]), int(chip["sprite"])])
+		if tex == null:
+			continue
+		c.draw_set_transform(center, deg_to_rad(float(chip["rot"])), Vector2(sc, sc))
+		c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
+		var tint: Color = chip["color"]
+		c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint.r, tint.g, tint.b, 0.22), true)
+		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_mortar_fx(c: Control) -> void:
+	if _mortar_parts == null:
+		return
+	_mortar_parts.draw(c, Vector2.ZERO, ZONE_MORTAR.size)
 
 
 func _kind(id: String) -> String:
@@ -510,23 +816,22 @@ func _kind(id: String) -> String:
 
 
 func _place_pestle() -> void:
-	if _pestle == null:
+	if _pestle == null or _pile == null:
 		return
-	var grinding := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0
-	_pestle.visible = grinding or (Game.mortar != null and transfer_t < 0.0)
-	if not _pestle.visible:
-		return
-	var frame := 1
-	if grinding:
-		frame = 1 + int(_clock * 8.0) % 6
-	_pestle.texture = UiKit.tex("mortar/v3/pestle_%d.png" % frame)
-	var pw := ZONE_MORTAR.size.x * 1.25
-	var ph := pw * (1088.0 / 1360.0)
-	var head := ZONE_MORTAR.position + Vector2(0.5016, 0.34) * ZONE_MORTAR.size
-	if grinding:
-		head += Vector2(cos(_clock * 9.0), sin(_clock * 9.0) * 0.35) * 10.0
-	_pestle.position = head - Vector2(0.42 * pw, 0.74 * ph)
-	_pestle.size = Vector2(pw, ph)
+	var aim: Dictionary = _pile.pestle()
+	var box := Vector2(MortarPile.PESTLE_W, MortarPile.PESTLE_H) / 100.0 * ZONE_MORTAR.size
+	var anchor := Vector2(MortarPile.PESTLE_HEAD_X, MortarPile.PESTLE_HEAD_Y)
+	var head := ZONE_MORTAR.position + Vector2(float(aim["head_x"]), float(aim["head_y"])) / 100.0 * ZONE_MORTAR.size
+	_pestle.visible = transfer_t < 0.0
+	_pestle.texture = UiKit.tex("mortar/v3/pestle_%d.png" % int(aim["frame"]))
+	_pestle.size = box
+	_pestle.pivot_offset = anchor * box
+	_pestle.position = head - anchor * box
+	_pestle.rotation_degrees = float(aim["rotate"])
+	_pestle.z_index = 4 if _pile.pestle_in_front(aim) else 2
+	if _brush:
+		var show := (Game.mortar != null or not _pile.residue().is_empty()) and transfer_t < 0.0
+		_brush.visible = show
 
 
 func _tick_long_press() -> void:
@@ -588,6 +893,8 @@ func _try_bottle() -> void:
 	if (Game.brew["entries"] as Array).is_empty() or Game.overprocessed() or Game.brew["bottled"]:
 		return
 	Game.bottle_brew()
+	if _brew:
+		_brew.dismiss_spoon()
 	pour = "tilt"
 	pour_t = 0.0
 	Haptics.pulse("medium")
@@ -677,6 +984,8 @@ func _tick_transfer(dt: float) -> void:
 	var drop_at := 0.32 + 1.6 + 0.7 + 0.88 * 0.46
 	if not _transfer_dropped and transfer_t >= drop_at:
 		_transfer_dropped = true
+		if _pile:
+			_held_chips = _pile.scoop_rest()
 		Game.add_mortar_to_cauldron()
 		Sfx.splash()
 		Haptics.pulse("medium")
@@ -684,19 +993,146 @@ func _tick_transfer(dt: float) -> void:
 		transfer_t = -1.0
 
 
-func _tick_grind_audio(dt: float) -> void:
-	if Game.mortar == null or not bool(Game.mortar.get("grinding", false)) or Game.is_paused():
-		_fine_played = false
+func _tick_mortar(dt: float) -> void:
+	if _shake_t > 0.0:
+		_shake_t -= dt
+	if _brush_t >= 0.0:
+		_brush_t += dt
+		if _brush_t >= 0.22 and Game.mortar != null:
+			Game.clear_mortar()
+		if _brush_t >= 0.48:
+			if _pile:
+				_pile.clear_residue()
+			_brush_t = -1.0
+	if _pile == null:
 		return
-	_grind_sfx += dt
-	if _grind_sfx >= 0.28:
-		_grind_sfx = 0.0
-		Sfx.grind_tick()
-		Haptics.pulse("light")
-	var state = Game.mortar.get("grindState")
-	if state == "fine" and not _fine_played:
-		_fine_played = true
-		Sfx.grind_fine()
+	var grinding := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0 and not Game.is_paused()
+	if Game.mortar == null:
+		_pile.sync({})
+		_fine_played = false
+	else:
+		var state: Dictionary = Game.mortar
+		_pile.sync(state)
+	_pile.update(dt, grinding)
+	if _mortar_parts:
+		var aroma := 0.0
+		var aroma_col := Color("#8a7a52")
+		if Game.mortar != null and transfer_t < 0.0:
+			aroma = _mortar_norm() * (1.0 if grinding else 0.55)
+			aroma_col = _mortar_mix_color()
+		_mortar_parts.set_aroma(aroma, aroma_col)
+		_mortar_parts.update(dt)
+	if Game.mortar != null:
+		var gstate = Game.mortar.get("grindState")
+		if gstate == "fine" and not _fine_played:
+			_fine_played = true
+			Sfx.grind_fine()
+			Haptics.pulse("medium")
+			if _mortar_parts:
+				_mortar_parts.burst("fine", Vector2.ZERO, {"color": _mortar_mix_color()})
+		elif gstate != "fine":
+			_fine_played = false
+
+
+func _on_mortar_strike(info: Dictionary) -> void:
+	Sfx.grind_strike(float(info["fineness"]), int(info["hits"]))
+	Haptics.pulse("light" if float(info["fineness"]) > 0.66 else "medium")
+	if _mortar_parts:
+		_mortar_parts.burst("strike", Vector2(float(info["x"]), float(info["y"])), {
+			"fineness": float(info["fineness"]),
+			"hits": int(info["hits"]),
+			"colors": info["colors"],
+		})
+
+
+func _mortar_norm() -> float:
+	if Game.mortar == null:
+		return 0.0
+	var work := 0.0
+	if Game.mortar.get("portions") != null:
+		for portion in Game.mortar["portions"]:
+			work = maxf(work, float(portion["grindWork"]) / maxf(0.001, float(portion["quantity"])))
+	else:
+		work = float(Game.mortar.get("grindWork", 0.0))
+	return clampf(work / 3.6, 0.0, 1.0)
+
+
+func _mortar_mix_color() -> Color:
+	if Game.mortar == null:
+		return Color("#8a7a52")
+	if Game.mortar.get("portions") != null:
+		for portion in Game.mortar["portions"]:
+			return _ingredient_color(str(portion["ingredientId"]))
+	return _ingredient_color(str(Game.mortar.get("ingredientId", "")))
+
+
+func _take_poured(id: String) -> Array:
+	var mine: Array = []
+	var rest: Array = []
+	for chip in _held_chips:
+		if str(chip.get("ingredient_id", "")) == id:
+			mine.append(chip)
+		else:
+			rest.append(chip)
+	if mine.is_empty():
+		var kept: Array = []
+		for chip in rest:
+			if str(chip.get("ingredient_id", "")) == "":
+				mine.append(chip)
+			else:
+				kept.append(chip)
+		rest = kept
+	_held_chips = rest
+	return mine
+
+
+func _build_brush() -> void:
+	var rect := Rect2(
+		ZONE_MORTAR.position.x + ZONE_MORTAR.size.x * 1.03,
+		ZONE_MORTAR.position.y + ZONE_MORTAR.size.y * 0.5,
+		ZONE_MORTAR.size.x * 0.19,
+		ZONE_MORTAR.size.y * 0.38
+	)
+	_brush = Control.new()
+	_brush.position = rect.position
+	_brush.size = rect.size
+	_brush.z_index = 7
+	_brush.visible = false
+	_brush.mouse_filter = MOUSE_FILTER_IGNORE
+	_work.add_child(_brush)
+	var handle := ColorRect.new()
+	handle.position = Vector2(rect.size.x * 0.38, 0)
+	handle.size = Vector2(rect.size.x * 0.24, rect.size.y * 0.62)
+	handle.color = Color("6b3e22")
+	handle.mouse_filter = MOUSE_FILTER_IGNORE
+	_brush.add_child(handle)
+	var ferrule := ColorRect.new()
+	ferrule.position = Vector2(rect.size.x * 0.32, rect.size.y * 0.58)
+	ferrule.size = Vector2(rect.size.x * 0.36, rect.size.y * 0.08)
+	ferrule.color = Color("c4913b")
+	ferrule.mouse_filter = MOUSE_FILTER_IGNORE
+	_brush.add_child(ferrule)
+	var bristles := ColorRect.new()
+	bristles.position = Vector2(rect.size.x * 0.22, rect.size.y * 0.66)
+	bristles.size = Vector2(rect.size.x * 0.56, rect.size.y * 0.3)
+	bristles.color = Color("d7c39a")
+	bristles.mouse_filter = MOUSE_FILTER_IGNORE
+	_brush.add_child(bristles)
+	var hit := UiKit.hit(Rect2(Vector2.ZERO, rect.size))
+	hit.pressed.connect(_on_brush)
+	_brush.add_child(hit)
+
+
+func _on_brush() -> void:
+	if _brush_t >= 0.0 or transfer_t >= 0.0:
+		return
+	if Game.mortar == null and (_pile == null or _pile.residue().is_empty()):
+		return
+	_brush_t = 0.0
+	Sfx.brush_sweep()
+	Haptics.pulse("light")
+	if _mortar_parts:
+		_mortar_parts.brush(460.0)
 
 
 func _cabinet_input(ev: InputEvent) -> void:
@@ -726,7 +1162,14 @@ func _max_scroll() -> float:
 func _tap_jar(local: Vector2) -> void:
 	if Game.mortar_total_units() >= 6.0:
 		Sfx.wood_bump()
+		Sfx.spill()
 		Haptics.pulse("medium")
+		_shake_t = 0.42
+		if _mortar_parts and _pile:
+			var colors: Array = []
+			for chip in _pile.chips():
+				colors.append(chip["color"])
+			_mortar_parts.burst("spill", Vector2.ZERO, {"colors": colors})
 		return
 	var y := local.y - _scroll
 	var index := int(floor(y / SLOT_H))
@@ -737,9 +1180,13 @@ func _tap_jar(local: Vector2) -> void:
 		Game.open_overlay_action("ingredient_detail", ings[index]["id"])
 		return
 	var id := str(ings[index]["id"])
-	Game.add_classic_unit(id)
-	Game.start_grinding()
-	Sfx.jar_drop()
+	var from := ZONE_CABINET.position + Vector2(43.0 + 64.0, INNER.position.y + _scroll + float(index) * SLOT_H + 76.0)
+	_spawn_flight(id, from)
+	_pending_lands.append({
+		"id": id,
+		"color": str(ings[index]["color"]),
+		"left": 0.12 + 0.3 + 4.0 * 0.022,
+	})
 	Haptics.pulse("light")
 
 
@@ -755,6 +1202,9 @@ func begin_discard() -> void:
 	Sfx.cauldron_throw()
 	Haptics.pulse("heavy")
 	Game.reset_brew()
+	if _brew:
+		_brew.hide_pot()
+		_brew.reset()
 	pour = ""
 	transfer_t = -1.0
 	discard_t = 0.0
@@ -785,6 +1235,8 @@ func _tick_discard(dt: float) -> void:
 		_ghost.visible = false
 		discard_t = -1.0
 		_stain = false
+		if _brew:
+			_brew.respawn(0.35)
 
 
 func jump_pour(phase_name: String, t: float) -> void:
