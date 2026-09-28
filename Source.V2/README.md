@@ -27,6 +27,8 @@ godot --headless --path Source.V2 --quit-after 2
 
 Sprite rectangles are the web logical boxes (`SCENE_ZONES`, `layout.ts`, `intro.css`, `scene.css`), not the PNG pixel size. `UiKit.sprite` sets `EXPAND_IGNORE_SIZE` before assigning the texture, then sets that layout size again. Full-screen layers use top-left anchors and an explicit 1920×1080. Stretched anchors (left ≠ right) were discarding a size set in `_ready` — the "non-equal opposite anchors" warning — so the gate plate collapsed and the workshop drew through it.
 
+The idle gate is that rig drawn once, scaled 1.06 from the stage centre and clipped to 1920×1080. The SubViewport plate exists only while the rig is rotating, and those items are on a visibility layer the root viewport does not draw, so the live texture and the plate cannot both show. Facade colour is the CSS dusk/dawn/night grade; the hue-rotate rows are multiplied as rows because Godot's `mat3()` is column-major. Pass `-- --workshop` with the write-movie command to record the classic workshop instead of the gate.
+
 A real run does not use `--shot` and does not need a warm `.godot/` cache. Delete `.godot/` if you want the same import a fresh checkout gets, then:
 
 ```bash

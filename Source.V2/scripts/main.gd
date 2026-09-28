@@ -11,6 +11,7 @@ var _gear: Button
 var _back: Button
 var _shot := ""
 var _shot_out := ""
+var _start_workshop := false
 var _shot_frames := 0
 var _shot_done := false
 var _keys := ""
@@ -48,6 +49,8 @@ func _ready() -> void:
 		_prepare_shot()
 	else:
 		Sfx.start_ambience()
+		if _start_workshop:
+			_open_workshop_now()
 	_booted = true
 	print("viewport ", get_viewport().get_visible_rect().size, " window ", DisplayServer.window_get_size())
 
@@ -64,6 +67,8 @@ func _parse_args() -> void:
 			_shot_out = arg.substr("--out=".length())
 		elif arg.begins_with("--hour="):
 			Settings.hour_override = int(arg.substr("--hour=".length()))
+		elif arg == "--workshop":
+			_start_workshop = true
 
 
 func _build_chrome() -> void:
@@ -106,6 +111,15 @@ func _process(dt: float) -> void:
 	overlays.advance(dt)
 	debug.refresh("phase %s tilt %s" % [phase, tilt.describe()])
 	_capture_shot()
+
+
+func _open_workshop_now() -> void:
+	Settings.mark_intro_seen()
+	phase = "workshop"
+	gate.visible = false
+	workshop.set_behind(false)
+	Sfx.stop_ambience()
+	Sfx.set_fire(0.7)
 
 
 func _on_entered() -> void:

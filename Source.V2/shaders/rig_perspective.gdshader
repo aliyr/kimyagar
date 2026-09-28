@@ -45,5 +45,12 @@ void fragment() {
 	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
 		discard;
 	}
-	COLOR = texture(TEXTURE, uv) * tint;
+	vec4 tex = texture(TEXTURE, uv);
+	// ANGLE's ViewportTexture is premultiplied. Blending it as straight alpha
+	// lets the workshop show through pixels the facade painted solid.
+	if (tex.a > 0.001) {
+		tex.rgb /= tex.a;
+	}
+	tex.a = tex.a >= 0.5 ? 1.0 : 0.0;
+	COLOR = vec4(tex.rgb, tex.a) * tint;
 }

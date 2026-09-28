@@ -22,15 +22,15 @@ vec3 _sepia(vec3 c) {
 }
 
 vec3 _hue(vec3 c, float deg) {
+	// CSS/SVG hue-rotate rows. mat3() in Godot is column-major, so feeding it
+	// these rows transposed the twist and pushed the dusk bricks toward green.
 	float a = radians(deg);
 	float si = sin(a);
 	float co = cos(a);
-	mat3 m = mat3(
-		vec3(0.213 + co * 0.787 - si * 0.213, 0.715 - co * 0.715 - si * 0.715, 0.072 - co * 0.072 + si * 0.928),
-		vec3(0.213 - co * 0.213 + si * 0.143, 0.715 + co * 0.285 + si * 0.140, 0.072 - co * 0.072 - si * 0.283),
-		vec3(0.213 - co * 0.213 - si * 0.787, 0.715 - co * 0.715 + si * 0.715, 0.072 + co * 0.928 + si * 0.072)
-	);
-	return clamp(m * c, vec3(0.0), vec3(1.0));
+	float r0 = (0.213 + co * 0.787 - si * 0.213) * c.r + (0.715 - co * 0.715 - si * 0.715) * c.g + (0.072 - co * 0.072 + si * 0.928) * c.b;
+	float r1 = (0.213 - co * 0.213 + si * 0.143) * c.r + (0.715 + co * 0.285 + si * 0.140) * c.g + (0.072 - co * 0.072 - si * 0.283) * c.b;
+	float r2 = (0.213 - co * 0.213 - si * 0.787) * c.r + (0.715 - co * 0.715 + si * 0.715) * c.g + (0.072 + co * 0.928 + si * 0.072) * c.b;
+	return clamp(vec3(r0, r1, r2), vec3(0.0), vec3(1.0));
 }
 
 void fragment() {

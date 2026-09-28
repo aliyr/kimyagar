@@ -30,6 +30,7 @@ var _front_layer: Control
 var _vp: SubViewport
 var _plate: TextureRect
 var _plate_mat: ShaderMaterial
+var _plate_live := false
 var _facade: TextureRect
 var _facade_mat: ShaderMaterial
 var _west: TextureRect
@@ -58,6 +59,9 @@ var _dust_fx: Control
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_STOP
+	# The 1.06 rest scale hangs past the stage; clip it here so the pin and
+	# the panels still receive the enter zoom from this control.
+	clip_contents = true
 	UiKit.fill(self)
 	UiKit.ensure()
 	var hour = Settings.hour_override
@@ -72,6 +76,11 @@ func _ready() -> void:
 		phase = "boot"
 		boot_left = 2.6
 	_build()
+	# Layer 2 is reserved for the flattened rig. Drop it from the root now,
+	# before the first draw, so a tilted first frame cannot leak.
+	var root_vp := get_viewport()
+	if root_vp:
+		root_vp.canvas_cull_mask = root_vp.canvas_cull_mask & ~2
 	# Size set on stretched anchors is thrown away after _ready. Relock once
 	# that pass has finished so the plate stays the logical stage.
 	call_deferred("_relock_stage")
@@ -123,6 +132,10 @@ func _relock_stage() -> void:
 	if _plate:
 		_plate.custom_minimum_size = Vector2.ZERO
 		UiKit.fill(_plate)
+	# Keep the flattened rig (visibility layer 2) out of the root framebuffer.
+	var root_vp := get_viewport()
+	if root_vp:
+		root_vp.canvas_cull_mask = root_vp.canvas_cull_mask & ~2
 
 
 func _build() -> void:
@@ -285,26 +298,62 @@ func _door_mat(hinge: float, origin: Vector2) -> ShaderMaterial:
 
 
 func _wrap_rig() -> void:
-	remove_child(_rig)
+	# The rig stays in this control while it is only scaled. A SubViewport
+	# whose texture is also drawn on a plate shows up twice on ANGLE: once as
+	# the viewport's own canvas and once as the plate, a few pixels apart.
+	_rig.pivot_offset = Vector2(960, 540)
+	_rig.scale = Vector2(1.06, 1.06)
 	_vp = SubViewport.new()
 	_vp.size = Vector2i(1920, 1080)
 	_vp.transparent_bg = true
 	_vp.disable_3d = true
 	_vp.handle_input_locally = false
-	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	# Layer 2 is the rig only while it is being flattened. The root viewport
+	# never draws that layer, so the live texture cannot also leak behind the plate.
+	_vp.canvas_cull_mask = 2
 	add_child(_vp)
-	_vp.add_child(_rig)
 	_plate = TextureRect.new()
 	_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_plate.stretch_mode = TextureRect.STRETCH_SCALE
 	_plate.mouse_filter = MOUSE_FILTER_IGNORE
 	_plate.texture = _vp.get_texture()
 	_plate.custom_minimum_size = Vector2.ZERO
+	_plate.visible = false
+	_plate.modulate = Color.WHITE
 	UiKit.fill(_plate)
 	_plate_mat = ShaderMaterial.new()
 	_plate_mat.shader = load("res://shaders/rig_perspective.gdshader")
-	_plate.material = _plate_mat
 	add_child(_plate)
+
+
+func _set_vis_layer(n: Node, layer: int) -> void:
+	if n is CanvasItem:
+		(n as CanvasItem).visibility_layer = layer
+	for child in n.get_children():
+		_set_vis_layer(child, layer)
+
+
+func _use_plate(on: bool) -> void:
+	if on == _plate_live:
+		return
+	_plate_live = on
+	if on:
+		_set_vis_layer(_rig, 2)
+		if _rig.get_parent() != _vp:
+			_rig.reparent(_vp)
+		_rig.scale = Vector2.ONE
+		_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		_plate.visible = true
+		_plate.material = _plate_mat
+	else:
+		_plate.visible = false
+		_plate.material = null
+		_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_set_vis_layer(_rig, 1)
+		if _rig.get_parent() != self:
+			_rig.reparent(self)
+			move_child(_rig, 0)
 
 
 func _add_window_glow(x: float) -> void:
@@ -727,17 +776,19 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 		var sc := 1.0
 		if tilt != null and not busy and tilt.mode != "off":
 			sc = tilt.rig_scale()
-		# Rest pose is a plain scaled texture. The perspective shader only
-		# runs once the rig actually rotates, so a shader miss on ANGLE
-		# cannot hide the idle facade.
+		# One facade at a time. Rest is the rig itself, scaled from the stage
+		# centre and clipped to 1920×1080. The plate is only the rotated pose,
+		# and the rig is not in the root tree while that texture is showing.
 		var resting := absf(ax) < 0.0001 and absf(ay) < 0.0001
 		_plate.pivot_offset = Vector2(960, 540)
+		_plate.scale = Vector2.ONE
+		_rig.pivot_offset = Vector2(960, 540)
 		if resting:
-			_plate.material = null
-			_plate.scale = Vector2(sc, sc)
+			_use_plate(false)
+			_rig.scale = Vector2(sc, sc)
 		else:
-			_plate.material = _plate_mat
-			_plate.scale = Vector2.ONE
+			_use_plate(true)
+			_rig.scale = Vector2.ONE
 			_plate_mat.set_shader_parameter("ax", ax)
 			_plate_mat.set_shader_parameter("ay", ay)
 			_plate_mat.set_shader_parameter("rig_scale", sc)
