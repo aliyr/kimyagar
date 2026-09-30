@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cgpi6hode2sxi"
-path="res://.godot/imported/bottle_empty.png-4b924dce895df5d824ad91c39565d943.ctex"
+uid="uid://dja2phhe704ln"
+path="res://.godot/imported/glass_open.webp-22bc874ed8bf1c8991d9f1565ef00edb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/bottles/bottle_empty.png"
-dest_files=["res://.godot/imported/bottle_empty.png-4b924dce895df5d824ad91c39565d943.ctex"]
+source_file="res://assets/art/bottles/glass_open.webp"
+dest_files=["res://.godot/imported/glass_open.webp-22bc874ed8bf1c8991d9f1565ef00edb.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

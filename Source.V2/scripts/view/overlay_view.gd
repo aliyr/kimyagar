@@ -238,6 +238,7 @@ func _notebook(panel: ColorRect) -> void:
 			line += "  " + Content.UI["unknownMark"]
 		add_child(UiKit.label(line, Rect2(panel.position.x + 48, y, 500, 56), 20, Color("2b1d12"), ink, HORIZONTAL_ALIGNMENT_RIGHT))
 		y += 58
+	_place_seal(panel, true)
 
 
 func _history(panel: ColorRect) -> void:

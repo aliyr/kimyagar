@@ -12,6 +12,8 @@ const ZONE_CABINET := Rect2(10, 100, 270, 950)
 const ZONE_CAULDRON := Rect2(647, 490, 400, 280)
 const ZONE_MORTAR := Rect2(290, 506, 250, 273)
 const ZONE_BOTTLE := Rect2(1150, 560, 125, 220)
+const GLASS_OPEN := "bottles/glass_open.webp"
+const GLASS_CORK := "bottles/glass_cork.webp"
 const ZONE_COUNTER := Rect2(1430, 603, 510, 485)
 const ZONE_CUSTOMER := Rect2(1510, 248, 350, 512)
 const ZONE_NOTE := Rect2(1460, 24, 430, 150)
@@ -64,6 +66,7 @@ var _pot_pivot: Control
 var _bottle: TextureRect
 var _pour_bottle: TextureRect
 var _bottle_fill: Control
+var _bottle_draw_key := ""
 var _stream: Control
 var _pestle: TextureRect
 var _mortar_fx: Control
@@ -431,14 +434,16 @@ func _build() -> void:
 	pot_hit.gui_input.connect(_cauldron_input)
 	_work.add_child(pot_hit)
 
-	_bottle = UiKit.sprite("bottles/bottle_empty.png", ZONE_BOTTLE, "contain")
+	_bottle = UiKit.sprite(GLASS_OPEN, ZONE_BOTTLE, "contain")
+	_bottle.z_index = 7
 	_work.add_child(_bottle)
-	_pour_bottle = UiKit.sprite("bottles/bottle_open.png", ZONE_BOTTLE, "contain")
+	_pour_bottle = UiKit.sprite(GLASS_OPEN, ZONE_BOTTLE, "contain")
+	_pour_bottle.z_index = 7
 	_pour_bottle.visible = false
 	_work.add_child(_pour_bottle)
 	_bottle_fill = _painter(_draw_bottle_fill)
 	UiKit.fill(_bottle_fill)
-	_bottle_fill.z_index = 7
+	_bottle_fill.z_index = 6
 	_work.add_child(_bottle_fill)
 	_stream = _painter(_draw_stream)
 	UiKit.fill(_stream)
@@ -843,8 +848,12 @@ func _sync_liquid() -> void:
 		_mortar_over.queue_redraw()
 	if _stream and (pour != "" or not _flights.is_empty()):
 		_stream.queue_redraw()
-	if _bottle_fill and pour != "":
-		_bottle_fill.queue_redraw()
+	if _bottle_fill:
+		var bottle_key := _bottle_paint_key()
+		if pour != "" or bottle_key != _bottle_draw_key:
+			_bottle_draw_key = bottle_key
+			_bottle_fill.queue_redraw()
+	_sync_bottle_glass()
 	if _smoke and _haze > 0.01:
 		_smoke.queue_redraw()
 	var entries: Array = Game.brew["entries"]
@@ -1220,13 +1229,43 @@ func _fallback_chips(id: String, qty: float, work: float, color: Color) -> Array
 	return out
 
 
-func _draw_bottle_fill(c: Control) -> void:
-	if pour == "" or _pour_bottle == null or not _pour_bottle.visible:
+func _bottle_paint_key() -> String:
+	if pour != "":
+		return "pour"
+	if bool(Game.brew.get("bottled", false)):
+		var entries: Array = Game.brew["entries"]
+		var body := GlassLib.blend_color(entries, Callable(self, "_ingredient_color"), 1.0)
+		return "rest:%d:%.3f:%.3f:%.3f" % [entries.size(), body.r, body.g, body.b]
+	return "empty"
+
+
+func _sync_bottle_glass() -> void:
+	if _bottle == null:
 		return
-	var rect := Rect2(_pour_bottle.position, _pour_bottle.size)
+	var corked_rest := bool(Game.brew.get("bottled", false)) and pour != "tilt" and pour != "stream"
+	var rest_tex := UiKit.tex(GLASS_CORK if corked_rest else GLASS_OPEN)
+	if rest_tex != null and _bottle.texture != rest_tex:
+		_bottle.texture = rest_tex
+	if _pour_bottle == null:
+		return
+	var pour_tex := UiKit.tex(GLASS_CORK if pour == "deliver" else GLASS_OPEN)
+	if pour_tex != null and _pour_bottle.texture != pour_tex:
+		_pour_bottle.texture = pour_tex
+
+
+func _draw_bottle_fill(c: Control) -> void:
+	var phase := pour
+	var node: TextureRect = _pour_bottle
+	if pour == "":
+		if not bool(Game.brew.get("bottled", false)):
+			return
+		phase = "rest"
+		node = _bottle
+	if node == null or not node.visible:
+		return
+	var rect := Rect2(node.position, node.size)
 	var entries: Array = Game.brew["entries"]
-	var glass_tex: Texture2D = _pour_bottle.texture
-	GlassLib.draw(c, rect, pour, pour_t, entries, Callable(self, "_ingredient_color"), pour_t * 8.0, glass_tex)
+	GlassLib.draw(c, rect, phase, pour_t, entries, Callable(self, "_ingredient_color"), pour_t * 8.0)
 
 
 func _draw_stream(c: Control) -> void:
@@ -1534,14 +1573,12 @@ func _place_pour_bottle() -> void:
 	if pour == "tilt":
 		var u := clampf(pour_t / 0.5, 0.0, 1.0)
 		_pour_bottle.position = ZONE_BOTTLE.position.lerp(fill_pos, u)
-		_pour_bottle.texture = UiKit.tex("bottles/bottle_open.png")
 	elif pour == "stream":
 		_pour_bottle.position = fill_pos
-		_pour_bottle.texture = UiKit.tex("bottles/bottle_open.png")
 	elif pour == "deliver":
 		var u2 := clampf((pour_t - 1.7) / 1.0, 0.0, 1.0)
 		_pour_bottle.position = fill_pos.lerp(spot, u2)
-		_pour_bottle.texture = UiKit.tex("bottles/bottle_empty.png")
+	_sync_bottle_glass()
 
 
 func _on_mortar_tap() -> void:
@@ -2584,7 +2621,9 @@ func _draw_ledger_sheets(n: Control) -> void:
 		var alpha := float(sheet["a"])
 		var center := Vector2(pad + 68.0, pad + 38.0 + float(sheet["dy"]))
 		n.draw_set_transform(center, deg_to_rad(float(sheet["rot"])), Vector2.ONE)
-		n.draw_rect(Rect2(-68, -38, 136, 76), Color(0.937, 0.875, 0.729, alpha))
+		var card: Texture2D = preload("res://scripts/fx/parchment_sheet.gd").sheet("card")
+		if card:
+			n.draw_texture_rect(card, Rect2(-68, -38, 136, 76), false, Color(1, 1, 1, alpha))
 		if alpha > 0.95:
 			var y := -24.0
 			while y < 28.0:

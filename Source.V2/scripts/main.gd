@@ -535,6 +535,10 @@ func _prepare_shot() -> void:
 			overlays.prime_toast(1.05)
 			_seed_brush_residue()
 			_warm_workshop(1.1)
+		"bottle-empty":
+			phase = "workshop"
+			gate.visible = false
+			_warm_workshop(0.15)
 		"bottle-low", "bottle-high":
 			phase = "workshop"
 			gate.visible = false
@@ -545,11 +549,27 @@ func _prepare_shot() -> void:
 			bl = Alchemy.stir(bl, Game.defs)
 			Game.brew = bl
 			Game.bottle_brew()
+			# The pause veil would grey the liquor. These frames are the glass.
+			Game.result = null
 			workshop.jump_pour("stream", 0.74 if _shot == "bottle-low" else 1.58)
 			workshop.hold_pour = true
 			overlays.prime_toast(1.05)
 			_seed_brush_residue()
 			_warm_workshop(1.1)
+		"bottle-corked":
+			phase = "workshop"
+			gate.visible = false
+			var bc: Dictionary = Alchemy.create_brew()
+			bc = Alchemy.add_ingredient(bc, "chamomile", 1.0, "fine", Game.defs)
+			bc = Alchemy.add_ingredient(bc, "saffron", 1.0, "fine", Game.defs)
+			bc = Alchemy.advance_time(bc, 16.0, Game.defs)
+			bc = Alchemy.stir(bc, Game.defs)
+			Game.brew = bc
+			Game.bottle_brew()
+			Game.result = null
+			workshop.pour = ""
+			_seed_brush_residue()
+			_warm_workshop(0.2)
 		"receive", "receive-reject":
 			_receive_shot("chamomile")
 		"receive-accept":

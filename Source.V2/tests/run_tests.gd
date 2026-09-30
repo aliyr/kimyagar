@@ -74,6 +74,7 @@ func _run() -> void:
 	_gate_text()
 	_round2()
 	_round3()
+	_round4()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -858,6 +859,101 @@ func _round3() -> void:
 	settings.haptics_enabled = true
 	root.remove_child(main)
 	main.free()
+
+
+func _round4() -> void:
+	var glass: GDScript = load("res://scripts/fx/bottle_glass.gd")
+	var sheets: Script = load("res://scripts/fx/parchment_sheet.gd")
+	check(FileAccess.file_exists("res://scripts/fx/workshop_fx.gd.uid"), "workshop fx uid is committed")
+	var entries: Array = [
+		{"ingredientId": "rose", "quantity": 1.0},
+		{"ingredientId": "ink", "quantity": 1.0},
+	]
+	var color_of := func(id: String) -> Color:
+		return Color(0.86, 0.12, 0.18) if id == "rose" else Color(0.15, 0.22, 0.72)
+	var liquid: Color = glass.blend_color(entries, color_of, 1.0)
+	var teal := Color8(31, 130, 114)
+	for rel in ["bottles/glass_open.webp", "bottles/glass_cork.webp"]:
+		var tex: Texture2D = load("res://assets/art/" + rel)
+		check(tex != null, "glass texture loads %s" % rel)
+		var img := tex.get_image()
+		check(img != null and not img.is_empty(), "glass image %s" % rel)
+		if img.get_format() != Image.FORMAT_RGBA8:
+			img.convert(Image.FORMAT_RGBA8)
+		var px: Color = img.get_pixel(glass.SAMPLE_X, glass.SAMPLE_Y)
+		check(px.a < 0.12, "bottle interior is clear %s alpha %s" % [rel, px.a])
+		var shown: Color = glass.over(px, liquid)
+		var to_liquid := _rgb_dist(shown, liquid)
+		var to_teal := _rgb_dist(shown, teal)
+		check(to_liquid < 0.12, "resting interior shows the liquid %s dist %s" % [rel, to_liquid])
+		check(to_liquid < to_teal, "resting interior is not the glass tint %s" % rel)
+	var cork_tex: Texture2D = load("res://assets/art/bottles/glass_cork.webp")
+	var cork_img := cork_tex.get_image()
+	if cork_img.get_format() != Image.FORMAT_RGBA8:
+		cork_img.convert(Image.FORMAT_RGBA8)
+	var neck: Color = cork_img.get_pixel(int(glass.TEX_W / 2), int(0.12 * float(glass.TEX_H)))
+	check(neck.a > 0.8 and neck.r > neck.b, "the cork stays on the neck got %s" % neck)
+	var open_tex: Texture2D = load("res://assets/art/bottles/glass_open.webp")
+	var open_img := open_tex.get_image()
+	if open_img.get_format() != Image.FORMAT_RGBA8:
+		open_img.convert(Image.FORMAT_RGBA8)
+	var mouth: Color = open_img.get_pixel(int(glass.TEX_W / 2), int(0.12 * float(glass.TEX_H)))
+	check(mouth.a < 0.2, "the open mouth is clear got %s" % mouth)
+	var wood := Color(0.55, 0.36, 0.18)
+	var empty_shown: Color = glass.over(open_img.get_pixel(glass.SAMPLE_X, glass.SAMPLE_Y), wood)
+	check(_rgb_dist(empty_shown, wood) < _rgb_dist(empty_shown, teal), "an empty bottle shows the room, not teal glass")
+	for kind in ["book", "ok", "bad", "card"]:
+		var page: Texture2D = sheets.sheet(kind)
+		var page_img := page.get_image()
+		var edge: Color = page_img.get_pixel(5, 220)
+		var inner: Color = page_img.get_pixel(180, 220)
+		check(edge.a > 0.8, "parchment edge stays solid %s alpha %s" % [kind, edge.a])
+		check(edge.r + edge.g + edge.b < inner.r + inner.g + inner.b - 0.2, "parchment edge is scorched %s" % kind)
+		var flips := 0
+		var prev := 0.0
+		for x in 36:
+			var a := page_img.get_pixel(x, 220).a
+			if x > 0 and absf(a - prev) > 0.45:
+				flips += 1
+			prev = a
+		check(flips <= 1, "parchment edge is a smooth fringe %s flips %s" % [kind, flips])
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	workshop._sync_liquid()
+	check(str(workshop._bottle.texture.resource_path).find("glass_open") >= 0, "the resting bottle is open glass")
+	var brew: Dictionary = Alchemy.create_brew()
+	brew = Alchemy.add_ingredient(brew, "chamomile", 1.0, "fine", game.defs)
+	brew = Alchemy.add_ingredient(brew, "saffron", 1.0, "fine", game.defs)
+	game.brew = brew
+	game.bottle_brew()
+	game.result = null
+	workshop.pour = ""
+	workshop._sync_liquid()
+	check(bool(game.brew["bottled"]), "the brew stays bottled")
+	check(str(workshop._bottle.texture.resource_path).find("glass_cork") >= 0, "a corked bottle keeps its cork")
+	check(workshop._bottle.visible, "the corked bottle stays on the bench")
+	check(workshop._bottle_draw_key.begins_with("rest:"), "the fill is drawn while the bottle rests, key %s" % workshop._bottle_draw_key)
+	check(is_equal_approx(glass.fill_level("rest", 0.0), 1.0), "a resting bottle keeps its level")
+	workshop.jump_pour("stream", 1.1)
+	check(str(workshop._pour_bottle.texture.resource_path).find("glass_open") >= 0, "the pour uses open glass")
+	workshop.jump_pour("deliver", 2.1)
+	check(str(workshop._pour_bottle.texture.resource_path).find("glass_cork") >= 0, "delivery corks the moving bottle")
+	var overlays: Node = main.get_node("ChromeLayer/Overlays")
+	game.open_overlay = "notebook"
+	overlays.advance(0.0)
+	check(overlays.get_node_or_null("WaxSeal") != null, "the notebook page has a wax seal")
+	game.open_overlay = null
+	root.remove_child(main)
+	main.free()
+
+
+func _rgb_dist(a: Color, b: Color) -> float:
+	var dr := a.r - b.r
+	var dg := a.g - b.g
+	var db := a.b - b.b
+	return sqrt(dr * dr + dg * dg + db * db)
 
 
 func _collect_labels(node: Node) -> Array:
