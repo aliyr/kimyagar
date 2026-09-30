@@ -197,6 +197,9 @@ func _settings(panel: ColorRect) -> void:
 		if on:
 			Haptics.pulse("medium")
 	)
+	_toggle(panel, 380, "effects", Content.UI["settingEffects"], Content.UI["settingEffectsHint"], Settings.effects_enabled, func(on: bool) -> void:
+		Settings.set_effects(on)
+	)
 
 
 func _toggle(panel: ColorRect, y: float, _id: String, label: String, hint: String, on: bool, cb: Callable) -> void:

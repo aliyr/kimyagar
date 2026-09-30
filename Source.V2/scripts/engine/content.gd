@@ -94,6 +94,8 @@ const UI := {
 	"settingSoundHint": "قُل‌قُل پاتیل، ترق آتش و کوبش هاون",
 	"settingHaptics": "لرزش",
 	"settingHapticsHint": "بازخورد لمسی در گوشی (کوبش، ریختن، تحویل)",
+	"settingEffects": "جلوه‌های کارگاه",
+	"settingEffectsHint": "بخار رنگی، لرزش تصویر، سوسوی شمع و صدای چوب",
 	"on": "روشن",
 	"off": "خاموش",
 	"deliver": "تحویل به مشتری",

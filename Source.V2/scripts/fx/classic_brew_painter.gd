@@ -10,6 +10,7 @@ extends RefCounted
 ## are polygon-clipped to the mouth ellipse (chips use the tighter inner ellipse).
 ## The spoon is drawn by ClassicSpoon between heat haze and the mouth interior.
 
+const RoomFx = preload("res://scripts/fx/workshop_fx.gd")
 const SCENE_MOUTH_RX: float = 378.0 * 280.0 / 750.0
 const SPLASH_DEPTH: float = 84.0 / 378.0
 const DOME: float = 0.78
@@ -41,6 +42,8 @@ var _lrx := 0.0
 var _lry := 0.0
 var _liq_fill := 0.0
 var _liq_ox := 0.0
+## Workshop clears this when the effects toggle is off.
+var draw_steam := true
 
 
 func _init() -> void:
@@ -63,7 +66,8 @@ func draw_back(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void
 	if not _prepare(c, sim, mouth, rx, ry):
 		hide_discs()
 		return
-	_steam()
+	if draw_steam:
+		_steam()
 	_heat_haze()
 	_spoon.draw(c, sim, mouth, rx, ry)
 	_interior()
@@ -452,7 +456,7 @@ func _steam() -> void:
 		var size: float = (18.0 + t * 46.0) * _f(s, "size") * _px
 		var clockwise: bool = _f(s, "phase") > PI
 		var col: Color = _steam_color(s, smoke)
-		col.a = fade * (0.55 if smoke else 0.7)
+		col.a = fade * (0.62 if smoke else 0.72)
 		var width: float = (5.0 if smoke else 3.2) * (0.6 + t) * _px
 		var turns: float = 1.2 if smoke else 1.6
 		var pts: PackedVector2Array = PackedVector2Array()
@@ -701,15 +705,10 @@ func _star(pos: Vector2, rot: float, points: int, outer: float, inner: float) ->
 
 
 func _steam_color(s: Dictionary, smoke: bool) -> Color:
-	if smoke:
-		return Color("6a625c")
-	var tint: Color = Color("3f6f8f")
+	var tint := Color("3f6f8f")
 	if s.has("tint"):
 		tint = s["tint"] as Color
-	var water: Color = Color("3f6f8f")
-	if absf(tint.r - water.r) < 0.02 and absf(tint.g - water.g) < 0.02 and absf(tint.b - water.b) < 0.02:
-		return Color("f4efe6")
-	return Color(tint.r, tint.g, tint.b, 1.0)
+	return RoomFx.steam_color(tint, smoke)
 
 
 func _arc(center: Vector2, rx: float, ry: float, rot: float, a0: float, a1: float, n: int) -> PackedVector2Array:

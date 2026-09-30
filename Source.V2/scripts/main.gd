@@ -217,6 +217,8 @@ func _scan_args(args: PackedStringArray) -> void:
 			_profile = true
 		elif arg == "--frametime":
 			_frametime = true
+		elif arg.begins_with("--effects="):
+			Settings.effects_enabled = arg.substr("--effects=".length()) != "0"
 
 
 func _build_chrome() -> void:
@@ -430,6 +432,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _prepare_shot() -> void:
 	Settings.mark_intro_seen()
+	# Candle flicker is a live sine. Shots stay on the t = 0 pose so hour-17
+	# colour samples do not drift.
+	workshop.pin_flicker = true
 	tilt.lock_pose = true
 	gate.freeze = true
 	gate.force_idle()
@@ -582,6 +587,17 @@ func _prepare_shot() -> void:
 			Game.brew = d
 			workshop.begin_discard()
 			workshop.discard_t = 0.70
+			workshop.jump_shake("hit", 0.10)
+		"steam":
+			phase = "workshop"
+			gate.visible = false
+			var st: Dictionary = Alchemy.create_brew()
+			st = Alchemy.add_ingredient(st, "chamomile", 1.0, "fine", Game.defs)
+			st = Alchemy.add_ingredient(st, "saffron", 1.0, "fine", Game.defs)
+			st = Alchemy.advance_time(st, 12.0, Game.defs)
+			st = Alchemy.stir(st, Game.defs)
+			Game.brew = st
+			_warm_workshop(2.2)
 		"pot":
 			phase = "workshop"
 			gate.visible = false

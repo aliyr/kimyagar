@@ -73,6 +73,7 @@ func _run() -> void:
 	_bottle_glass()
 	_gate_text()
 	_round2()
+	_round3()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -727,6 +728,134 @@ func _round2() -> void:
 	check(workshop._splat_fired and workshop._clang_fired, "splat and clang stay on the web clock")
 	workshop._sync_liquid()
 	check(workshop._throw_was, "the wall stain and the flying pot redraw")
+	root.remove_child(main)
+	main.free()
+
+
+func _round3() -> void:
+	var fx: Script = load("res://scripts/fx/workshop_fx.gd")
+	var sfx: Script = load("res://scripts/autoload/sfx.gd")
+	var ident: Vector3 = fx.candle_pose(0.0)
+	near(ident.x, 1.0, "candle glow is unscaled at t=0")
+	near(ident.y, 0.0, "candle shadow x is pinned at t=0")
+	near(ident.z, 0.0, "candle shadow y is pinned at t=0")
+	var peak_t := PI / 2.0 / 2.15
+	var peak: Vector3 = fx.candle_pose(peak_t)
+	near(peak.y, 1.2, "candle shadow reaches the slow sine", 0.02)
+	check(absf(peak.x - 1.0) > 0.02, "candle glow breathes")
+	var hit: Vector2 = fx.shake_offset("hit", 0.0)
+	near(hit.x, 0.0, "throw shake starts still")
+	var mid: Vector2 = fx.shake_offset("hit", 0.10)
+	check(absf(mid.x) > 8.0, "throw shake moves the room, x %s" % mid.x)
+	var done: Vector2 = fx.shake_offset("hit", 0.62)
+	near(done.x, 0.0, "throw shake settles", 0.05)
+	near(done.y, 0.0, "throw shake settles vertically", 0.05)
+	var drop: Vector2 = fx.shake_offset("drop", 0.06)
+	check(absf(drop.y) > 1.0, "landing shake dips")
+	var quiet: Dictionary = fx.plume(0, 0.0)
+	check(float(quiet["a"]) < 0.02, "steam plume starts clear")
+	var risen: Dictionary = fx.plume(0, 1.2)
+	check(float(risen["a"]) > 0.4, "steam plume is up at 1.2s")
+	var saffron := Color("d4891c")
+	var chamomile := Color("e0c85a")
+	var steam_a: Color = fx.steam_color(saffron, false)
+	var steam_b: Color = fx.steam_color(chamomile, false)
+	check(absf(steam_a.r - steam_b.r) + absf(steam_a.g - steam_b.g) > 0.04, "steam follows the potion")
+	var ash := Color("6a625c")
+	var smoked: Color = fx.steam_color(saffron, true)
+	check(absf(smoked.r - ash.r) > 0.08, "smoke keeps the potion hue")
+	var mixed: Color = fx.steam_color(saffron.lerp(chamomile, 0.5), false)
+	check(absf(mixed.g - steam_a.g) > 0.01, "a second ingredient shifts the steam")
+	check(sfx.bubble_loudness(0.7, true) > sfx.bubble_loudness(0.7, false), "an active pot bubbles louder")
+	near(sfx.bubble_loudness(0.0, true), 0.0, "an empty pot does not bubble harder")
+	check(sfx.simmer_loop_gain(0.7, true, true) > sfx.simmer_loop_gain(0.7, false, true), "effects raise the simmer bed")
+	near(sfx.simmer_loop_gain(0.7, true, false), 0.0, "sound off silences the simmer")
+	check(sfx.creak_allowed(true, 0.7, true), "wood can creak while the fire is up")
+	check(not sfx.creak_allowed(false, 0.7, true), "effects off skips the creak")
+	check(not sfx.creak_allowed(true, 0.7, false), "sound off skips the creak")
+	var sim := ClassicBrewSim.new()
+	sim.set_heat_level(0.8)
+	sim.set_ingredient_progress("chamomile", 1.0)
+	sim.drop_chips({
+		"id": "chamomile",
+		"tint": chamomile,
+		"strength": 0.7,
+		"quantity": 1.0,
+	}, [{"kind": "petal", "sprite": 1, "crush": 0.4, "generation": 0, "nick": 0.2, "rot": 10.0, "w": 16.0, "h": 12.0, "color": chamomile}])
+	for _i in 40:
+		sim.update(0.05)
+	check(sim.steam.size() > 0, "the pot gives off steam")
+	var one: Color = sim.mix_liquid()
+	var carried: Color = sim.steam[0]["tint"]
+	near(carried.r, one.r, "steam tint matches the liquor", 0.02)
+	sim.set_ingredient_progress("saffron", 1.0)
+	sim.drop_chips({
+		"id": "saffron",
+		"tint": saffron,
+		"strength": 1.0,
+		"quantity": 1.0,
+	}, [{"kind": "petal", "sprite": 1, "crush": 0.4, "generation": 0, "nick": 0.2, "rot": 10.0, "w": 16.0, "h": 12.0, "color": saffron}])
+	sim.update(0.05)
+	var two: Color = sim.mix_liquid()
+	check(absf(two.r - one.r) + absf(two.g - one.g) > 0.02, "the liquor changes as ingredients combine")
+	var followed: Color = sim.steam[0]["tint"]
+	near(followed.r, two.r, "steam follows the new mix", 0.02)
+	var settings: Node = root.get_node("Settings")
+	var haptics: Node = root.get_node("Haptics")
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	workshop.pin_flicker = true
+	workshop._clock = peak_t
+	workshop._tick_fire(0.0)
+	near(workshop._fire_glow.modulate.a, 0.28, "a pinned candle does not dim the room", 0.02)
+	near(workshop._shadows.position.x, 0.0, "pinned shadows stay put", 0.05)
+	workshop.pin_flicker = false
+	settings.effects_enabled = true
+	workshop._tick_fire(0.0)
+	near(workshop._shadows.position.x, 1.2, "live shadows drift with the candle", 0.05)
+	settings.effects_enabled = false
+	workshop._tick_fire(0.0)
+	near(workshop._shadows.position.x, 0.0, "effects off freezes the candle", 0.05)
+	settings.effects_enabled = true
+	settings.haptics_enabled = false
+	var held: int = haptics.pulses
+	workshop._exploded = false
+	var burnt: Dictionary = Alchemy.create_brew()
+	burnt = Alchemy.add_ingredient(burnt, "chamomile", 1.0, "fine", game.defs)
+	burnt = Alchemy.advance_time(burnt, 80.0, game.defs)
+	game.brew = burnt
+	check(game.overprocessed(), "a long boil burns")
+	workshop._tick_burst()
+	check(haptics.pulses == held, "haptics off ignores the explosion")
+	check(workshop._shake_kind == "hit", "the explosion still shakes when effects are on")
+	workshop._shake_kind = ""
+	workshop._exploded = false
+	settings.effects_enabled = false
+	workshop._tick_burst()
+	check(workshop._shake_kind == "", "effects off does not shake")
+	settings.effects_enabled = true
+	settings.haptics_enabled = true
+	var before: int = haptics.pulses
+	workshop.jump_shake("hit", 0.10)
+	check(workshop._camera.position.length() > 8.0, "the throw offsets the camera")
+	settings.effects_enabled = false
+	workshop._apply_camera()
+	near(workshop._camera.position.x, 0.0, "effects off clears the shake", 0.05)
+	settings.effects_enabled = true
+	workshop._shake_kind = ""
+	workshop.begin_discard()
+	workshop._tick_discard(0.52)
+	check(workshop._clang_fired, "the wall hit still clangs")
+	check(workshop._shake_kind == "hit", "the wall hit shakes the room")
+	check(haptics.pulses > before, "the throw vibrates")
+	settings.haptics_enabled = false
+	var silent: int = haptics.pulses
+	haptics.pulse("heavy")
+	check(haptics.pulses == silent, "the haptics setting still wins")
+	settings.effects_enabled = true
+	settings.haptics_enabled = true
 	root.remove_child(main)
 	main.free()
 

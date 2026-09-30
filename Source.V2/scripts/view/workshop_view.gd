@@ -96,6 +96,12 @@ var _held_chips: Array = []
 var _pending_lands: Array = []
 var _brush_t := -1.0
 var _shake_t := -1.0
+var _shake_kind := ""
+var _shake_elapsed := 0.0
+var _shake_dur := 0.0
+var _exploded := false
+## Shots set this so the candle sine stays at its t = 0 identity.
+var pin_flicker := false
 var _brush: Control
 var _brew: ClassicBrewSim
 var _brew_painter: ClassicBrewPainter
@@ -164,6 +170,7 @@ var _notches: Array = []
 var _fire_glow: TextureRect
 var _pour_seen := ""
 var _tilt_mode := "lite"
+const RoomFx = preload("res://scripts/fx/workshop_fx.gd")
 const _PUFFS: Array = [
 	{"dx": -60.0, "delay": 0.0, "dur": 6.2, "size": 260.0, "drift": -140.0},
 	{"dx": 40.0, "delay": 0.9, "dur": 6.8, "size": 300.0, "drift": 120.0},
@@ -315,6 +322,7 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	var filled := not (Game.brew["entries"] as Array).is_empty()
 	Sfx.set_fire(level if not behind_gate else 0.0)
 	Sfx.set_simmer(level if filled and not Game.brew["bottled"] else 0.0)
+	_tick_burst()
 
 
 func set_dusk(opacity: float) -> void:
@@ -702,6 +710,53 @@ func _sync_notches() -> void:
 		notch.queue_redraw()
 
 
+func _candle_pose() -> Vector3:
+	if pin_flicker or not Settings.effects_enabled:
+		return RoomFx.candle_pose(0.0)
+	return RoomFx.candle_pose(_clock)
+
+
+func _begin_shake(kind: String) -> void:
+	if not Settings.effects_enabled:
+		return
+	_shake_kind = kind
+	_shake_elapsed = 0.0
+	_shake_dur = RoomFx.shake_duration(kind)
+
+
+func jump_shake(kind: String, elapsed: float) -> void:
+	_shake_kind = kind
+	_shake_elapsed = elapsed
+	_shake_dur = RoomFx.shake_duration(kind)
+	_apply_camera()
+
+
+func _tick_burst() -> void:
+	var burnt := Game.overprocessed() and not bool(Game.brew["bottled"]) and discard_t < 0.0
+	if burnt and not _exploded:
+		_exploded = true
+		_begin_shake("hit")
+		Haptics.pulse("heavy")
+	elif not burnt:
+		_exploded = false
+
+
+func _draw_plumes(c: Control) -> void:
+	if not Settings.effects_enabled or bool(Game.brew["bottled"]):
+		return
+	var entries: Array = Game.brew["entries"]
+	if entries.is_empty():
+		return
+	var col: Color = RoomFx.steam_color(_pour_stream_color(), Game.overprocessed())
+	for i in 3:
+		var puff: Dictionary = RoomFx.plume(i, _clock)
+		var alpha := float(puff["a"])
+		if alpha < 0.02:
+			continue
+		var at := _mouth + Vector2(float(puff["x"]), float(puff["y"]))
+		c.draw_circle(at, float(puff["s"]), Color(col.r, col.g, col.b, alpha))
+
+
 func _tick_fire(dt: float) -> void:
 	var heat := str(Game.brew.get("currentHeat", "medium"))
 	var level: float = float({"low": 0.35, "medium": 0.7, "high": 1.0}.get(heat, 0.7))
@@ -715,7 +770,13 @@ func _tick_fire(dt: float) -> void:
 		_stove_front.queue_redraw()
 	if _fire_glow:
 		var glow := 0.16 if heat == "low" else (0.42 if heat == "high" else 0.28)
-		_fire_glow.modulate.a = glow
+		var pose := _candle_pose()
+		_fire_glow.modulate.a = glow * pose.x
+	if _shadows:
+		var drift := _candle_pose()
+		var at := Vector2(drift.y, drift.z)
+		if _shadows.position.distance_to(at) > 0.05:
+			_shadows.position = at
 	_sync_notches()
 
 
@@ -788,6 +849,8 @@ func _sync_liquid() -> void:
 		_smoke.queue_redraw()
 	var entries: Array = Game.brew["entries"]
 	var brewing := (not entries.is_empty()) or pour != "" or _stirring or discard_t >= 0.0
+	if _brew_painter:
+		_brew_painter.draw_steam = Settings.effects_enabled
 	if brewing:
 		if _fx:
 			_fx.queue_redraw()
@@ -869,9 +932,12 @@ func _blur_image(img: Image, radius: int) -> void:
 
 
 func _draw_smoke(c: Control) -> void:
+	var dye := Color(90.0 / 255.0, 84.0 / 255.0, 82.0 / 255.0, 1.0)
+	if Settings.effects_enabled:
+		dye = RoomFx.steam_color(_pour_stream_color(), true)
 	if _haze > 0.01:
-		c.draw_rect(Rect2(0, 0, 1920, 420), Color(64.0 / 255.0, 58.0 / 255.0, 56.0 / 255.0, 0.55 * _haze))
-		c.draw_circle(Vector2(860, 40), 520, Color(70.0 / 255.0, 64.0 / 255.0, 62.0 / 255.0, 0.28 * _haze))
+		c.draw_rect(Rect2(0, 0, 1920, 420), Color(dye.r, dye.g, dye.b, 0.55 * _haze))
+		c.draw_circle(Vector2(860, 40), 520, Color(dye.r, dye.g, dye.b, 0.28 * _haze))
 	if _haze < 0.05:
 		return
 	for puff in _PUFFS:
@@ -892,7 +958,7 @@ func _draw_smoke(c: Control) -> void:
 		var origin := Vector2(_mouth.x + float(puff["dx"]) - float(puff["size"]) * 0.22, _mouth.y - float(puff["size"]) * 0.85)
 		var pivot := origin + Vector2(box.x * 0.5, box.y * 0.6)
 		var shift := Vector2(drift, rise)
-		var col := Color(90.0 / 255.0, 84.0 / 255.0, 82.0 / 255.0, alpha * _haze)
+		var col := Color(dye.r, dye.g, dye.b, alpha * _haze)
 		var blob := PackedVector2Array([
 			Vector2(0.46, 0.0), Vector2(0.62, 0.18), Vector2(0.78, 0.08), Vector2(0.70, 0.36),
 			Vector2(0.92, 0.48), Vector2(0.68, 0.58), Vector2(0.80, 0.88), Vector2(0.50, 0.72),
@@ -1007,6 +1073,7 @@ func _draw_brew_back(c: Control) -> void:
 			_brew_painter.hide_discs()
 		return
 	_brew_painter.draw_back(c, _brew, _mouth, _mouth_r.x, _mouth_r.y)
+	_draw_plumes(c)
 
 
 func _draw_brew_front(c: Control) -> void:
@@ -1100,6 +1167,9 @@ func _sync_brew(dt: float) -> void:
 		var impact: float = _brew.take_landing()
 		if impact > 0.0:
 			Sfx.cauldron_land(clampf(impact / 2200.0, 0.15, 1.0))
+			if impact > 900.0:
+				_begin_shake("drop")
+				Haptics.pulse("heavy" if impact > 1100.0 else "light")
 		if _brew.take_fill_start():
 			Sfx.water_fill(0.95)
 	if pour == "" and _pot_pivot and discard_t < 0.0:
@@ -1747,6 +1817,7 @@ func begin_discard() -> void:
 	if _ghost:
 		_ghost.visible = false
 	if _brew_painter:
+		_brew_painter.draw_steam = Settings.effects_enabled
 		_brew_painter.hide_discs()
 	_present_throw()
 
@@ -1763,6 +1834,8 @@ func _tick_discard(dt: float) -> void:
 		_clang_fired = true
 		Sfx.cauldron_clang()
 		_shake_t = 0.18
+		_begin_shake("hit")
+		Haptics.pulse("heavy")
 	if not _thud_fired and discard_t >= DiscardMotion.THUD_AT:
 		_thud_fired = true
 		Sfx.cauldron_land(0.55)
@@ -1906,6 +1979,10 @@ func _set_camera(focus: Vector2, zoom: float, ms: float, letterbox: bool, owner:
 func _apply_camera() -> void:
 	if _camera == null:
 		return
+	var shake := Vector2.ZERO
+	if Settings.effects_enabled and _shake_kind != "" and _shake_elapsed < _shake_dur:
+		shake = RoomFx.shake_offset(_shake_kind, _shake_elapsed)
+	_camera.position = shake
 	_camera.pivot_offset = _cam_focus
 	_camera.scale = Vector2(_cam_zoom, _cam_zoom)
 	var h := 72.0 * _bar
@@ -1928,6 +2005,10 @@ func _tick_camera(dt: float) -> void:
 		_cam_zoom = lerpf(_cam_from, _cam_to, u)
 		_cam_focus = _cam_focus_from.lerp(_cam_focus_to, u)
 	_bar = move_toward(_bar, _bar_target, dt / 0.55)
+	if _shake_kind != "" and _shake_elapsed < _shake_dur:
+		_shake_elapsed += dt
+		if _shake_elapsed >= _shake_dur:
+			_shake_kind = ""
 	_apply_camera()
 
 

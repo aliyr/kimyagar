@@ -753,7 +753,7 @@ func _update_steam(dt: float) -> void:
 				kept.append(s)
 		steam = kept
 		return
-	var tint := SMOKE_TINT if _burnt else dominant_tint()
+	var tint := mix_liquid()
 	_steam_timer += dt * heat * (11.0 if _burnt else 6.5)
 	while _steam_timer >= 1.0 and steam.size() < MAX_STEAM:
 		_steam_timer -= 1.0
@@ -772,6 +772,8 @@ func _update_steam(dt: float) -> void:
 		s["age"] = float(s["age"]) + dt
 		s["rise"] = float(s["rise"]) + dt * (0.42 if _burnt else 0.55)
 		s["u"] = float(s["u"]) + sin(time * 2.2 + float(s["phase"])) * dt * 0.15
+		s["tint"] = tint
+		s["smoke"] = _burnt
 		if float(s["age"]) < float(s["dur"]):
 			next.append(s)
 	steam = next

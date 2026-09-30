@@ -17,6 +17,7 @@ var _simmer := 0.0
 var _fire := 0.0
 var _bubble_wait := 0.0
 var _crackle_wait := 0.0
+var _creak_wait := 7.5
 var _chime_wait := 0.0
 var _time := 0.0
 var _master := 0.0
@@ -103,11 +104,29 @@ func set_fire(level: float) -> void:
 	_apply_levels()
 
 
+static func simmer_loop_gain(level: float, effects: bool, enabled: bool) -> float:
+	if not enabled:
+		return 0.0
+	# Effects off keeps the previous bed. Effects on lets the pot rumble harder.
+	return clampf(level, 0.0, 1.0) * (0.16 if effects else 0.11)
+
+
+static func bubble_loudness(level: float, effects: bool) -> float:
+	var s := clampf(level, 0.0, 1.0)
+	if effects:
+		return minf(1.0, s * 1.45)
+	return s
+
+
+static func creak_allowed(effects: bool, fire: float, enabled: bool) -> bool:
+	return effects and enabled and fire > 0.02
+
+
 func _apply_levels() -> void:
 	if _rumble.is_empty():
 		return
 	var on := _unlocked and Settings.sfx_enabled
-	_rumble["target"] = (_simmer * 0.11) if on else 0.0
+	_rumble["target"] = simmer_loop_gain(_simmer, Settings.effects_enabled, on)
 	_roar["target"] = (_fire * 0.1) if on else 0.0
 	_murmur["target"] = 0.16 if on and _ambience else 0.0
 	_wind["target"] = 0.06 if on and _ambience else 0.0
@@ -156,12 +175,17 @@ func _process(delta: float) -> void:
 		_crackle_wait -= delta
 		_chime_wait -= delta
 		if _simmer > 0.0 and _bubble_wait <= 0.0:
-			_bubble(_simmer)
-			if _rng.randf() < _simmer * 0.55:
-				var level := _simmer * 0.7
+			var loud := bubble_loudness(_simmer, Settings.effects_enabled)
+			_bubble(loud)
+			if _rng.randf() < loud * 0.55:
+				var level := loud * 0.7
 				_later_call(0.035 + _rng.randf() * 0.07, func() -> void: _bubble(level))
-			var per := 1.4 + _simmer * 7.5
+			var per := 1.4 + loud * 7.5
 			_bubble_wait = (1.0 / per) * (0.35 + _rng.randf() * 1.3)
+		if creak_allowed(Settings.effects_enabled, _fire, true) and _creak_wait <= 0.0:
+			_wood_creak()
+			_creak_wait = 9.0 + _rng.randf() * 7.0
+		_creak_wait -= delta
 		if _fire > 0.0 and _crackle_wait <= 0.0:
 			_crackle(_fire)
 			if _rng.randf() < _fire * 0.45:
@@ -648,6 +672,12 @@ func meow() -> void:
 		"freqEnd": 900.0, "gain": 0.11, "at": 0.0, "filter": "lowpass", "q": 3.0,
 		"env": "meow", "base": base, "f0": base * 0.8, "f1": base * 0.7,
 	})
+
+
+func _wood_creak() -> void:
+	# A short board, not the gate chain. Two voices, no sample.
+	noise_burst(0.16, "bandpass", 240.0, 0.07, 0.65, 120.0)
+	tone(140.0, 0.2, 0.035, "triangle", 70.0)
 
 
 func chain_creak() -> void:

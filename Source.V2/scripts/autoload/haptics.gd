@@ -4,10 +4,15 @@ extends Node
 const MS := {"light": 8, "medium": 18, "heavy": 32}
 const AMP := {"light": 0.35, "medium": 0.65, "heavy": 1.0}
 
+var pulses := 0
+var last_style := ""
+
 
 func pulse(style: String) -> void:
 	if not Settings.haptics_enabled:
 		return
+	pulses += 1
+	last_style = style
 	var duration := int(MS.get(style, 8))
 	var amp := float(AMP.get(style, 0.5))
 	Input.vibrate_handheld(duration, amp)
