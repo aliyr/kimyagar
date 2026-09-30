@@ -69,6 +69,9 @@ func _run() -> void:
 	_layout()
 	_stage_fit()
 	_layers()
+	_spoon_motion()
+	_bottle_glass()
+	_gate_text()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -547,6 +550,152 @@ func _layout() -> void:
 	plaque.free()
 	cabinet.free()
 	stage.free()
+
+
+func _dist_to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var den := ab.length_squared()
+	if den < 0.001:
+		return p.distance_to(a)
+	var t := clampf((p - a).dot(ab) / den, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+
+func _spoon_motion() -> void:
+	var spoon: GDScript = load("res://scripts/fx/spoon_transfer.gd")
+	var s = spoon.new()
+	s.begin(Vector2(900, 640), Vector2(180, 70))
+	var deepest: float = s.start.y
+	var carry: Array = []
+	var pour_rot := 0.0
+	var exit_rot := 99.0
+	var saw_dip := false
+	while s.active():
+		var pose: Dictionary = s.update(1.0 / 60.0, null)
+		if not bool(pose.get("alive", false)):
+			break
+		var y := float(pose["y"])
+		var tt: float = s.t
+		if tt > 0.45 and tt < 1.92:
+			if y > deepest:
+				deepest = y
+			if y > s.dip.y - 4.0:
+				saw_dip = true
+		if tt > 1.92 and tt < 2.62:
+			carry.append(Vector2(float(pose["x"]), y))
+		if tt > 2.62 and tt < 3.50:
+			pour_rot = maxf(pour_rot, absf(float(pose["rot"])))
+		if tt > 3.70:
+			exit_rot = absf(float(pose["rot"]))
+	check(saw_dip and deepest > s.start.y + 36.0, "spoon dips into the mortar got %s start %s" % [deepest, s.start.y])
+	var dev := 0.0
+	if carry.size() >= 3:
+		var a: Vector2 = carry[0]
+		var b: Vector2 = carry[carry.size() - 1]
+		for p in carry:
+			dev = maxf(dev, _dist_to_segment(p, a, b))
+	check(dev > 40.0, "carry follows a curve, deviation %s" % dev)
+	check(pour_rot > 60.0, "spoon tilts over the cauldron got %s" % pour_rot)
+	check(exit_rot < 12.0, "spoon returns upright got %s" % exit_rot)
+	var lip0: Vector2 = s.lip_offset(0.0)
+	var lip1: Vector2 = s.lip_offset(76.0)
+	check(lip0.y > 12.0, "material sits in the bowl")
+	check(lip0.distance_to(lip1) > 8.0, "material slides to the lip as the spoon tilts")
+
+
+func _bottle_glass() -> void:
+	var glass: GDScript = load("res://scripts/fx/bottle_glass.gd")
+	check(is_equal_approx(glass.fill_level("tilt", 0.4), 0.0), "bottle empty before the stream")
+	near(glass.fill_level("stream", 1.1), 0.5, "bottle mid fill", 0.02)
+	check(is_equal_approx(glass.fill_level("stream", 1.7), 1.0), "bottle full as the stream ends")
+	check(is_equal_approx(glass.fill_level("deliver", 2.2), 1.0), "bottle stays full on delivery")
+	var entries: Array = [
+		{"ingredientId": "a", "quantity": 1.0},
+		{"ingredientId": "b", "quantity": 1.0},
+	]
+	var color_of := func(id: String) -> Color:
+		return Color("cc4422") if id == "a" else Color("2266cc")
+	var early: Color = glass.blend_color(entries, color_of, 0.0)
+	var late: Color = glass.blend_color(entries, color_of, 1.0)
+	check(early.r > early.b + 0.2, "blend starts on the first material got %s" % early)
+	check(absf(late.r - late.b) < 0.12, "blend reaches the mixed colour got %s" % late)
+	var rect := Rect2(100, 200, 125, 220)
+	for level in [0.2, 0.55, 0.9]:
+		var poly: PackedVector2Array = glass.liquid_polygon(rect, level, 0.4)
+		check(poly.size() >= 6, "liquid polygon at %s" % level)
+		var prev_y := 9999.0
+		for p in poly:
+			check(glass.contains(rect, p), "liquid stays inside the glass at %s %s" % [level, p])
+			prev_y = minf(prev_y, p.y)
+		if level > 0.2:
+			var lower: PackedVector2Array = glass.liquid_polygon(rect, level - 0.2, 0.4)
+			var lower_top := 9999.0
+			for q in lower:
+				lower_top = minf(lower_top, q.y)
+			check(prev_y < lower_top, "surface rises as material enters")
+	var path: PackedVector2Array = glass.pour_path(rect, 0.35, 1.2)
+	check(path.size() >= 8, "pour path from the mouth")
+	check(path[0].y < path[path.size() - 1].y - 20.0, "pour runs downward")
+	for q2 in path:
+		check(glass.contains(rect, q2), "pour stays inside the glass %s" % q2)
+	var bub: Vector3 = glass.bubble_at(rect, 0.6, 2, 0.3)
+	if bub.z > 0.5:
+		check(glass.contains(rect, Vector2(bub.x, bub.y)), "bubble stays inside the glass")
+
+
+func _gate_text() -> void:
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var gate: Node = main.get_node("GateLayer/Gate")
+	gate.force_idle()
+	var labels := _collect_labels(gate)
+	check(_visible_caption(labels, "کیمیاگر"), "gate title is on screen")
+	check(_visible_caption(labels, Content.UI["gateStart"]) or _visible_caption(labels, Content.UI["gateContinue"]), "gate plaque is on screen")
+	check(_visible_caption(labels, Content.UI["gateStages"]), "stages tag is on screen")
+	check(_visible_caption(labels, Content.UI["gateSubtitle"]), "gate subtitle is on screen")
+	gate.panel = "stages"
+	gate._refresh_panel()
+	labels = _collect_labels(gate)
+	var any := false
+	check(_visible_caption(labels, Content.UI["gateMapTitle"]), "map title is on screen")
+	for st in Content.STAGES:
+		var name := str(st["nameFa"])
+		var shown := _visible_caption(labels, name)
+		if shown:
+			any = true
+		check(shown, "stage %s has visible text" % name)
+		var hint := str(st["hintFa"]) if Content.stage_unlocked(Content.STAGES.find(st)) else str(Content.UI["gateLocked"])
+		check(_visible_caption(labels, hint), "stage %s hint is visible" % name)
+	check(any, "the gate shows text on at least one stage")
+	root.remove_child(main)
+	main.free()
+
+
+func _collect_labels(node: Node) -> Array:
+	var out: Array = []
+	if node is Label:
+		out.append(node)
+	for child in node.get_children():
+		out.append_array(_collect_labels(child))
+	return out
+
+
+func _visible_caption(labels: Array, text: String) -> bool:
+	for node in labels:
+		var l: Label = node
+		if l.text != text:
+			continue
+		if not l.visible or l.modulate.a < 0.45 or l.clip_text:
+			continue
+		var fs := float(l.get_theme_font_size("font_size"))
+		if l.size.y < fs * 1.35:
+			continue
+		var gp := l.get_global_rect()
+		if not Rect2(Vector2.ZERO, Vector2(1920, 1080)).intersects(gp):
+			continue
+		return true
+	return false
 
 
 func _layers() -> void:

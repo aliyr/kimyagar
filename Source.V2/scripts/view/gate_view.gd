@@ -39,6 +39,8 @@ var _cat_sleep: TextureRect
 var _cat_awake: TextureRect
 var _knocker: TextureRect
 var _plaque_label: Label
+var _logo: CanvasItem
+var _subtitle: CanvasItem
 var _fresh: Button
 var _quote_root: Control
 var _veil: ColorRect
@@ -209,14 +211,16 @@ func _build() -> void:
 	_front_layer.add_child(_sign)
 	_sign.add_child(UiKit.sprite("gate/sign.png", Rect2(0, 0, 560, 315), "fill"))
 	# intro.css .intro__logo: 128px ExtraBold, line box 1.5, left/right 40, top 96.
-	var logo := UiKit.label(Content.UI["gameTitle"], Rect2(40, 96, 480, 192), 128, Color("f1cd7a"), UiKit.extrabold)
+	var logo := _caption(Content.UI["gameTitle"], Rect2(40, 80, 480, 210), 128, Color("f1cd7a"), UiKit.extrabold)
 	logo.clip_text = false
+	_logo = logo
 	logo.add_theme_color_override("font_outline_color", Color(0.235, 0.118, 0.02, 0.9))
 	logo.add_theme_constant_override("outline_size", 2)
 	logo.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.55))
 	logo.add_theme_constant_override("shadow_offset_y", 5)
 	_sign.add_child(logo)
-	var subtitle := UiKit.label(Content.UI["gateSubtitle"], Rect2(0, 322, 560, 36), 22, Color(0.914, 0.851, 0.706, 0.82))
+	var subtitle := _caption(Content.UI["gateSubtitle"], Rect2(0, 318, 560, 52), 22, Color(0.914, 0.851, 0.706, 0.82))
+	_subtitle = subtitle
 	subtitle.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	subtitle.add_theme_constant_override("shadow_offset_y", 2)
 	_sign.add_child(subtitle)
@@ -434,15 +438,15 @@ func _build_pin() -> void:
 	_quote_root.add_child(UiKit.sprite("gate/parchment.png", Rect2(0, 0, 306, 173), "fill"))
 	var qtext := str(quote["lines"][0]) + "\n" + str(quote["lines"][1])
 	# .intro__quote-text inset 22px 20px 40px, 17px.
-	_quote_root.add_child(UiKit.label(qtext, Rect2(20, 22, 266, 111), 17, Color("4a2f16")))
-	_quote_root.add_child(UiKit.label(str(quote["attribution"]), Rect2(34, 129, 200, 28), 13, Color(0.29, 0.18, 0.09, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_LEFT))
+	_quote_root.add_child(_caption(qtext, Rect2(16, 18, 274, 112), 17, Color("4a2f16")))
+	_quote_root.add_child(_caption(str(quote["attribution"]), Rect2(20, 128, 250, 32), 13, Color(0.29, 0.18, 0.09, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_LEFT))
 	var qhit := UiKit.hit(Rect2(0, 0, 306, 173))
 	qhit.pressed.connect(_toggle_quote)
 	_quote_root.add_child(qhit)
 
 	var plaque := UiKit.sprite("intro/plaque.png", Rect2(850, 805, 210, 97), "contain")
 	add_child(plaque)
-	_plaque_label = UiKit.label("", Rect2(850, 805, 210, 97), 30, Color("3a2410"), UiKit.bold)
+	_plaque_label = _caption("", Rect2(850, 805, 210, 97), 30, Color("3a2410"), UiKit.bold)
 	_plaque_label.add_theme_color_override("font_shadow_color", Color(1.0, 0.91, 0.686, 0.55))
 	_plaque_label.add_theme_constant_override("shadow_offset_y", 1)
 	_plaque_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.35))
@@ -486,10 +490,21 @@ func _build_pin() -> void:
 	_fresh.visible = ProgressLogic.has_progress(Progress.data)
 
 
-func _tag(text: String, rect: Rect2, size: int) -> Label:
-	var l := UiKit.label(text, rect, size, Color(0.914, 0.851, 0.706, 0.86))
+func _caption(text: String, rect: Rect2, size: int, color: Color, font: Font = null, align: int = HORIZONTAL_ALIGNMENT_CENTER) -> Label:
+	# Vazirmatn's line box is taller than the CSS font-size. clip_text on a
+	# short Label discards the whole Persian line, which is why the stage
+	# names never appeared.
+	var l := UiKit.label(text, rect, size, color, font, align)
 	l.clip_text = false
-	l.z_index = 6
+	l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	l.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	l.custom_minimum_size = rect.size
+	l.z_index = 8
+	return l
+
+
+func _tag(text: String, rect: Rect2, size: int) -> Label:
+	var l := _caption(text, rect, size, Color(0.914, 0.851, 0.706, 0.86))
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	l.add_theme_constant_override("shadow_offset_y", 2)
 	return l
@@ -556,7 +571,7 @@ func _refresh_panel() -> void:
 	var frame := UiKit.sprite(art, frame_rect, "fill")
 	_panel_layer.add_child(frame)
 	if panel == "stages":
-		var map_title := UiKit.label(Content.UI["gateMapTitle"], Rect2(260, 224, 1400, 48), 34, Color("4a2f16"), UiKit.bold)
+		var map_title := _caption(Content.UI["gateMapTitle"], Rect2(260, 210, 1400, 70), 34, Color("4a2f16"), UiKit.bold)
 		map_title.add_theme_color_override("font_shadow_color", Color(1, 0.961, 0.863, 0.6))
 		map_title.add_theme_constant_override("shadow_offset_y", 1)
 		_panel_layer.add_child(map_title)
@@ -595,11 +610,16 @@ func _fill_stages() -> void:
 		disc.shadow_size = 3
 		seal.add_theme_stylebox_override("panel", disc)
 		_panel_layer.add_child(seal)
-		var name := str(st["nameFa"]) if unlocked else Content.UI["gateLocked"]
+		# Web stamp is column-reverse: hint, name, seal. The seal stays on the point.
+		var name := str(st["nameFa"])
+		var hint := str(st["hintFa"]) if unlocked else str(Content.UI["gateLocked"])
 		var name_color := Color("3b2a14") if unlocked else Color(0.231, 0.165, 0.078, 0.6)
-		var name_l := UiKit.label(name, Rect2(x - 120, y - 68, 240, 30), 22, name_color, UiKit.bold)
+		var hint_color := Color(0.231, 0.165, 0.078, 0.75)
+		var name_l := _caption(name, Rect2(x - 140, y - 86, 280, 44), 22, name_color, UiKit.bold)
 		name_l.add_theme_color_override("font_shadow_color", Color(1, 0.961, 0.863, 0.6))
 		name_l.add_theme_constant_override("shadow_offset_y", 1)
+		var hint_l := _caption(hint, Rect2(x - 150, y - 118, 300, 32), 15, hint_color)
+		_panel_layer.add_child(hint_l)
 		_panel_layer.add_child(name_l)
 		i += 1
 
@@ -607,27 +627,27 @@ func _fill_stages() -> void:
 func _fill_scores() -> void:
 	# .intro__page--right: 54.5% / 26% of the 1400×788 sheet, top 19%.
 	var page := Rect2(260.0 + 0.545 * 1400.0, 146.0 + 0.19 * 788.0, 0.26 * 1400.0, 0.58 * 788.0)
-	var title := UiKit.label(Content.UI["gateLedgerTitle"], Rect2(page.position.x, page.position.y, page.size.x, 54), 25, Color("3a2a12"), UiKit.bold)
+	var title := _caption(Content.UI["gateLedgerTitle"], Rect2(page.position.x, page.position.y, page.size.x, 64), 25, Color("3a2a12"), UiKit.bold)
 	_panel_layer.add_child(title)
 	var hist: Array = Progress.data["scoreHistory"]
 	if hist.is_empty():
-		_panel_layer.add_child(UiKit.label(Content.UI["gateLedgerEmpty"], Rect2(page.position.x, page.position.y + 80, page.size.x, 40), 22, Color("3b2a14")))
-		_panel_layer.add_child(UiKit.label(Content.UI["gateLedgerEmptyHint"], Rect2(page.position.x, page.position.y + 124, page.size.x, 48), 16, Color(0.231, 0.165, 0.078, 0.7)))
+		_panel_layer.add_child(_caption(Content.UI["gateLedgerEmpty"], Rect2(page.position.x, page.position.y + 80, page.size.x, 44), 22, Color("3b2a14")))
+		_panel_layer.add_child(_caption(Content.UI["gateLedgerEmptyHint"], Rect2(page.position.x, page.position.y + 124, page.size.x, 56), 16, Color(0.231, 0.165, 0.078, 0.7)))
 		return
 	var best := float(Progress.data.get("bestScore", 0))
-	_panel_layer.add_child(UiKit.label("%s  %s" % [Content.UI["gateLedgerBest"], Content.to_fa_digits(best)], Rect2(page.position.x, page.position.y + 58, page.size.x, 32), 18, Color("3b2a14"), UiKit.bold))
+	_panel_layer.add_child(_caption("%s  %s" % [Content.UI["gateLedgerBest"], Content.to_fa_digits(best)], Rect2(page.position.x, page.position.y + 58, page.size.x, 40), 18, Color("3b2a14"), UiKit.bold))
 	var y := page.position.y + 100.0
 	var shown := mini(8, hist.size())
 	for n in shown:
 		var row: Dictionary = hist[hist.size() - 1 - n]
 		var line := "%s   %s   %s" % [str(row.get("customerId", "")), Content.BAND.get(str(row.get("band", "")), ""), Content.to_fa_digits(float(row.get("score", 0)))]
-		_panel_layer.add_child(UiKit.label(line, Rect2(page.position.x, y, page.size.x, 46), 20, Color("3b2a14"), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT))
+		_panel_layer.add_child(_caption(line, Rect2(page.position.x, y, page.size.x, 46), 20, Color("3b2a14"), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT))
 		y += 46
 
 
 func _fill_confirm() -> void:
 	# .intro__note-body inset 56px 80px 60px inside the 800×454 sheet.
-	_panel_layer.add_child(UiKit.label(Content.UI["gateFreshConfirm"], Rect2(640, 390, 640, 120), 24, Color("3b2a14")))
+	_panel_layer.add_child(_caption(Content.UI["gateFreshConfirm"], Rect2(640, 390, 640, 120), 24, Color("3b2a14")))
 	var yes := UiKit.note_button(Content.UI["gateFreshYes"], Rect2(980, 540, 220, 56), true)
 	yes.pressed.connect(func() -> void:
 		Game.start_fresh()
@@ -649,7 +669,9 @@ func advance(dt: float, tilt: TiltDriver) -> void:
 	if phase == "boot":
 		boot_left -= dt
 		if _veil:
-			_veil.modulate.a = clampf(boot_left / 1.3, 0.0, 1.0)
+			# intro-fade-out 1300ms, delayed 400ms.
+			var elapsed := 2.6 - boot_left
+			_veil.modulate.a = 1.0 if elapsed < 0.4 else clampf(1.0 - (elapsed - 0.4) / 1.3, 0.0, 1.0)
 		if boot_left <= 0.0:
 			phase = "idle"
 			Settings.mark_intro_seen()
@@ -786,6 +808,46 @@ func dusk_opacity() -> float:
 	return clampf(1.0 - local / 1.0, 0.0, 1.0)
 
 
+func _boot_alpha(delay: float, dur: float) -> float:
+	var elapsed := 2.6 - boot_left
+	return clampf((elapsed - delay) / maxf(dur, 0.001), 0.0, 1.0)
+
+
+func _apply_boot_text() -> void:
+	# intro.css: the sign drops in, then the brass title and the pin captions fade.
+	if phase != "boot":
+		if _logo:
+			_logo.modulate.a = 1.0
+		if _subtitle:
+			_subtitle.modulate.a = 1.0
+		if _plaque_label:
+			_plaque_label.modulate.a = 1.0
+		if _quote_root:
+			_quote_root.modulate.a = 1.0
+		if _sign:
+			_sign.position.y = -30.0
+		return
+	var word := _boot_alpha(1.7, 0.6)
+	var pin := _boot_alpha(2.0, 0.55)
+	if _logo:
+		_logo.modulate.a = word
+	if _subtitle:
+		_subtitle.modulate.a = word
+	if _plaque_label:
+		_plaque_label.modulate.a = pin
+	if _quote_root:
+		_quote_root.modulate.a = pin
+	if _fresh:
+		_fresh.modulate.a = pin
+	for child in get_children():
+		if child is Label and child != _plaque_label:
+			(child as CanvasItem).modulate.a = pin
+	if _sign:
+		var u := clampf(((2.6 - boot_left) - 0.95) / 0.95, 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - u, 3.0)
+		_sign.position.y = -30.0 - 440.0 * (1.0 - e)
+
+
 func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 	if _rig == null:
 		return
@@ -820,6 +882,7 @@ func _apply_visuals(dt: float, tilt: TiltDriver) -> void:
 		_east_mat.set_shader_parameter("angle_deg", -ang)
 	if _glow:
 		_glow.modulate.a = doors * 0.85
+	_apply_boot_text()
 	if _sign and not freeze and not busy:
 		var sway := fposmod(_clock, 12.0) / 6.0
 		var leg := sway if sway <= 1.0 else 2.0 - sway

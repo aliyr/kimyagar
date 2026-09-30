@@ -467,6 +467,18 @@ func _prepare_shot() -> void:
 			Game.apply_grind_work(2.0)
 			_warm_workshop(0.35)
 			workshop.jump_transfer(2.35)
+		"scoop", "spoon-pour":
+			phase = "workshop"
+			gate.visible = false
+			Game.add_classic_unit("chamomile")
+			Game.start_grinding()
+			Game.apply_grind_work(2.0)
+			_warm_workshop(0.35)
+			workshop.jump_transfer(1.49 if _shot == "scoop" else 3.20)
+		"gate-stages":
+			phase = "gate"
+			gate.panel = "stages"
+			gate._refresh_panel()
 		"boil-low":
 			_boil_shot("low")
 		"boil-medium":
@@ -501,6 +513,21 @@ func _prepare_shot() -> void:
 			# during that wait, and the 900ms auto-stir has the ladle 0.2s into
 			# its entrance. Hold the pour so the extra sim time does not deliver.
 			workshop.jump_pour("stream", 1.1)
+			workshop.hold_pour = true
+			overlays.prime_toast(1.05)
+			_seed_brush_residue()
+			_warm_workshop(1.1)
+		"bottle-low", "bottle-high":
+			phase = "workshop"
+			gate.visible = false
+			var bl: Dictionary = Alchemy.create_brew()
+			bl = Alchemy.add_ingredient(bl, "chamomile", 1.0, "fine", Game.defs)
+			bl = Alchemy.add_ingredient(bl, "saffron", 1.0, "fine", Game.defs)
+			bl = Alchemy.advance_time(bl, 16.0, Game.defs)
+			bl = Alchemy.stir(bl, Game.defs)
+			Game.brew = bl
+			Game.bottle_brew()
+			workshop.jump_pour("stream", 0.74 if _shot == "bottle-low" else 1.58)
 			workshop.hold_pour = true
 			overlays.prime_toast(1.05)
 			_seed_brush_residue()

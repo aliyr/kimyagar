@@ -2,6 +2,8 @@ class_name WorkshopView
 extends Control
 ## Classic workshop. Zones match artManifest.ts and layout.ts.
 
+const GlassLib = preload("res://scripts/fx/bottle_glass.gd")
+
 signal open_overlay(id: String)
 signal back_to_gate
 
@@ -61,6 +63,7 @@ var _body: TextureRect
 var _pot_pivot: Control
 var _bottle: TextureRect
 var _pour_bottle: TextureRect
+var _bottle_fill: Control
 var _stream: Control
 var _pestle: TextureRect
 var _mortar_fx: Control
@@ -406,6 +409,10 @@ func _build() -> void:
 	_pour_bottle = UiKit.sprite("bottles/bottle_open.png", ZONE_BOTTLE, "contain")
 	_pour_bottle.visible = false
 	_work.add_child(_pour_bottle)
+	_bottle_fill = _painter(_draw_bottle_fill)
+	UiKit.fill(_bottle_fill)
+	_bottle_fill.z_index = 7
+	_work.add_child(_bottle_fill)
 	_stream = _painter(_draw_stream)
 	UiKit.fill(_stream)
 	_stream.z_index = 8
@@ -761,6 +768,8 @@ func _sync_liquid() -> void:
 		_mortar_over.queue_redraw()
 	if _stream and pour != "":
 		_stream.queue_redraw()
+	if _bottle_fill and pour != "":
+		_bottle_fill.queue_redraw()
 	if _smoke and _haze > 0.01:
 		_smoke.queue_redraw()
 	var entries: Array = Game.brew["entries"]
@@ -1125,6 +1134,15 @@ func _fallback_chips(id: String, qty: float, work: float, color: Color) -> Array
 	return out
 
 
+func _draw_bottle_fill(c: Control) -> void:
+	if pour == "" or _pour_bottle == null or not _pour_bottle.visible:
+		return
+	var rect := Rect2(_pour_bottle.position, _pour_bottle.size)
+	var entries: Array = Game.brew["entries"]
+	var glass_tex: Texture2D = _pour_bottle.texture
+	GlassLib.draw(c, rect, pour, pour_t, entries, Callable(self, "_ingredient_color"), pour_t * 8.0, glass_tex)
+
+
 func _draw_stream(c: Control) -> void:
 	for flight in _flights:
 		var ft := float(flight["t"])
@@ -1437,7 +1455,7 @@ func _place_pour_bottle() -> void:
 	elif pour == "deliver":
 		var u2 := clampf((pour_t - 1.7) / 1.0, 0.0, 1.0)
 		_pour_bottle.position = fill_pos.lerp(spot, u2)
-		_pour_bottle.texture = UiKit.tex("bottles/bottle_full.png")
+		_pour_bottle.texture = UiKit.tex("bottles/bottle_empty.png")
 
 
 func _on_mortar_tap() -> void:
@@ -1942,14 +1960,48 @@ func _draw_transfer(c: Control) -> void:
 	var pose := _transfer_pose()
 	if pose.is_empty():
 		return
-	_spoon_art.draw_free(c, Vector2(float(pose["x"]), float(pose["y"])), deg_to_rad(float(pose["rot"])), 250.0, float(pose["opacity"]))
+	var at := Vector2(float(pose["x"]), float(pose["y"]))
+	var rot := deg_to_rad(float(pose["rot"]))
+	var fade := float(pose["opacity"])
+	var lip: Vector2 = pose.get("lip", Vector2(0, 24))
+	_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade)
 	if float(pose["blob"]) > 0.05:
+		var col: Color = pose.get("color", Color("#8a7a52"))
+		var heap := at + lip * 0.55
+		c.draw_set_transform(heap, rot, Vector2.ONE)
+		c.draw_colored_polygon(_oval(22.0, 13.0), Color(col.r, col.g, col.b, 0.95 * fade))
+		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var cs := cos(rot)
+		var sn := sin(rot)
 		for chip in pose.get("chips", []):
-			_draw_mini_chip(c, chip, Vector2(float(pose["x"]) + float(chip.get("sx", 0.0)), float(pose["y"]) + float(chip.get("sy", 0.0)) - 8.0), float(chip.get("dw", 16.0)), float(chip.get("dh", 16.0)), 1.0)
+			var local := Vector2(float(chip.get("sx", 0.0)), float(chip.get("sy", 0.0))) * 0.45 + lip * 0.5
+			var p := at + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y)
+			_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
+	var from := at + lip
 	for item in pose.get("falling", []):
 		var eased := float(item.get("eased", 0.0))
-		var at := Vector2(_transfer.end.x + float(item["ox"]), _transfer.end.y + float(item["oy"])).lerp(Vector2(_transfer.land.x + float(item["ox"]) * 0.3, _transfer.land.y), eased)
-		_draw_mini_chip(c, item["chip"], at, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
+		var dest := Vector2(_transfer.land.x + float(item["ox"]) * 0.22, _transfer.land.y)
+		var mid := Vector2((from.x + dest.x) * 0.5 + float(item["ox"]) * 0.15, from.y + 18.0)
+		var u := 1.0 - eased
+		var p2 := from * (u * u) + mid * (2.0 * u * eased) + dest * (eased * eased)
+		_draw_mini_chip(c, item["chip"], p2, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
+	if float(pose.get("pouring", 0.0)) > 0.5:
+		var col2: Color = pose.get("color", Color("#8a7a52"))
+		for i in 7:
+			var s := fposmod(_transfer.t * 3.0 + float(i) / 7.0, 1.0)
+			var fall := s * s
+			var drop := from.lerp(_transfer.land, fall)
+			drop.x += sin(float(i) * 1.7) * 6.0 * (1.0 - s)
+			c.draw_circle(drop, lerpf(4.2, 2.2, s), Color(col2.r, col2.g, col2.b, 0.85 * fade * (1.0 - s * 0.35)))
+
+
+func _oval(rx: float, ry: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	pts.resize(14)
+	for i in 14:
+		var a := TAU * float(i) / 14.0
+		pts[i] = Vector2(cos(a) * rx, sin(a) * ry)
+	return pts
 
 
 func _transfer_pose() -> Dictionary:
@@ -1961,6 +2013,9 @@ func _transfer_pose() -> Dictionary:
 		"blob": _transfer_last.get("blob", 0.0),
 		"chips": _transfer_last.get("chips", []),
 		"falling": _transfer_last.get("falling", []),
+		"lip": _transfer_last.get("lip", Vector2(0, 24)),
+		"pouring": _transfer_last.get("pouring", 0.0),
+		"color": _transfer_last.get("color", Color("#8a7a52")),
 	}
 
 
