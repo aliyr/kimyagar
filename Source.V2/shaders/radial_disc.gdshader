@@ -42,15 +42,22 @@ vec4 sample_stop(float d) {
 void fragment() {
 	vec2 p = UV * rect_size;
 	vec2 e = (p - rect_size * 0.5) / max(rect_size * 0.5, vec2(0.001));
+	// Alpha 0, not a fragment kill. ANGLE/D3D11 (Intel HD 630) drops the
+	// whole disc when a canvas shader kills fragments, which blanks the water.
+	float outside = 0.0;
 	if (dot(e, e) > 1.0) {
-		discard;
+		outside = 1.0;
 	}
 	if (clip_mouth) {
 		vec2 m = (p - mouth_center) / max(mouth_radii, vec2(0.001));
 		if (dot(m, m) > 1.0) {
-			discard;
+			outside = 1.0;
 		}
 	}
-	float d = length(p - grad_center) / max(grad_radius, 0.001);
-	COLOR = sample_stop(d);
+	if (outside > 0.5) {
+		COLOR = vec4(0.0);
+	} else {
+		float d = length(p - grad_center) / max(grad_radius, 0.001);
+		COLOR = sample_stop(d);
+	}
 }

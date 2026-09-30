@@ -148,6 +148,18 @@ var _hole_lip: Control
 var _stove := Vector4.ZERO
 var _shadow_sprites: Array = []
 var _customer_armed := false
+var _jars: Dictionary = {}
+var _jar_pour: Dictionary = {}
+var _cust_phase := ""
+var _cust_t := 0.0
+var _cust_index := -1
+var _cust_look := ""
+var _cust_emo := ""
+var _cust_rest := Vector2.ZERO
+var _cust_hold := false
+var _cust_paper := false
+var _cust_steps := 0
+var _throw_was := false
 var _notches: Array = []
 var _fire_glow: TextureRect
 var _pour_seen := ""
@@ -256,7 +268,10 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	if _dusk:
 		_dusk.visible = false
 	if hold_sim:
-		_sync_customer()
+		_tick_customer(0.0)
+		_present_throw()
+		if _stream and (pour != "" or not _flights.is_empty()):
+			_stream.queue_redraw()
 		_sync_note()
 		_sync_hint()
 		_place_pestle()
@@ -269,21 +284,25 @@ func advance(dt: float, tilt: TiltDriver, live: bool) -> void:
 	_tick_pour(dt)
 	_tick_discard(dt)
 	_tick_long_press()
-	_sync_customer()
+	_tick_jars(dt)
+	_tick_customer(dt)
 	_sync_note()
 	_sync_hint()
 	_sync_liquid()
-	if _vignette:
-		_vignette.visible = true
-		if _vignette_mat:
-			var pause := overlay.vignette_pause() if overlay != null else (1.0 if Game.is_paused() else 0.0)
-			var grinding_now := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0
-			# .cst-focus fades in over 0.65s with the CSS ease curve. The grind
-			# pair is only 60ms in, so a full overlay is much darker than the web.
-			if grinding_now:
-				_focus_t = minf(_focus_t + dt, 0.65)
-			else:
-				_focus_t = maxf(_focus_t - dt, 0.0)
+	if _vignette and _vignette_mat:
+		var pause := overlay.vignette_pause() if overlay != null else (1.0 if Game.is_paused() else 0.0)
+		var grinding_now := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0
+		# .cst-focus fades in over 0.65s with the CSS ease curve. The grind
+		# pair is only 60ms in, so a full overlay is much darker than the web.
+		if grinding_now:
+			_focus_t = minf(_focus_t + dt, 0.65)
+		else:
+			_focus_t = maxf(_focus_t - dt, 0.0)
+		# A full-screen vignette shader is wasted fill on an iGPU when the
+		# room is neither paused nor grinding.
+		var show := pause > 0.02 or _focus_t > 0.02
+		_vignette.visible = show
+		if show:
 			_vignette_mat.set_shader_parameter("pause", pause)
 			_vignette_mat.set_shader_parameter("grind", _css_ease(clampf(_focus_t / 0.65, 0.0, 1.0)))
 	_sync_pot_spin()
@@ -458,6 +477,9 @@ func _build() -> void:
 	_pin.add_child(bucket)
 	var near := _near
 	_customer = UiKit.sprite("customer/customer_woman_elder.png", ZONE_CUSTOMER, "contain")
+	_customer.pivot_offset = Vector2(ZONE_CUSTOMER.size.x * 0.5, ZONE_CUSTOMER.size.y)
+	_cust_rest = ZONE_CUSTOMER.position
+	_customer.modulate.a = 0.0
 	near.add_child(_customer)
 	near.add_child(UiKit.sprite("customer/counter.png", ZONE_COUNTER, "contain"))
 	# goal/goal_note.png is the aged card. The pin is a child of the card so it
@@ -606,6 +628,9 @@ func _add_jar(ing: Dictionary, index: int) -> void:
 	var board := UiKit.sprite("shelf/shelf_board.png", Rect2(-4, row_y + SLOT_H - BOARD_H, INNER.size.x + 8.0, BOARD_H), "fill")
 	_cabinet_strip.add_child(board)
 	var jar := UiKit.sprite("cabinet/jar_%s.png" % str(ing["id"]), Rect2(JAR_LEFT, row_y + JAR_TOP, JAR_W, JAR_H), "contain")
+	jar.pivot_offset = Vector2(JAR_W * 0.5, JAR_H)
+	jar.set_meta("rest", jar.position)
+	_jars[str(ing["id"])] = jar
 	_cabinet_strip.add_child(jar)
 	var plaque := Panel.new()
 	plaque.position = Vector2(JAR_LEFT + 8.0, row_y + JAR_TOP + JAR_H - 24.0)
@@ -695,30 +720,19 @@ func _tick_fire(dt: float) -> void:
 
 
 func _sync_customer() -> void:
-	var c: Dictionary = Game.current_customer()
-	var look := str(c.get("appearance", "woman_elder"))
-	var emo := ""
-	if Game.evaluation != null:
-		var band := str(Game.evaluation["band"])
-		emo = "_happy" if band == "excellent" or band == "good" else "_sad"
-	var rel := "customer/customer_%s%s.png" % [look, emo]
-	if rel == _last_customer:
-		return
-	var changed := _last_customer != ""
-	_last_customer = rel
-	if _customer:
-		_customer.texture = UiKit.tex(rel)
-	if changed and _tilt_mode != "off" and pour == "":
-		_set_camera(_customer_focus(), 1.16, 1.0, true, "enter")
-		_cam_return = 1.7
+	_tick_customer(0.0)
 
 
 func _sync_note() -> void:
 	var c: Dictionary = Game.current_customer()
-	if _note_who:
-		_note_who.text = str(c.get("nameFa", ""))
-	if _note_sum:
-		_note_sum.text = str(c.get("summaryFa", ""))
+	_set_label(_note_who, str(c.get("nameFa", "")))
+	_set_label(_note_sum, str(c.get("summaryFa", "")))
+
+
+func _set_label(node: Label, text: String) -> void:
+	if node == null or node.text == text:
+		return
+	node.text = text
 
 
 func _sync_hint() -> void:
@@ -734,27 +748,27 @@ func _sync_hint() -> void:
 	var discarding := discard_t >= 0.0
 	var transferring := transfer_t >= 0.0
 	var pouring := pour != ""
+	var hint_text := ""
 	if burnt and not discarding:
-		_hint.text = Content.UI["burntHint"]
+		hint_text = Content.UI["burntHint"]
 	elif filled and not bottled and stir_count == 0 and not discarding:
-		_hint.text = Content.UI["stirHint"]
+		hint_text = Content.UI["stirHint"]
 	elif Game.all_ready() and not bottled and not pouring and not transferring and not discarding and stir_count > 0:
-		_hint.text = Content.UI["tapToBottleHint"]
-	else:
-		_hint.text = ""
+		hint_text = Content.UI["tapToBottleHint"]
+	_set_label(_hint, hint_text)
 	if _grind_label == null:
 		return
+	var grind_text := ""
 	if Game.mortar != null and not transferring:
 		var grinding := bool(Game.mortar.get("grinding", false))
 		var gstate = Game.mortar.get("grindState")
 		if gstate == null:
-			_grind_label.text = Content.UI["grindingHint"]
+			grind_text = Content.UI["grindingHint"]
 		elif grinding:
-			_grind_label.text = str(Content.GRIND.get(gstate, ""))
+			grind_text = str(Content.GRIND.get(gstate, ""))
 		else:
-			_grind_label.text = "%s — %s" % [str(Content.GRIND.get(gstate, "")), Content.UI["tapMortarHint"]]
-	else:
-		_grind_label.text = ""
+			grind_text = "%s — %s" % [str(Content.GRIND.get(gstate, "")), Content.UI["tapMortarHint"]]
+	_set_label(_grind_label, grind_text)
 
 
 func _sync_liquid() -> void:
@@ -766,7 +780,7 @@ func _sync_liquid() -> void:
 		_mortar_fx.queue_redraw()
 	if _mortar_over and (parts_busy or transfer_t >= 0.0):
 		_mortar_over.queue_redraw()
-	if _stream and pour != "":
+	if _stream and (pour != "" or not _flights.is_empty()):
 		_stream.queue_redraw()
 	if _bottle_fill and pour != "":
 		_bottle_fill.queue_redraw()
@@ -779,6 +793,7 @@ func _sync_liquid() -> void:
 			_fx.queue_redraw()
 		if _fx_back:
 			_fx_back.queue_redraw()
+	_present_throw()
 	_place_pestle()
 	if _bottle:
 		_bottle.visible = pour == "" and discard_t < 0.0
@@ -965,6 +980,7 @@ func _spawn_flight(ingredient_id: String, from: Vector2) -> void:
 		"left": 0.12 + 0.3 + float(count - 1) * 0.022,
 		"count": count,
 	})
+	_jar_pour[ingredient_id] = 0.0
 
 
 func _draw_liquid(_c: Control) -> void:
@@ -1732,6 +1748,7 @@ func begin_discard() -> void:
 		_ghost.visible = false
 	if _brew_painter:
 		_brew_painter.hide_discs()
+	_present_throw()
 
 
 func _tick_discard(dt: float) -> void:
@@ -2034,6 +2051,274 @@ func _draw_mini_chip(c: Control, chip: Dictionary, at: Vector2, w: float, h: flo
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+func _present_throw() -> void:
+	var on := discard_t >= 0.0
+	if on or _throw_was:
+		if _wall:
+			_wall.queue_redraw()
+		if _discard_fx:
+			_discard_fx.queue_redraw()
+	_throw_was = on
+
+
+func _tick_jars(dt: float) -> void:
+	if _jar_pour.is_empty():
+		return
+	var done: Array = []
+	for id in _jar_pour.keys():
+		var t := float(_jar_pour[id]) + dt
+		_jar_pour[id] = t
+		_apply_jar(str(id), t / 0.42)
+		if t >= 0.42:
+			done.append(id)
+	for id in done:
+		_apply_jar(str(id), 1.0)
+		_jar_pour.erase(id)
+
+
+func _apply_jar(id: String, k: float) -> void:
+	var jar: Control = _jars.get(id) as Control
+	if jar == null:
+		return
+	var rest: Vector2 = jar.get_meta("rest", jar.position)
+	var pose := _jar_pour_pose(k)
+	jar.position = rest + Vector2(0.0, pose.x)
+	jar.rotation_degrees = pose.y
+
+
+func _jar_pour_pose(k: float) -> Vector2:
+	# cabinet-jar-pour, 0.42s ease-out. k is 0..1. CSS rotate is clockwise.
+	var u := clampf(k, 0.0, 1.0)
+	var marks := [0.0, 0.25, 0.55, 0.80, 1.0]
+	var ys := [0.0, -8.0, -10.0, -3.0, 0.0]
+	var rs := [0.0, 8.0, 26.0, -4.0, 0.0]
+	for i in range(1, marks.size()):
+		if u <= float(marks[i]) or i == marks.size() - 1:
+			var span := float(marks[i]) - float(marks[i - 1])
+			var local := 0.0 if span <= 0.0001 else (u - float(marks[i - 1])) / span
+			var e := _bezier_y(clampf(local, 0.0, 1.0), 0.0, 0.0, 0.58, 1.0)
+			return Vector2(lerpf(float(ys[i - 1]), float(ys[i]), e), lerpf(float(rs[i - 1]), float(rs[i]), e))
+	return Vector2.ZERO
+
+
+func jump_drop(ingredient_id: String) -> void:
+	var from := ZONE_CABINET.position + INNER.position + Vector2(JAR_LEFT + JAR_W * 0.78, JAR_TOP + JAR_H * 0.2)
+	_spawn_flight(ingredient_id, from)
+	for flight in _flights:
+		flight["t"] = 0.22
+	_jar_pour[ingredient_id] = 0.22
+	_apply_jar(ingredient_id, 0.22 / 0.42)
+	if _stream:
+		_stream.queue_redraw()
+
+
+func jump_customer(phase_name: String, t: float) -> void:
+	_cust_hold = true
+	_cust_index = Game.customer_index
+	var c: Dictionary = Game.current_customer()
+	_cust_look = str(c.get("appearance", "woman_elder"))
+	_cust_emo = ""
+	if phase_name == "react" or phase_name == "leave":
+		if Game.evaluation != null:
+			var band := str(Game.evaluation.get("band", ""))
+			_cust_emo = "_happy" if band == "excellent" or band == "good" else "_sad"
+		elif phase_name == "leave":
+			_cust_emo = "_sad"
+	_cust_phase = phase_name
+	_cust_t = t
+	_cust_rest = ZONE_CUSTOMER.position
+	_apply_customer_visual()
+
+
+func _tick_customer(dt: float) -> void:
+	if _customer == null:
+		return
+	if _cust_rest == Vector2.ZERO:
+		_cust_rest = _customer.position
+	var idx := Game.customer_index
+	if _cust_phase == "":
+		_cust_index = idx
+		var c0: Dictionary = Game.current_customer()
+		_cust_look = str(c0.get("appearance", "woman_elder"))
+		if hold_sim and not _cust_hold:
+			_cust_phase = "idle"
+		else:
+			_cust_phase = "enter"
+			_cust_t = 0.0
+			_cust_steps = 0
+			Sfx.paper()
+	if _cust_hold:
+		dt = 0.0
+	elif idx != _cust_index and _cust_phase != "leave":
+		_cust_phase = "leave"
+		_cust_t = 0.0
+		_cust_steps = 0
+		_cust_paper = false
+	elif Game.evaluation != null and _cust_phase != "leave":
+		if _cust_phase != "react":
+			_cust_phase = "react"
+			_cust_t = 0.0
+			_cust_paper = false
+			_cust_steps = 0
+			var band := str(Game.evaluation.get("band", ""))
+			_cust_emo = "_happy" if band == "excellent" or band == "good" else "_sad"
+	elif _cust_phase == "react":
+		_cust_phase = "idle"
+		_cust_t = 0.0
+		_cust_emo = ""
+	if not _cust_hold:
+		_cust_t += dt
+	if _cust_phase == "enter" and _cust_t >= 1.1:
+		_cust_phase = "idle"
+		_cust_t = 0.0
+		_cust_steps = 0
+	if _cust_phase == "leave" and _cust_t >= 0.9:
+		_cust_index = idx
+		var c1: Dictionary = Game.current_customer()
+		_cust_look = str(c1.get("appearance", "woman_elder"))
+		_cust_emo = ""
+		_cust_phase = "enter"
+		_cust_t = 0.0
+		_cust_steps = 0
+		_cust_paper = false
+		Sfx.paper()
+		if _tilt_mode != "off" and pour == "":
+			_set_camera(_customer_focus(), 1.16, 1.0, true, "enter")
+			_cam_return = 1.7
+	_step_sound()
+	if _cust_phase == "react" and _cust_t >= 0.3 and not _cust_paper:
+		_cust_paper = true
+		Sfx.paper()
+	_apply_customer_visual()
+
+
+func _step_sound() -> void:
+	if _cust_phase != "enter" and _cust_phase != "leave":
+		return
+	var period := 0.366 if _cust_phase == "enter" else 0.3
+	var n := mini(3, int(_cust_t / period))
+	if n > _cust_steps:
+		_cust_steps = n
+		Sfx.noise_burst(0.05, "lowpass", 160.0, 0.07)
+
+
+func _apply_customer_visual() -> void:
+	if _customer == null:
+		return
+	var pose := _customer_pose(_cust_phase, _cust_t)
+	var emo := _cust_emo if (_cust_phase == "react" or _cust_phase == "leave") else ""
+	var rel := "customer/customer_%s%s.png" % [_cust_look, emo]
+	if rel != _last_customer:
+		var tex := UiKit.tex(rel)
+		if tex != null:
+			_customer.texture = tex
+			_last_customer = rel
+	_customer.position = _cust_rest + Vector2(float(pose["x"]), float(pose["y"]))
+	_customer.rotation_degrees = float(pose["rot"])
+	_customer.scale = Vector2(float(pose["sx"]), float(pose["sy"]))
+	_customer.modulate.a = float(pose["a"])
+
+
+func _customer_pose(phase_name: String, t: float) -> Dictionary:
+	var x := 0.0
+	var y := 0.0
+	var rot := 0.0
+	var sx := 1.0
+	var sy := 1.0
+	var a := 1.0
+	if phase_name == "enter":
+		var k := clampf(t / 1.1, 0.0, 1.0)
+		var e := _bezier_y(k, 0.2, 0.7, 0.25, 1.0)
+		x = lerpf(250.0, 0.0, e)
+		if k > 0.82:
+			x += sin((k - 0.82) / 0.18 * PI) * -6.0
+		a = 1.0 if k >= 0.32 else _bezier_y(k / 0.32, 0.2, 0.7, 0.25, 1.0)
+		var bob := _step_bob(t, 0.366)
+		y = bob.x
+		rot = bob.y
+	elif phase_name == "leave":
+		var k2 := clampf(t / 0.9, 0.0, 1.0)
+		var e2 := _bezier_y(k2, 0.4, 0.05, 0.7, 0.4)
+		x = lerpf(0.0, 250.0, e2)
+		if k2 <= 0.55:
+			a = lerpf(1.0, 0.75, _bezier_y(k2 / 0.55, 0.4, 0.05, 0.7, 0.4))
+		else:
+			a = lerpf(0.75, 0.0, _bezier_y((k2 - 0.55) / 0.45, 0.4, 0.05, 0.7, 0.4))
+		var bob2 := _step_bob(t, 0.3)
+		y = bob2.x
+		rot = bob2.y
+	elif phase_name == "idle" or phase_name == "":
+		var ph := fmod(maxf(t, 0.0), 3.0) / 3.0 * TAU
+		var breath := (1.0 - cos(ph)) * 0.5
+		y = -2.0 * breath
+		var sc := 1.0 + 0.008 * breath
+		sx = sc
+		sy = sc
+	elif phase_name == "react":
+		if _cust_emo == "_happy":
+			var joy := _joy_pose(fmod(maxf(t, 0.0), 0.56) / 0.56)
+			y = joy.x
+			sy = joy.y
+			rot = _joy_tilt(clampf(t / 1.68, 0.0, 1.0))
+		else:
+			var sl := _bezier_y(clampf(t / 1.1, 0.0, 1.0), 0.0, 0.0, 0.58, 1.0)
+			y = lerpf(0.0, 11.0, sl)
+			sy = lerpf(1.0, 0.97, sl)
+			var sway_t := t - 0.32
+			if sway_t > 0.0:
+				rot = sin(clampf(sway_t / 0.9, 0.0, 2.0) * PI) * 1.9
+				x = sin(clampf(sway_t / 0.9, 0.0, 2.0) * PI) * 6.0
+	return {"x": x, "y": y, "rot": rot, "sx": sx, "sy": sy, "a": a}
+
+
+func _step_bob(t: float, period: float) -> Vector2:
+	var u := fmod(maxf(t, 0.0), period) / period
+	var e := _ease_in_out(u)
+	var lift := sin(e * PI)
+	return Vector2(-9.0 * lift, -0.7 * lift)
+
+
+func _joy_pose(u: float) -> Vector2:
+	var marks := [0.0, 0.32, 0.62, 0.82, 1.0]
+	var ys := [0.0, -24.0, 0.0, -7.0, 0.0]
+	var ss := [1.0, 1.015, 0.982, 1.004, 1.0]
+	var t := clampf(u, 0.0, 1.0)
+	for i in range(1, marks.size()):
+		if t <= float(marks[i]) or i == marks.size() - 1:
+			var span := float(marks[i]) - float(marks[i - 1])
+			var local := 0.0 if span <= 0.0001 else (t - float(marks[i - 1])) / span
+			var e := _ease_in_out(local)
+			return Vector2(lerpf(float(ys[i - 1]), float(ys[i]), e), lerpf(float(ss[i - 1]), float(ss[i]), e))
+	return Vector2(0.0, 1.0)
+
+
+func _joy_tilt(u: float) -> float:
+	var t := clampf(u, 0.0, 1.0)
+	if t < 0.25:
+		return lerpf(0.0, 2.4, _ease_in_out(t / 0.25))
+	if t < 0.75:
+		return lerpf(2.4, -2.4, _ease_in_out((t - 0.25) / 0.5))
+	return lerpf(-2.4, 0.0, _ease_in_out((t - 0.75) / 0.25))
+
+
+func _bezier_y(u: float, x1: float, y1: float, x2: float, y2: float) -> float:
+	var target := clampf(u, 0.0, 1.0)
+	var lo := 0.0
+	var hi := 1.0
+	var t := target
+	for _i in 12:
+		t = (lo + hi) * 0.5
+		var s := 1.0 - t
+		var x := 3.0 * s * s * t * x1 + 3.0 * s * t * t * x2 + t * t * t
+		if x < target:
+			lo = t
+		else:
+			hi = t
+	t = (lo + hi) * 0.5
+	var s2 := 1.0 - t
+	return 3.0 * s2 * s2 * t * y1 + 3.0 * s2 * t * t * y2 + t * t * t
+
+
 func _draw_wall(c: Control) -> void:
 	if discard_t < 0.0 or _discard_scene.is_empty():
 		return
@@ -2155,11 +2440,10 @@ func _draw_notch(n: Control) -> void:
 
 
 func _draw_notebook(n: Control) -> void:
+	var sheet: Texture2D = preload("res://scripts/fx/parchment_sheet.gd").sheet("book")
 	n.draw_set_transform(Vector2(78, 86), deg_to_rad(-3.0), Vector2.ONE)
-	n.draw_rect(Rect2(-58, -68, 112, 140), Color("d7c295"))
-	n.draw_rect(Rect2(-64, -74, 122, 148), Color("5c3c22"))
-	n.draw_rect(Rect2(44, -74, 16, 148), Color("c39643"))
-	n.draw_rect(Rect2(46, -74, 4, 148), Color("5c3d12"))
+	if sheet:
+		n.draw_texture_rect(sheet, Rect2(-64, -74, 122, 148), false)
 	n.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

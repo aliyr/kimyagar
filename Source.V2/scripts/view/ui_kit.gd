@@ -5,6 +5,7 @@ static var regular: Font
 static var medium: Font
 static var bold: Font
 static var extrabold: Font
+static var hand: Font
 static var _cache := {}
 static var _radial: Texture2D
 
@@ -31,6 +32,7 @@ static func shutdown() -> void:
 	medium = null
 	bold = null
 	extrabold = null
+	hand = null
 	_cache.clear()
 
 
@@ -41,6 +43,10 @@ static func ensure() -> void:
 	medium = load("res://assets/fonts/Vazirmatn-Medium.ttf")
 	bold = load("res://assets/fonts/Vazirmatn-Bold.ttf")
 	extrabold = load("res://assets/fonts/Vazirmatn-ExtraBold.ttf")
+	# Aref Ruqaa, OFL. Arabic/Persian ruqaa hand. Vazirmatn if the file is missing.
+	hand = load("res://assets/fonts/ArefRuqaa-Regular.ttf")
+	if hand == null:
+		hand = regular
 
 
 static func radial_texture() -> Texture2D:

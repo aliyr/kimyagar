@@ -28,6 +28,11 @@ var _booted := false
 var _probe_t := 0.0
 var _probed := false
 var _profile := false
+var _frametime := false
+var _ft_acc := 0.0
+var _ft_frames := 0
+var _ft_print := 0.0
+var _ft_label: Label
 var _prof_stage := 0
 var _prof_left := 45
 var _prof_name := "warmup"
@@ -110,6 +115,10 @@ func _ready() -> void:
 	debug = DebugPanel.new()
 	debug.name = "Debug"
 	_chrome.add_child(debug)
+	if _frametime:
+		_ft_label = UiKit.label("frame", Rect2(760, 8, 400, 28), 18, Color("f4e2b4"))
+		_ft_label.clip_text = false
+		_chrome.add_child(_ft_label)
 	if _shot != "":
 		_prepare_shot()
 	else:
@@ -206,6 +215,8 @@ func _scan_args(args: PackedStringArray) -> void:
 			_start_workshop = true
 		elif arg == "--profile":
 			_profile = true
+		elif arg == "--frametime":
+			_frametime = true
 
 
 func _build_chrome() -> void:
@@ -353,6 +364,8 @@ func _process(dt: float) -> void:
 	if not _profile and not _probed and _probe_t >= 3.2:
 		_probed = true
 		_print_grade_probe()
+	if _frametime:
+		_tick_frametime(dt)
 	_capture_shot()
 	if _profile:
 		_profile_tick(dt)
@@ -537,17 +550,21 @@ func _prepare_shot() -> void:
 		"receive-accept":
 			_receive_shot("saffron")
 		"result":
+			_result_shot("chamomile")
+		"result-ok":
+			_result_shot("saffron")
+		"drop":
 			phase = "workshop"
 			gate.visible = false
-			var r: Dictionary = Alchemy.create_brew()
-			r = Alchemy.add_ingredient(r, "chamomile", 1.0, "fine", Game.defs)
-			r = Alchemy.set_heat(r, "low", Game.defs)
-			r = Alchemy.advance_time(r, 20.0, Game.defs)
-			Game.brew = r
-			Game.bottle_brew()
-			Game.open_overlay_action("result")
-			Game.deliver()
-			overlays.force_reveal = true
+			workshop.jump_drop("chamomile")
+		"arrive":
+			phase = "workshop"
+			gate.visible = false
+			workshop.jump_customer("enter", 0.48)
+		"depart":
+			phase = "workshop"
+			gate.visible = false
+			workshop.jump_customer("leave", 0.42)
 		"notebook":
 			phase = "workshop"
 			gate.visible = false
@@ -610,6 +627,36 @@ func _boil_shot(heat_name: String) -> void:
 	workshop.block_auto_stir = true
 	_seed_brush_residue()
 	_warm_workshop(0.8)
+
+
+func _result_shot(ingredient_id: String) -> void:
+	phase = "workshop"
+	gate.visible = false
+	var r: Dictionary = Alchemy.create_brew()
+	r = Alchemy.add_ingredient(r, ingredient_id, 1.0, "fine", Game.defs)
+	r = Alchemy.set_heat(r, "low", Game.defs)
+	r = Alchemy.advance_time(r, 20.0, Game.defs)
+	Game.brew = r
+	Game.bottle_brew()
+	Game.open_overlay_action("result")
+	Game.deliver()
+	overlays.force_reveal = true
+
+
+func _tick_frametime(dt: float) -> void:
+	_ft_acc += dt
+	_ft_frames += 1
+	_ft_print += dt
+	if _ft_acc < 0.5 or _ft_label == null:
+		return
+	var fps := float(_ft_frames) / _ft_acc
+	var ms := _ft_acc / float(_ft_frames) * 1000.0
+	_ft_label.text = "frame %.1f ms   %.0f fps" % [ms, fps]
+	_ft_acc = 0.0
+	_ft_frames = 0
+	if _ft_print >= 2.0:
+		_ft_print = 0.0
+		print("FRAMETIME fps=%.1f ms=%.2f" % [fps, ms])
 
 
 func _receive_shot(ingredient_id: String) -> void:

@@ -109,10 +109,13 @@ func _draw() -> void:
 	var cell_h := (h * 0.78) / float(GRID_H)
 	var ox := w * 0.07
 	var oy := h * 0.16
-	var blob := maxf(cell_w, cell_h) * 2.05
-	for y in GRID_H:
+	# Every other cell. A 24×12 textured blob grid is the idle-workshop draw
+	# spike on a weak iGPU; the larger blob keeps the arch covered.
+	var step := 2
+	var blob := maxf(cell_w, cell_h) * 2.05 * 1.85
+	for y in range(0, GRID_H, step):
 		var row := y * GRID_W
-		for x in GRID_W:
+		for x in range(0, GRID_W, step):
 			var heat: float = fire.heat[row + x]
 			if heat < 0.18:
 				continue

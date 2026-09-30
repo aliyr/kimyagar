@@ -72,6 +72,7 @@ func _run() -> void:
 	_spoon_motion()
 	_bottle_glass()
 	_gate_text()
+	_round2()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -668,6 +669,64 @@ func _gate_text() -> void:
 		var hint := str(st["hintFa"]) if Content.stage_unlocked(Content.STAGES.find(st)) else str(Content.UI["gateLocked"])
 		check(_visible_caption(labels, hint), "stage %s hint is visible" % name)
 	check(any, "the gate shows text on at least one stage")
+	root.remove_child(main)
+	main.free()
+
+
+func _round2() -> void:
+	var shader := FileAccess.get_file_as_string("res://shaders/radial_disc.gdshader")
+	check(shader.find("discard") < 0, "cauldron water shader does not kill fragments")
+	var sim := ClassicBrewSim.new()
+	check(sim.fill > 0.5, "cauldron starts with water")
+	sim.hide_pot()
+	check(not sim.pot_visible(), "a hidden pot is not drawn")
+	sim.respawn(0.0)
+	check(sim.fill == 0.0, "respawn empties the pot before the water returns")
+	for _i in 120:
+		sim.update(0.05)
+	check(sim.fill > 0.5, "water returns after the pot settles, fill %s" % sim.fill)
+	var sheets: Script = load("res://scripts/fx/parchment_sheet.gd")
+	var ok: Texture2D = sheets.sheet("ok")
+	var bad: Texture2D = sheets.sheet("bad")
+	check(ok != null and ok.get_width() > 0, "success parchment bakes")
+	check(bad != null and bad.get_width() == ok.get_width(), "failure parchment bakes")
+	var ok_px: Color = ok.get_image().get_pixel(180, 220)
+	var bad_px: Color = bad.get_image().get_pixel(180, 220)
+	check(ok_px != bad_px, "failure parchment is scorched")
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	var tipped: Vector2 = workshop._jar_pour_pose(0.55)
+	near(tipped.x, -10.0, "jar lifts at the web pour keyframe", 0.05)
+	near(tipped.y, 26.0, "jar tips toward the mortar", 0.05)
+	var enter0: Dictionary = workshop._customer_pose("enter", 0.0)
+	check(float(enter0["x"]) > 200.0, "customer enters from the right")
+	check(float(enter0["a"]) < 0.05, "customer is unseen at the start of the walk")
+	var arrived: Dictionary = workshop._customer_pose("enter", 1.1)
+	check(absf(float(arrived["x"])) < 12.0, "customer reaches the counter, x %s" % arrived["x"])
+	var left: Dictionary = workshop._customer_pose("leave", 0.9)
+	check(float(left["x"]) > 200.0, "customer departs to the right")
+	workshop._spawn_flight("chamomile", Vector2(80, 200))
+	check(workshop._flights.size() >= 4, "pieces leave the jar")
+	check(workshop._jar_pour.has("chamomile"), "the jar plays the pour")
+	workshop._tick_flights(0.2)
+	var airborne := false
+	for flight in workshop._flights:
+		var ft := float(flight["t"])
+		if ft >= 0.0 and ft < 0.34:
+			airborne = true
+	check(airborne, "pieces are in the air on the way to the mortar")
+	var brew: Dictionary = Alchemy.create_brew()
+	brew = Alchemy.add_ingredient(brew, "ginger", 1.0, "crushed", game.defs)
+	game.brew = brew
+	workshop.begin_discard()
+	check(workshop.discard_t == 0.0, "the throw starts")
+	check(not workshop._brew.pot_visible(), "the pot leaves the hearth")
+	workshop._tick_discard(0.52)
+	check(workshop._splat_fired and workshop._clang_fired, "splat and clang stay on the web clock")
+	workshop._sync_liquid()
+	check(workshop._throw_was, "the wall stain and the flying pot redraw")
 	root.remove_child(main)
 	main.free()
 
