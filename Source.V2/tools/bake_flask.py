@@ -177,8 +177,9 @@ def _mark():
     """دوا in Aref Ruqaa, shaped by Godot's text server.
 
     ffmpeg drawtext has no Arabic shaping and drew three hollow boxes.
-    tools/dawa_ink.png is that same font, RTL, with the swashes overlapped
-    just enough that the word is one connected mark. See render_dawa.gd.
+    tools/dawa_ink.png is that same font, RTL. The alif is dropped onto the
+    waw's tail and the dal is pulled until it touches, so the word is one
+    connected mark and the three letters stay readable. See render_dawa.gd.
     """
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dawa_ink.png")
     img = _load_rgba(path)
