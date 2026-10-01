@@ -476,6 +476,9 @@ func _build() -> void:
 	UiKit.fill(_transfer_back)
 	_transfer_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_transfer_back.z_index = 4
+	# The spoon in the mortar is drawn inside the pile, behind the front stone.
+	# A full-screen canvas between those two layers was splitting batches.
+	_transfer_back.visible = false
 	_work.add_child(_transfer_back)
 	_transfer_draw = _painter(_draw_transfer)
 	UiKit.fill(_transfer_draw)
@@ -2374,7 +2377,8 @@ func _in_mortar(phase: String) -> bool:
 
 
 func _paint_transfer(c: Control, buried: bool) -> void:
-	if _transfer == null or not _transfer.active() or _spoon_art == null:
+	# The mortar spoon is painted with the pile, behind the front stone.
+	if buried or _transfer == null or not _transfer.active() or _spoon_art == null:
 		return
 	var pose := _transfer_pose()
 	if pose.is_empty():
@@ -2384,49 +2388,15 @@ func _paint_transfer(c: Control, buried: bool) -> void:
 	var fade := float(pose["opacity"])
 	var lip: Vector2 = pose.get("lip", Vector2(0, 24))
 	var phase := str(pose.get("phase", ""))
-	var in_mortar := _in_mortar(phase)
-	if buried and not in_mortar:
-		return
 	var bury := 100000.0
-	if buried:
-		_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
-	elif in_mortar:
-		# Above the herbs and above the stone. The buried bowl stays on the back layer.
+	if _in_mortar(phase):
+		# Fade into the pile, and never cross onto the front stone.
 		var surface := MortarPile.pile_surface_y(float(pose.get("level", 1.0)))
-		bury = minf(surface, MortarPile.front_lip_y())
-		_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
-	else:
-		_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
-	if buried:
-		if float(pose["blob"]) > 0.05:
-			_paint_mound(c, pose, at, rot, lip, fade, bury)
-		if phase == "dip" or phase == "scoop":
-			_draw_buried_herbs(c, float(pose.get("level", 1.0)), fade, pose.get("color", Color("#8a7a52")))
-		return
-	if in_mortar:
-		if Settings.effects_enabled:
-			_paint_motes(c, pose)
-		return
+		bury = minf(surface, MortarPile.front_lip_y() - 12.0)
+	_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
 	if float(pose["blob"]) > 0.05:
-		var col: Color = pose.get("color", Color("#8a7a52"))
-		var heap := at + lip * 0.42
-		var heap_k := clampf(float(pose["blob"]), 0.15, 1.0)
-		var mound := _shift_poly(_oval(24.0 * heap_k, 13.0 * heap_k), heap, rot)
-		var core := _shift_poly(_oval(14.0 * heap_k, 7.0 * heap_k), heap, rot)
-		if bury < 50000.0:
-			mound = _clip_above(mound, bury)
-			core = _clip_above(core, bury)
-		if mound.size() >= 3:
-			c.draw_colored_polygon(mound, Color(col.r, col.g, col.b, 0.96 * fade))
-		if core.size() >= 3:
-			c.draw_colored_polygon(core, Color(col.r * 0.78, col.g * 0.78, col.b * 0.7, 0.45 * fade))
-		var cs := cos(rot)
-		var sn := sin(rot)
-		for chip in pose.get("chips", []):
-			var local := Vector2(float(chip.get("sx", 0.0)), float(chip.get("sy", 0.0))) * 0.45 + lip * 0.5
-			var p := at + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y)
-			if p.y <= bury:
-				_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
+		var mound_limit := MortarPile.front_lip_y() if _in_mortar(phase) else bury
+		_paint_mound(c, pose, at, rot, lip, fade, mound_limit)
 	var from := at + lip
 	for item in pose.get("falling", []):
 		var eased := float(item.get("eased", 0.0))
@@ -2436,20 +2406,9 @@ func _paint_transfer(c: Control, buried: bool) -> void:
 		var p2 := from * (u * u) + mid * (2.0 * u * eased) + dest * (eased * eased)
 		_draw_mini_chip(c, item["chip"], p2, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
 	if Settings.effects_enabled:
-		for mote_v in pose.get("motes", []):
-			var mote: Dictionary = mote_v
-			var mc: Color = mote.get("color", Color("#8a7a52"))
-			var mr := float(mote.get("r", 2.0))
-			var ma := clampf(float(mote.get("life", 0.2)) / 0.4, 0.0, 1.0)
-			c.draw_circle(Vector2(float(mote.get("x", 0.0)), float(mote.get("y", 0.0))), mr, Color(mc.r, mc.g, mc.b, 0.8 * ma))
+		_paint_motes(c, pose)
 	if float(pose.get("pouring", 0.0)) > 0.5:
-		var col2: Color = pose.get("color", Color("#8a7a52"))
-		for i in 7:
-			var s := fposmod(_transfer.t * 3.0 + float(i) / 7.0, 1.0)
-			var fall := s * s
-			var drop := from.lerp(_transfer.land, fall)
-			drop.x += sin(float(i) * 1.7) * 6.0 * (1.0 - s)
-			c.draw_circle(drop, lerpf(4.2, 2.2, s), Color(col2.r, col2.g, col2.b, 0.85 * fade * (1.0 - s * 0.35)))
+		_paint_stream(c, from, _transfer.land, pose.get("color", Color("#8a7a52")), fade)
 
 
 func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Vector2, fade: float, bury: float) -> void:
@@ -2483,34 +2442,29 @@ func _paint_motes(c: Control, pose: Dictionary) -> void:
 		c.draw_circle(Vector2(float(mote.get("x", 0.0)), float(mote.get("y", 0.0))), mr, Color(mc.r, mc.g, mc.b, 0.8 * ma))
 
 
-## Front of the material, drawn over the spoon so the buried bowl stays in the herbs.
-## The cover is the opening ellipse below the pile surface, so it cannot paint the stone.
-func _draw_buried_herbs(c: Control, level: float, fade: float, col: Color) -> void:
-	if level < 0.12 or fade <= 0.02:
+func _paint_stream(c: Control, from: Vector2, land: Vector2, col: Color, fade: float) -> void:
+	var dir := land - from
+	var span := dir.length()
+	if span < 8.0:
 		return
-	var surface := MortarPile.pile_surface_y(level)
-	var mouth_c := MortarPile.scene_mouth()
-	var mouth_r := MortarPile.scene_mouth_r()
-	var ell := _ellipse_pts(mouth_c, mouth_r.x * 0.96, mouth_r.y * 0.96, 36)
-	var below := PackedVector2Array([
-		Vector2(mouth_c.x - mouth_r.x * 1.5, surface - 1.0),
-		Vector2(mouth_c.x + mouth_r.x * 1.5, surface - 1.0),
-		Vector2(mouth_c.x + mouth_r.x * 1.5, surface + mouth_r.y * 3.0),
-		Vector2(mouth_c.x - mouth_r.x * 1.5, surface + mouth_r.y * 3.0),
-	])
-	var parts: Array = Geometry2D.intersect_polygons(ell, below)
-	for poly in parts:
-		if (poly as PackedVector2Array).size() >= 3:
-			c.draw_colored_polygon(poly, Color(col.r, col.g, col.b, 0.98 * fade))
-
-
-func _ellipse_pts(center: Vector2, rx: float, ry: float, n: int) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	pts.resize(n)
+	dir /= span
+	var nrm := Vector2(-dir.y, dir.x)
+	var left := PackedVector2Array()
+	var right := PackedVector2Array()
+	var n := 12
 	for i in n:
-		var a := TAU * float(i) / float(n)
-		pts[i] = center + Vector2(cos(a) * rx, sin(a) * ry)
-	return pts
+		var s := float(i) / float(n - 1)
+		var p := from.lerp(land, s)
+		p += nrm * sin(s * PI) * 5.0
+		var w := lerpf(6.2, 2.6, s)
+		left.append(p + nrm * w)
+		right.append(p - nrm * w)
+	var poly := PackedVector2Array()
+	for p in left:
+		poly.append(p)
+	for i in range(right.size() - 1, -1, -1):
+		poly.append(right[i])
+	c.draw_colored_polygon(poly, Color(col.r, col.g, col.b, 0.9 * fade))
 
 
 func _shift_poly(local: PackedVector2Array, at: Vector2, rot: float) -> PackedVector2Array:
@@ -2525,16 +2479,7 @@ func _shift_poly(local: PackedVector2Array, at: Vector2, rot: float) -> PackedVe
 
 
 func _clip_above(poly: PackedVector2Array, limit_y: float) -> PackedVector2Array:
-	var rect := PackedVector2Array([
-		Vector2(-4000.0, -4000.0),
-		Vector2(8000.0, -4000.0),
-		Vector2(8000.0, limit_y),
-		Vector2(-4000.0, limit_y),
-	])
-	var clipped: Array = Geometry2D.clip_polygons(poly, rect)
-	if clipped.is_empty():
-		return PackedVector2Array()
-	return clipped[0]
+	return SpoonTransfer.clip_above(poly, limit_y)
 
 
 func _oval(rx: float, ry: float) -> PackedVector2Array:

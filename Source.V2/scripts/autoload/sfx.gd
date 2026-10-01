@@ -731,28 +731,28 @@ var _capture := false
 ## Gains are set so the mixed peak, after the master, sits near 0.25.
 func spoon_dip(kind: String) -> void:
 	if kind == "grain":
-		noise_burst(0.045, "bandpass", 2800.0, 0.46, 5.5)
-		noise_burst(0.03, "bandpass", 4200.0, 0.34, 6.0)
-		tone(680.0, 0.04, 0.08, "triangle", 240.0)
+		noise_burst(0.045, "bandpass", 2800.0, 0.53, 5.5)
+		noise_burst(0.03, "bandpass", 4200.0, 0.38, 6.0)
+		tone(680.0, 0.04, 0.09, "triangle", 240.0)
 	elif kind == "leaf":
-		noise_burst(0.14, "highpass", 2600.0, 0.95, 0.7, 1100.0)
-		noise_burst(0.07, "bandpass", 1800.0, 0.7, 1.5)
+		noise_burst(0.14, "highpass", 2600.0, 0.54, 0.7, 1100.0)
+		noise_burst(0.07, "bandpass", 1800.0, 0.38, 1.5)
 	else:
-		noise_burst(0.12, "lowpass", 320.0, 1.35, 0.55, 140.0)
-		noise_burst(0.06, "lowpass", 180.0, 0.9, 0.5)
+		noise_burst(0.12, "lowpass", 320.0, 0.92, 0.55, 140.0)
+		noise_burst(0.06, "lowpass", 180.0, 0.58, 0.5)
 
 
 func spoon_drag(kind: String) -> void:
 	if kind == "grain":
-		noise_burst(0.04, "bandpass", 3400.0, 0.48, 7.0)
-		noise_burst(0.035, "bandpass", 5100.0, 0.38, 8.0, 2600.0)
-		noise_burst(0.03, "highpass", 4800.0, 0.28, 1.2)
-		tone(920.0, 0.03, 0.06, "triangle", 400.0)
+		noise_burst(0.04, "bandpass", 3400.0, 0.70, 7.0)
+		noise_burst(0.035, "bandpass", 5100.0, 0.55, 8.0, 2600.0)
+		noise_burst(0.03, "highpass", 4800.0, 0.37, 1.2)
+		tone(920.0, 0.03, 0.08, "triangle", 400.0)
 	elif kind == "leaf":
-		noise_burst(0.22, "highpass", 1900.0, 0.9, 0.75, 700.0)
-		noise_burst(0.1, "bandpass", 980.0, 0.55, 1.2)
+		noise_burst(0.22, "highpass", 1900.0, 0.38, 0.75, 700.0)
+		noise_burst(0.1, "bandpass", 980.0, 0.22, 1.2)
 	else:
-		noise_burst(0.22, "lowpass", 240.0, 1.00, 0.5, 90.0)
+		noise_burst(0.22, "lowpass", 240.0, 1.05, 0.5, 90.0)
 		noise_burst(0.1, "lowpass", 140.0, 0.55, 0.45)
 
 

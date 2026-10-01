@@ -104,6 +104,14 @@ var _visual_level := -1.0
 ## spoon clip read this so the powder and the buried bowl share one line.
 const PILE_HIGH_Y := 586.0
 const PILE_LOW_Y := 628.0
+## Painted opening on the 1920 stage. The chip-percent mouth is smaller and
+## lower, so a scoop aimed at that mouth sat on the front lip.
+const VIS_CX := 414.0
+const VIS_CY := 566.0
+const VIS_RX := 120.0
+const VIS_RY := 56.0
+## Front stone. Alpha is about 0.2 at y=620 and 1.0 by y=626.
+const LIP_Y := 622.0
 const MARK_LIFE := 3.2
 var _pile_crush: float = 0.0
 var _pile_work: float = 0.0
@@ -213,24 +221,27 @@ static func scene_mouth_r() -> Vector2:
 	return Vector2((MOUTH_RX / 100.0) * ZONE_W, (MOUTH_RY / 100.0) * ZONE_H)
 
 
+static func visible_mouth() -> Vector2:
+	return Vector2(VIS_CX, VIS_CY)
+
+
+static func visible_mouth_r() -> Vector2:
+	return Vector2(VIS_RX, VIS_RY)
+
+
 ## Where the front stone becomes the near rim. The spoon bowl stays above this.
 static func front_lip_y() -> float:
-	return ZONE_Y + 0.4128 * ZONE_H
+	return LIP_Y
 
 
-## Centre of a scoop: inside the opening, about 70% of the bowl under a full pile.
+## Centre of the material surface, inside the painted opening.
 static func scoop_point() -> Vector2:
-	var mouth := scene_mouth()
-	var rad := scene_mouth_r()
-	var y := minf(PILE_HIGH_Y + 14.0, mouth.y + rad.y * 0.58)
-	return Vector2(mouth.x, y)
+	return Vector2(VIS_CX, 570.0)
 
 
 static func mouth_norm(p: Vector2) -> float:
-	var mouth := scene_mouth()
-	var rad := scene_mouth_r()
-	var dx := (p.x - mouth.x) / maxf(1.0, rad.x)
-	var dy := (p.y - mouth.y) / maxf(1.0, rad.y)
+	var dx := (p.x - VIS_CX) / VIS_RX
+	var dy := (p.y - VIS_CY) / VIS_RY
 	return sqrt(dx * dx + dy * dy)
 
 

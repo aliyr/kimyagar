@@ -49,10 +49,10 @@ var _mote_wait := 0.0
 var _ang := -28.0
 var _ang_vel := 0.0
 var _hollow_sent: Array[bool] = [false, false]
-## Wrist speed stays under the 250 deg/s cap, with a finite acceleration so
-## phase seams do not snap.
-const MAX_ANG_VEL := 240.0
-const MAX_ANG_ACC := 1400.0
+## The wrist follows a smooth target. Acceleration stays near 6,000 deg/s^2.
+## A hard speed cap was what snapped 240 deg/s down to -99 in one tick.
+const MAX_ANG_ACC := 6000.0
+const ANG_W := 38.0
 
 
 func begin(mouth_center: Vector2, radii: Vector2) -> void:
@@ -65,17 +65,17 @@ func begin(mouth_center: Vector2, radii: Vector2) -> void:
 	_trail = 0.0
 	mouth = mouth_center
 	mouth_r = radii
-	# The bowl lands inside the opening, on the material, not on the front lip.
+	# The bowl lands on the material, at the centre of the painted opening.
 	dip = MortarPile.scoop_point()
 	start = Vector2(dip.x, dip.y - 52.0)
-	var mr := MortarPile.scene_mouth_r()
-	orbit = Vector2(mr.x * 0.34, mr.y * 0.22)
-	# Pour from above the mouth, centred on the opening.
-	end = Vector2(mouth.x, mouth.y - mouth_r.y - 36.0)
-	land = Vector2(mouth.x, mouth.y + mouth_r.y * 0.12)
+	var mr := MortarPile.visible_mouth_r()
+	orbit = Vector2(mr.x * 0.20, mr.y * 0.10)
+	# High enough above the mouth that the stream has a real fall into the opening.
+	end = Vector2(mouth.x, mouth.y - mouth_r.y - 78.0)
+	land = Vector2(mouth.x, mouth.y + mouth_r.y * 0.22)
 	control = Vector2((start.x + end.x) * 0.5, minf(start.y, end.y) - 210.0)
-	lift = Vector2(dip.x, dip.y - 28.0)
-	hover = Vector2(dip.x - 16.0, MortarPile.scene_mouth().y - mr.y - 70.0)
+	lift = Vector2(dip.x, dip.y - 22.0)
+	hover = Vector2(dip.x - 16.0, MortarPile.visible_mouth().y - mr.y - 70.0)
 	mortar_level = 1.0
 	motes = []
 	_removed = 0.0
@@ -88,7 +88,7 @@ func begin(mouth_center: Vector2, radii: Vector2) -> void:
 	_had_material = false
 	_base_set = false
 	_mote_wait = 0.0
-	_ang = 72.0
+	_ang = REST_ROT
 	_ang_vel = 0.0
 	_hollow_sent = [false, false]
 
@@ -127,52 +127,67 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	if t < T_IN:
 		# From above and to the side, tip first, down into the opening.
 		phase = "approach"
-		var k := _ease_in_out(t / T_IN)
-		var mc := MortarPile.scene_mouth()
-		var mr := MortarPile.scene_mouth_r()
-		var rest := Vector2(mc.x + mr.x * 0.62, mc.y - mr.y - 34.0)
-		var c1 := Vector2(mc.x + mr.x * 0.22, rest.y - 28.0)
-		var c2 := Vector2(mc.x + 4.0, mc.y - mr.y * 0.35)
+		var k := _quintic(t / T_IN)
+		var mc := MortarPile.visible_mouth()
+		var mr := MortarPile.visible_mouth_r()
+		var rest := Vector2(mc.x + mr.x * 0.46, mc.y - mr.y - 28.0)
+		var c1 := Vector2(mc.x + mr.x * 0.70, rest.y - 46.0)
+		var c2 := Vector2(mc.x + 6.0, mc.y - mr.y * 0.25)
 		pos = _cubic(rest, c1, c2, dip, k)
-		rot = _rot_target(t)
 	elif t < T_SCOOP:
 		phase = "scoop"
 		var k2 := (t - T_IN) / T_STIR
 		var cycle := clampf(k2, 0.0, 0.999) * 2.0
 		var which := int(floor(cycle))
 		var local := cycle - float(which)
-		var xoff := 0.0
+		# Zero velocity at both ends of the cycle, so the seams stay C1.
+		var hump := sin(local * PI)
+		var xoff := hump * hump * orbit.x * 0.85
+		var y := dip.y
+		if which == 0:
+			if local < 0.62:
+				depth = 1.0 if local >= 0.34 else _ease_in(local / 0.34)
+			else:
+				var up := _quintic((local - 0.62) / 0.38)
+				y = lerpf(dip.y, lift.y, up)
+				depth = 1.0 - up
+		elif local < 0.40:
+			var down := _quintic(local / 0.40)
+			y = lerpf(lift.y, dip.y, down)
+			depth = down
+		elif local < 0.62:
+			depth = 1.0
+		else:
+			var up2 := _quintic((local - 0.62) / 0.38)
+			y = lerpf(dip.y, lift.y, up2)
+			depth = 1.0 - up2
 		if local < 0.34:
 			phase = "dip"
-			depth = _ease_in(local / 0.34)
-			xoff = sin(local / 0.34 * PI) * orbit.x * 0.22
 			if depth > 0.62 and which < _dip_sent.size() and not _dip_sent[which]:
 				_dip_sent[which] = true
 				cue = "dip"
 		elif local < 0.62:
-			depth = 1.0
 			var drag := (local - 0.34) / 0.28
-			xoff = lerpf(0.0, orbit.x * 0.72, _ease_in_out(drag))
 			if drag > 0.2 and which < _drag_sent.size() and not _drag_sent[which]:
 				_drag_sent[which] = true
 				cue = "drag"
 		else:
-			var lift_k := _ease_out((local - 0.62) / 0.38)
-			depth = 1.0 - lift_k
-			xoff = orbit.x * 0.72 * (1.0 - lift_k)
+			var lift_k := (local - 0.62) / 0.38
 			shedding = lift_k > 0.08 and lift_k < 0.92
-		# The handle rises out of the cavity, over the opening, then eases
-		# level before the carry. The target is flat at both seams.
-		rot = _rot_target(t)
-		var high := dip.y if (which == 0 and local < 0.62) else lift.y
-		pos = Vector2(start.x + xoff, lerpf(high, dip.y, depth))
-		pos = _keep_in_mouth(pos)
+		pos = Vector2(dip.x + xoff, y)
+		if depth > 0.55:
+			pos = _keep_in_mouth(pos)
 		var sunk := (float(which) + depth) / 2.0
 		if sunk > _removed:
 			_removed = sunk
 		if pile != null:
 			if _had_material:
-				_take(pile.scoop_under(pos.x, pos.y))
+				# The pivot rests on the material. Chips sit deeper in the bowl,
+				# under the buried tip, so gather there while the spoon is seated.
+				var gather := pos
+				if pos.y > dip.y - 10.0:
+					gather = Vector2(pos.x, MortarPile.front_lip_y() - 2.0)
+				_take(pile.scoop_under(gather.x, gather.y))
 			if local >= 0.40 and which < _hollow_sent.size() and not _hollow_sent[which]:
 				_hollow_sent[which] = true
 				pile.note_hollow(pos.x, pos.y)
@@ -196,16 +211,11 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 		if _carry_rot == 0.0 and absf(rot) < 0.01:
 			_carry_rot = -2.0
 		pos = _carry(k3)
-		pos.x += sin(k3 * TAU) * 6.0
-		pos.y += sin(k3 * PI) * 5.0
-		if k3 > 0.84:
-			var over := sin((k3 - 0.84) / 0.16 * PI)
-			pos.x += over * 14.0
-			pos.y -= over * 7.0
-		var ahead := _carry(minf(1.0, k3 + 0.05))
-		var want := clampf(-(ahead.x - pos.x) * 0.025, -4.0, 4.0)
-		_carry_rot = lerpf(_carry_rot, want, 0.22)
-		rot = _carry_rot + sin(k3 * TAU) * 1.6
+		# A bump that is still at both ends, so the carry does not kick the wrist.
+		var sway := sin(k3 * PI)
+		sway *= sway
+		pos.x += sway * 8.0
+		pos.y += sway * 4.0
 		blob = 1.0 if _had_material else 0.0
 		var fine := 0
 		for chip in chips:
@@ -215,34 +225,31 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	elif t < T_SCOOP + T_CARRY + T_DROP:
 		phase = "pour"
 		var k4 := (t - T_SCOOP - T_CARRY) / T_DROP
-		var tilt_k := _ease_in_out(clampf(k4 / DROP_AT, 0.0, 1.0))
+		var tilt_k := _dwell(clampf(k4 / 0.70, 0.0, 1.0))
 		# Small arc onto the mouth, then a pause at full tilt while it pours.
-		pos = Vector2(end.x + 18.0 * sin(tilt_k * PI * 0.5), end.y - 14.0 * sin(tilt_k * PI))
-		rot = 76.0 * tilt_k
+		pos = Vector2(end.x + 14.0 * sin(tilt_k * PI * 0.5), end.y - 8.0 * sin(tilt_k * PI))
 		if k4 >= DROP_AT and not _released:
 			_released = true
 			_release()
+		if k4 > 0.10:
+			pouring = 1.0
 		if _released and not _landed:
 			var pour := clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0)
 			_place_fall(pour)
-			pouring = 1.0
 			if pour >= 0.92:
 				_landed = true
 				landed_now = true
-		var residue := 0.32 * (1.0 - clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0))
-		blob = (1.0 if not _released else residue) if _had_material else 0.0
+		# The heap shrinks with the pour. It does not jump on the release tick.
+		var poured := _dwell(clampf((k4 - 0.04) / 0.90, 0.0, 1.0))
+		blob = (1.0 - poured) if _had_material else 0.0
 	elif t < TOTAL:
 		phase = "exit"
 		if _released and not _landed:
 			_landed = true
 			landed_now = true
-		var k5 := _ease_in_out((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT)
-		pos = Vector2(end.x + 18.0 - 28.0 * k5, end.y - 170.0 * k5)
-		# The web exit settles at 15 deg. k5 is already eased, and the
-		# turn finishes early so the limited wrist can arrive and hold.
-		var rot_k := clampf(k5 / 0.78, 0.0, 1.0)
-		rot = lerpf(76.0, 15.0, rot_k)
-		opacity = 1.0 - k5
+		var k5 := _dwell((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT)
+		pos = Vector2(end.x + 14.0 - 22.0 * k5, end.y - 150.0 * k5)
+		opacity = 1.0 - _ease_in_out((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT)
 		blob = 0.0
 	else:
 		if not _landed:
@@ -257,7 +264,7 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	mortar_level = _level_at(t)
 	if pile != null:
 		pile.set_visual_level(mortar_level)
-	rot = _slew_rot(rot, dt)
+	rot = _slew_rot(_rot_target(t), dt)
 	_tick_motes(dt, pos, shedding and _had_material, _chip_color())
 	return {
 		"alive": true,
@@ -367,6 +374,30 @@ func _pour_sample(list: Array, limit: int) -> Array:
 	return picked
 
 
+## Keep the part of poly at or above limit_y (smaller y). clip_polygons is a
+## difference in Godot 4.7.2 and would keep the buried half.
+static func clip_above(poly: PackedVector2Array, limit_y: float) -> PackedVector2Array:
+	if poly.size() < 3:
+		return PackedVector2Array()
+	var rect := PackedVector2Array([
+		Vector2(-4000.0, -4000.0),
+		Vector2(8000.0, -4000.0),
+		Vector2(8000.0, limit_y),
+		Vector2(-4000.0, limit_y),
+	])
+	var clipped: Array = Geometry2D.intersect_polygons(poly, rect)
+	if clipped.is_empty():
+		return PackedVector2Array()
+	var best: PackedVector2Array = clipped[0]
+	var best_n := best.size()
+	for i in range(1, clipped.size()):
+		var part: PackedVector2Array = clipped[i]
+		if part.size() > best_n:
+			best = part
+			best_n = part.size()
+	return best
+
+
 func lip_offset(rot_deg: float) -> Vector2:
 	var rad := deg_to_rad(rot_deg)
 	var front := Vector2(-sin(rad), cos(rad))
@@ -471,33 +502,49 @@ func _chip_color() -> Color:
 	return Color(r / float(n), g / float(n), b / float(n), 1.0)
 
 
-## The bowl pivot stays in the cavity. 54 deg sends the handle up and to the
-## side, across the opening and out above the rim, instead of along the front lip.
-const DIP_ROT := 54.0
-const REST_ROT := 72.0
-const UNWIND_AT := 1.22
+## 42 deg sends the handle up and out over the side of the rim. The tip,
+## local +Y, points down into the material.
+const DIP_ROT := 42.0
+const REST_ROT := 64.0
+const UNWIND_AT := 1.62
+const POUR_TILT := 68.0
 
 
 func _rot_target(now: float) -> float:
+	if now <= 0.0:
+		return REST_ROT
 	if now < T_IN:
-		return lerpf(REST_ROT, DIP_ROT, _ease_in_out(now / T_IN))
+		return lerpf(REST_ROT, DIP_ROT, _quintic(now / T_IN))
 	if now < UNWIND_AT:
 		return DIP_ROT
 	if now < T_SCOOP:
-		return lerpf(DIP_ROT, -2.0, _ease_in_out((now - UNWIND_AT) / (T_SCOOP - UNWIND_AT)))
-	return -2.0
+		return lerpf(DIP_ROT, -2.0, _dwell((now - UNWIND_AT) / (T_SCOOP - UNWIND_AT)))
+	var carry_end := T_SCOOP + T_CARRY
+	if now < carry_end:
+		var k := (now - T_SCOOP) / T_CARRY
+		var bump := sin(k * PI)
+		return -2.0 + bump * bump * 2.2
+	var pour_end := carry_end + T_DROP
+	if now < pour_end:
+		var k4 := (now - carry_end) / T_DROP
+		if k4 < 0.70:
+			return lerpf(-2.0, POUR_TILT, _dwell(k4 / 0.70))
+		return POUR_TILT
+	# 68 -> 15 across the whole exit. Smoothstep peaks near 230 deg/s.
+	var k5 := clampf((now - pour_end) / T_EXIT, 0.0, 1.0)
+	return lerpf(POUR_TILT, 15.0, _dwell(k5))
 
 
 func _keep_in_mouth(p: Vector2) -> Vector2:
-	var mouth := MortarPile.scene_mouth()
-	var rad := MortarPile.scene_mouth_r()
-	var dx := (p.x - mouth.x) / rad.x
-	var dy := (p.y - mouth.y) / rad.y
+	var center := MortarPile.visible_mouth()
+	var rad := MortarPile.visible_mouth_r()
+	var dx := (p.x - center.x) / rad.x
+	var dy := (p.y - center.y) / rad.y
 	var n := sqrt(dx * dx + dy * dy)
-	if n <= 0.72 or n < 0.001:
+	if n <= 0.58 or n < 0.001:
 		return p
-	var s := 0.72 / n
-	return Vector2(mouth.x + dx * s * rad.x, mouth.y + dy * s * rad.y)
+	var s := 0.58 / n
+	return Vector2(center.x + dx * s * rad.x, center.y + dy * s * rad.y)
 
 
 func _level_at(now: float) -> float:
@@ -518,18 +565,25 @@ func _level_at(now: float) -> float:
 
 
 func _slew_rot(target: float, dt: float) -> float:
+	# The target is already smoothstep-shaped, so the wrist is that curve.
+	# A spring here was unstable at 30 Hz and snapped the speed.
 	var step_dt := maxf(dt, 0.0001)
-	var err := target - _ang
-	var want := clampf(err / step_dt, -MAX_ANG_VEL, MAX_ANG_VEL)
-	_ang_vel = move_toward(_ang_vel, want, MAX_ANG_ACC * step_dt)
-	_ang_vel = clampf(_ang_vel, -MAX_ANG_VEL, MAX_ANG_VEL)
-	var step := _ang_vel * step_dt
-	if absf(step) >= absf(err):
+	var prev := _rot_target(maxf(0.0, t - step_dt))
+	var vel := clampf((target - prev) / step_dt, -245.0, 245.0)
+	var acc := clampf((vel - _ang_vel) / step_dt, -MAX_ANG_ACC, MAX_ANG_ACC)
+	_ang_vel += acc * step_dt
+	# Stay on the target when the limit is not binding.
+	if absf(acc) < MAX_ANG_ACC - 1.0:
 		_ang = target
-		_ang_vel = clampf(err / step_dt, -MAX_ANG_VEL, MAX_ANG_VEL)
+		_ang_vel = vel
 	else:
-		_ang += step
+		_ang += _ang_vel * step_dt
 	return _ang
+
+
+func _quintic(k: float) -> float:
+	var u := clampf(k, 0.0, 1.0)
+	return u * u * u * (u * (u * 6.0 - 15.0) + 10.0)
 
 
 func _ease_out(k: float) -> float:

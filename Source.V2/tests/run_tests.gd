@@ -597,8 +597,15 @@ func _spoon_motion() -> void:
 	var drag_cues := 0
 	var saw_mote := false
 	var worst_norm := 0.0
+	var deep_norm := 0.0
 	var below_lip := false
 	var dip_rise := 1.0
+	var prev_ang_v := 0.0
+	var have_ang_v := false
+	var max_ang_acc := 0.0
+	var max_blob_step := 0.0
+	var prev_blob := 0.0
+	var have_blob := false
 	while s.active():
 		var pose: Dictionary = s.update(1.0 / 60.0, null)
 		if not bool(pose.get("alive", false)):
@@ -611,8 +618,17 @@ func _spoon_motion() -> void:
 			step = here.distance_to(prev)
 			max_step = maxf(max_step, step)
 			max_accel = maxf(max_accel, absf(step - prev_step))
-			drot = absf(float(pose["rot"]) - prev_rot) * 60.0
-			max_ang = maxf(max_ang, drot)
+			drot = (float(pose["rot"]) - prev_rot) * 60.0
+			max_ang = maxf(max_ang, absf(drot))
+			if have_ang_v:
+				max_ang_acc = maxf(max_ang_acc, absf(drot - prev_ang_v) * 60.0)
+			have_ang_v = true
+			prev_ang_v = drot
+		var blob_now := float(pose.get("blob", 0.0))
+		if have_blob and str(pose.get("phase", "")) == "pour":
+			max_blob_step = maxf(max_blob_step, absf(blob_now - prev_blob))
+		have_blob = true
+		prev_blob = blob_now
 		have_prev = true
 		prev = here
 		prev_step = step
@@ -630,7 +646,7 @@ func _spoon_motion() -> void:
 			level = next_level
 		if tt > 1.92 and tt < 2.62:
 			carry.append(here)
-			carry_ang = maxf(carry_ang, drot)
+			carry_ang = maxf(carry_ang, absf(drot))
 			carry_abs = maxf(carry_abs, absf(float(pose["rot"])))
 		if tt > 2.62 and tt < 3.50:
 			pour_rot = maxf(pour_rot, absf(float(pose["rot"])))
@@ -641,6 +657,8 @@ func _spoon_motion() -> void:
 			var norm := MortarPile.mouth_norm(here)
 			if phase != "approach":
 				worst_norm = maxf(worst_norm, norm)
+			if float(pose.get("depth", 0.0)) > 0.8:
+				deep_norm = maxf(deep_norm, norm)
 			if here.y > MortarPile.front_lip_y():
 				below_lip = true
 		if phase == "dip":
@@ -655,10 +673,14 @@ func _spoon_motion() -> void:
 	check(saw_dip and deepest > s.start.y + 36.0, "spoon dips into the mortar got %s start %s" % [deepest, s.start.y])
 	var scoop: Vector2 = MortarPile.scoop_point()
 	var lip_y := MortarPile.front_lip_y()
-	check(MortarPile.mouth_norm(scoop) < 0.7, "scoop sits inside the opening, norm %s at %s" % [MortarPile.mouth_norm(scoop), scoop])
+	check(MortarPile.mouth_norm(scoop) <= 0.6, "scoop sits inside the opening, norm %s at %s" % [MortarPile.mouth_norm(scoop), scoop])
+	check(absf(scoop.x - 414.0) < 2.0 and scoop.y >= 560.0 and scoop.y <= 575.0, "scoop is at the material centre %s" % scoop)
 	check(scoop.y < lip_y - 12.0, "scoop is above the front lip, y %s lip %s" % [scoop.y, lip_y])
 	check(s.dip.distance_to(scoop) < 1.0, "dip uses the interior scoop point")
+	check(deep_norm <= 0.6, "max depth stays inside the opening, norm %s" % deep_norm)
 	check(worst_norm < 0.78, "dip and drag stay inside the opening, norm %s" % worst_norm)
+	check(max_ang_acc < 6500.0, "angular acceleration %s deg/s^2" % max_ang_acc)
+	check(max_blob_step < 0.08, "mound shrinks continuously, step %s" % max_blob_step)
 	check(not below_lip, "bowl centre stays above the front lip")
 	check(dip_rise < -0.35, "handle rises out of the cavity, screen dy %s" % dip_rise)
 	var dev := 0.0
@@ -741,7 +763,30 @@ func _spoon_motion() -> void:
 	check(absf(at_first - 0.54) < 0.04, "first scoop drops 0.46, level %s" % at_first)
 	check(absf(at_second - 0.08) < 0.04, "second scoop drops 0.46, level %s" % at_second)
 	check(ang30 <= 250.0, "angular speed at 30 Hz got %s" % ang30)
-	print("ROUND15 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f ang30=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f exit=%.2f norm=%.3f scoop=%s lip=%.1f rise=%.3f" % [curve, max_step, max_accel, max_ang, ang30, carry_ang, carry_abs, level, drop_sum, exit_rot, worst_norm, scoop, lip_y, dip_rise])
+	print("ROUND15 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f ang_acc=%.0f ang30=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f exit=%.2f norm=%.3f deep=%.3f scoop=%s lip=%.1f rise=%.3f blob_step=%.3f" % [curve, max_step, max_accel, max_ang, max_ang_acc, ang30, carry_ang, carry_abs, level, drop_sum, exit_rot, worst_norm, deep_norm, scoop, lip_y, dip_rise, max_blob_step])
+	_clip_square()
+
+
+func _clip_square() -> void:
+	var square := PackedVector2Array([
+		Vector2(0, 0), Vector2(10, 0), Vector2(10, 10), Vector2(0, 10),
+	])
+	var kept: PackedVector2Array = SpoonTransfer.clip_above(square, 4.0)
+	var above := true
+	var below := false
+	for p in kept:
+		if p.y > 4.05:
+			above = false
+		if p.y < 3.5:
+			below = true
+	check(kept.size() >= 3 and above and below, "clip_above keeps the top of a square, n %s" % kept.size())
+	var area := 0.0
+	for i in kept.size():
+		var a: Vector2 = kept[i]
+		var b: Vector2 = kept[(i + 1) % kept.size()]
+		area += a.x * b.y - b.x * a.y
+	area = absf(area) * 0.5
+	check(area > 35.0 and area < 45.0, "clip_above area %s" % area)
 
 
 func _spoon_pile() -> void:
@@ -869,19 +914,24 @@ func _spoon_empty_carry() -> void:
 func _spoon_sounds() -> void:
 	var sfx_script: GDScript = load("res://scripts/autoload/sfx.gd")
 	var sfx = sfx_script.new()
+	# The noise phase is random. Pin it so the peak check does not flake.
+	sfx._rng.seed = 14015
+	sfx._noise = PackedFloat32Array()
+	sfx._build_noise()
+	var peaks := {}
+	for which in ["dip", "drag"]:
+		for kind in ["powder", "grain", "leaf"]:
+			var wave: PackedFloat32Array = sfx.render_spoon(which, kind)
+			var peak := 0.0
+			for i in wave.size():
+				peak = maxf(peak, absf(wave[i]))
+			peaks["%s-%s" % [which, kind]] = peak
+			check(peak >= 0.24 and peak <= 0.36, "%s %s peak %s" % [kind, which, peak])
 	var powder: PackedFloat32Array = sfx.render_spoon("drag", "powder")
 	var grain: PackedFloat32Array = sfx.render_spoon("drag", "grain")
-	var peak_p := 0.0
-	var peak_g := 0.0
-	for i in powder.size():
-		peak_p = maxf(peak_p, absf(powder[i]))
-	for i in grain.size():
-		peak_g = maxf(peak_g, absf(grain[i]))
-	check(peak_p >= 0.18 and peak_p <= 0.85, "powder drag peak %s" % peak_p)
-	check(peak_g >= 0.18 and peak_g <= 0.85, "grain drag peak %s" % peak_g)
 	var corr := _spectrum_corr(powder, grain)
 	check(corr < 0.4, "powder and grain drags differ, correlation %s" % corr)
-	print("ROUND14 sound powder=%.3f grain=%.3f corr=%.3f" % [peak_p, peak_g, corr])
+	print("ROUND15 sound dip powder=%.3f grain=%.3f leaf=%.3f drag powder=%.3f grain=%.3f leaf=%.3f corr=%.3f" % [peaks["dip-powder"], peaks["dip-grain"], peaks["dip-leaf"], peaks["drag-powder"], peaks["drag-grain"], peaks["drag-leaf"], corr])
 	sfx.free()
 
 

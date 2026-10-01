@@ -109,7 +109,7 @@ func draw_front(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> voi
 	_stir_wake()
 	if _sim != null and bool(_sim.is_stirring()) and _lrx > 2.0:
 		# Inside the water, clear of the copper rim, so the front rim stays in front.
-		var wet := _ellipse_pts(_liq_center, _lrx * 0.78, _lry * 0.72, 28, 0.0)
+		var wet := _ellipse_pts(_liq_center, _lrx * 0.90, _lry * 0.84, 28, 0.0)
 		_spoon.draw_through(_c, _sim, _mouth, _rx, _ry, wet)
 	_blooms()
 	_chips()
@@ -230,10 +230,11 @@ func _stir_wake() -> void:
 		return
 	var ang := float(_sim.spoon_angle)
 	var px := _mouth.x + cos(ang) * _rx * 0.55
-	var py := _mouth.y + sin(ang) * _ry * 0.35
-	var wash := Color(_light.r, _light.g, _light.b, 0.38)
-	_stroke(_arc(Vector2(px, py), _rx * 0.30, _ry * 0.18, ang, 0.85, PI * 1.45, 14), wash, 2.6)
-	_stroke(_arc(Vector2(px, py), _rx * 0.46, _ry * 0.24, ang, 1.15, PI * 1.2, 14), Color(wash.r, wash.g, wash.b, 0.30), 2.1)
+	# Ring where the handle crosses the water, darker than the brew.
+	var ring := Vector2(px, _liq_center.y)
+	var wash := Color(0.22, 0.1, 0.04, 0.72)
+	_stroke(_arc(ring, _lrx * 0.18, _lry * 0.34, 0.0, 0.0, TAU, 18), wash, 2.4)
+	_stroke(_arc(ring, _lrx * 0.28, _lry * 0.5, 0.0, 0.2, PI * 1.7, 14), Color(0.85, 0.75, 0.55, 0.45), 1.6)
 
 
 func _wall_shadow(ly: float, lry: float, depth: float) -> void:

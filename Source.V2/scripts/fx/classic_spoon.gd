@@ -63,7 +63,8 @@ func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	# The liquid covers this pass. The front pass draws the bowl through the water.
 	_skip_mouth = stirring
 	var ink: Color = sim.liquid_color()
-	_drip = Color(ink.r, ink.g, ink.b, 0.75)
+	# Darker than the brew so a drop still reads when it crosses the surface.
+	_drip = Color(ink.r * 0.42 + 0.05, ink.g * 0.32 + 0.03, ink.b * 0.22 + 0.02, 0.95)
 	_free = false
 	_fade = 1.0
 	_build_clip()
@@ -113,13 +114,28 @@ func draw_through(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float, liqu
 	_fade = 1.0
 	_bury_y = 100000.0
 	var ink: Color = sim.liquid_color()
-	_tint = Color(0.62 + ink.r * 0.38, 0.62 + ink.g * 0.38, 0.62 + ink.b * 0.38, 0.42)
+	# Darker than the brew, and opaque enough to read at every angle.
+	_tint = Color(ink.r * 0.28 + 0.05, ink.g * 0.24 + 0.04, ink.b * 0.2 + 0.03, 0.82)
 	_through = liquid
+	_draw_bowl_shade(c)
 	_draw_sprite()
 	_through = PackedVector2Array()
 	_tint = Color(1, 1, 1, 1)
 	_free = false
 	_c = null
+
+
+func _draw_bowl_shade(c: CanvasItem) -> void:
+	if _through.size() < 3:
+		return
+	var rx := 36.0 * _sc
+	var ry := 22.0 * _sc
+	var ell := _ellipse_pts(_origin, rx, ry, 18, _rot)
+	var parts: Array = Geometry2D.intersect_polygons(ell, _through)
+	for poly in parts:
+		var pts: PackedVector2Array = poly
+		if pts.size() >= 3:
+			c.draw_colored_polygon(pts, Color(0.16, 0.07, 0.03, 0.62))
 
 
 func _texture() -> Texture2D:
@@ -148,13 +164,24 @@ func _draw_sprite() -> void:
 		screen.append(_map(p))
 	var tint := _tint
 	if _free and _bury_y < 50000.0:
+		# The bowl continues into the pile. Alpha falls across the contact
+		# so the surface reads as closing over the wood. The polygon stops
+		# at the front lip: nothing is painted on the stone.
+		var lip := MortarPile.front_lip_y() - 1.0
+		var soft := minf(_bury_y + 26.0, lip)
 		var above := PackedVector2Array([
 			Vector2(-4000.0, -4000.0), Vector2(8000.0, -4000.0),
-			Vector2(8000.0, _bury_y), Vector2(-4000.0, _bury_y),
+			Vector2(8000.0, soft), Vector2(-4000.0, soft),
 		])
 		var kept: Array = _clip_uv(screen, uvs, above)
-		if (kept[0] as PackedVector2Array).size() >= 3:
-			_paint(kept[0], kept[1], tex, tint)
+		var pts: PackedVector2Array = kept[0]
+		if pts.size() >= 3:
+			var cols := PackedColorArray()
+			cols.resize(pts.size())
+			for i in pts.size():
+				var u := clampf((pts[i].y - (_bury_y - 4.0)) / 30.0, 0.0, 1.0)
+				cols[i] = Color(tint.r, tint.g, tint.b, tint.a * (1.0 - u))
+			_c.draw_polygon(pts, cols, kept[1], tex)
 		return
 	if _free and _through.size() >= 3:
 		var wet: Array = _clip_uv(screen, uvs, _through)
@@ -166,9 +193,9 @@ func _draw_sprite() -> void:
 		return
 	if _exiting and extras:
 		for i in 4:
-			var drop_at := _origin + Vector2((float(i) - 1.5) * 6.0, 12.0 + float(i) * 7.0)
-			var rad := 4.8 - float(i) * 0.7
-			_c.draw_circle(drop_at, rad, Color(_drip.r, _drip.g, _drip.b, 0.72 - float(i) * 0.12))
+			var drop_at := _origin + Vector2((float(i) - 1.5) * 6.0, 14.0 + float(i) * 8.0)
+			var rad := 5.4 - float(i) * 0.7
+			_c.draw_circle(drop_at, rad, Color(_drip.r, _drip.g, _drip.b, 0.88 - float(i) * 0.12))
 	var up: Array = _clip_uv(screen, uvs, _upper)
 	if (up[0] as PackedVector2Array).size() >= 3:
 		_paint(up[0], up[1], tex, tint)
