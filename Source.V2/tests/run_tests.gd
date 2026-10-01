@@ -596,6 +596,9 @@ func _spoon_motion() -> void:
 	var dip_cues := 0
 	var drag_cues := 0
 	var saw_mote := false
+	var worst_norm := 0.0
+	var below_lip := false
+	var dip_rise := 1.0
 	while s.active():
 		var pose: Dictionary = s.update(1.0 / 60.0, null)
 		if not bool(pose.get("alive", false)):
@@ -633,6 +636,16 @@ func _spoon_motion() -> void:
 			pour_rot = maxf(pour_rot, absf(float(pose["rot"])))
 		if tt > 3.70:
 			exit_rot = absf(float(pose["rot"]))
+		var phase := str(pose.get("phase", ""))
+		if phase == "dip" or phase == "scoop" or phase == "approach":
+			var norm := MortarPile.mouth_norm(here)
+			if phase != "approach":
+				worst_norm = maxf(worst_norm, norm)
+			if here.y > MortarPile.front_lip_y():
+				below_lip = true
+		if phase == "dip":
+			# Local handle is -Y. Screen dy of that axis is -cos(rot); negative means it rises.
+			dip_rise = minf(dip_rise, -cos(deg_to_rad(float(pose["rot"]))))
 		if str(pose.get("cue", "")) == "dip":
 			dip_cues += 1
 		if str(pose.get("cue", "")) == "drag":
@@ -640,6 +653,14 @@ func _spoon_motion() -> void:
 		if (pose.get("motes", []) as Array).size() > 0:
 			saw_mote = true
 	check(saw_dip and deepest > s.start.y + 36.0, "spoon dips into the mortar got %s start %s" % [deepest, s.start.y])
+	var scoop: Vector2 = MortarPile.scoop_point()
+	var lip_y := MortarPile.front_lip_y()
+	check(MortarPile.mouth_norm(scoop) < 0.7, "scoop sits inside the opening, norm %s at %s" % [MortarPile.mouth_norm(scoop), scoop])
+	check(scoop.y < lip_y - 12.0, "scoop is above the front lip, y %s lip %s" % [scoop.y, lip_y])
+	check(s.dip.distance_to(scoop) < 1.0, "dip uses the interior scoop point")
+	check(worst_norm < 0.78, "dip and drag stay inside the opening, norm %s" % worst_norm)
+	check(not below_lip, "bowl centre stays above the front lip")
+	check(dip_rise < -0.35, "handle rises out of the cavity, screen dy %s" % dip_rise)
 	var dev := 0.0
 	if carry.size() >= 3:
 		var a: Vector2 = carry[0]
@@ -720,7 +741,7 @@ func _spoon_motion() -> void:
 	check(absf(at_first - 0.54) < 0.04, "first scoop drops 0.46, level %s" % at_first)
 	check(absf(at_second - 0.08) < 0.04, "second scoop drops 0.46, level %s" % at_second)
 	check(ang30 <= 250.0, "angular speed at 30 Hz got %s" % ang30)
-	print("ROUND14 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f ang30=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f exit=%.2f" % [curve, max_step, max_accel, max_ang, ang30, carry_ang, carry_abs, level, drop_sum, exit_rot])
+	print("ROUND15 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f ang30=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f exit=%.2f norm=%.3f scoop=%s lip=%.1f rise=%.3f" % [curve, max_step, max_accel, max_ang, ang30, carry_ang, carry_abs, level, drop_sum, exit_rot, worst_norm, scoop, lip_y, dip_rise])
 
 
 func _spoon_pile() -> void:

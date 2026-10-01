@@ -189,7 +189,9 @@ func _paint(pts: PackedVector2Array, uvs: PackedVector2Array, tex: Texture2D, ti
 
 func _build_clip() -> void:
 	var top: float = _mouth.y - _ry * 24.0
-	var line_y: float = _mouth.y - _ry * 0.2
+	# While stirring, the unclipped part stops inside the opening so it does not
+	# paint the cauldron's front rim. The bowl under that line is the water pass.
+	var line_y: float = _mouth.y + _ry * 0.22 if _skip_mouth else _mouth.y - _ry * 0.2
 	var bottom: float = _mouth.y + _ry * 30.0
 	var left: float = _mouth.x - _rx * 3.0
 	var right: float = _mouth.x + _rx * 3.0

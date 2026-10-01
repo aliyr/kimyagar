@@ -138,6 +138,7 @@ var _pin: Control
 var _fx_back: Control
 var _transfer: SpoonTransfer
 var _transfer_last: Dictionary = {}
+var _transfer_back: Control
 var _transfer_draw: Control
 var _spoon_art: ClassicSpoon
 var _discard_scene: Dictionary = {}
@@ -470,6 +471,12 @@ func _build() -> void:
 
 	_build_mortar()
 	_build_cabinet()
+	# Buried bowl sits under the stone lip (z 5) and under the near herbs.
+	_transfer_back = _painter(_draw_transfer_back)
+	UiKit.fill(_transfer_back)
+	_transfer_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_transfer_back.z_index = 4
+	_work.add_child(_transfer_back)
 	_transfer_draw = _painter(_draw_transfer)
 	UiKit.fill(_transfer_draw)
 	_transfer_draw.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
@@ -1882,6 +1889,8 @@ func _tick_transfer(dt: float) -> void:
 		transfer_t = -1.0
 		if _pile:
 			_pile.clear_visual_level()
+	if _transfer_back:
+		_transfer_back.queue_redraw()
 	if _transfer_draw:
 		_transfer_draw.queue_redraw()
 
@@ -2352,7 +2361,19 @@ func _sync_pour_camera() -> void:
 		_set_camera(Vector2(960, 540), 1.0, 0.7, false, "")
 
 
+func _draw_transfer_back(c: Control) -> void:
+	_paint_transfer(c, true)
+
+
 func _draw_transfer(c: Control) -> void:
+	_paint_transfer(c, false)
+
+
+func _in_mortar(phase: String) -> bool:
+	return phase == "approach" or phase == "dip" or phase == "scoop"
+
+
+func _paint_transfer(c: Control, buried: bool) -> void:
 	if _transfer == null or not _transfer.active() or _spoon_art == null:
 		return
 	var pose := _transfer_pose()
@@ -2363,13 +2384,29 @@ func _draw_transfer(c: Control) -> void:
 	var fade := float(pose["opacity"])
 	var lip: Vector2 = pose.get("lip", Vector2(0, 24))
 	var phase := str(pose.get("phase", ""))
+	var in_mortar := _in_mortar(phase)
+	if buried and not in_mortar:
+		return
 	var bury := 100000.0
-	if phase == "approach" or phase == "dip" or phase == "scoop":
-		if at.x > MortarPile.ZONE_X + 24.0 and at.x < MortarPile.ZONE_X + MortarPile.ZONE_W - 16.0:
-			var surface := MortarPile.pile_surface_y(float(pose.get("level", 1.0)))
-			if at.y + 34.0 > surface:
-				bury = surface
-	_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
+	if buried:
+		_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
+	elif in_mortar:
+		# Above the herbs and above the stone. The buried bowl stays on the back layer.
+		var surface := MortarPile.pile_surface_y(float(pose.get("level", 1.0)))
+		bury = minf(surface, MortarPile.front_lip_y())
+		_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
+	else:
+		_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
+	if buried:
+		if float(pose["blob"]) > 0.05:
+			_paint_mound(c, pose, at, rot, lip, fade, bury)
+		if phase == "dip" or phase == "scoop":
+			_draw_buried_herbs(c, float(pose.get("level", 1.0)), fade, pose.get("color", Color("#8a7a52")))
+		return
+	if in_mortar:
+		if Settings.effects_enabled:
+			_paint_motes(c, pose)
+		return
 	if float(pose["blob"]) > 0.05:
 		var col: Color = pose.get("color", Color("#8a7a52"))
 		var heap := at + lip * 0.42
@@ -2413,6 +2450,67 @@ func _draw_transfer(c: Control) -> void:
 			var drop := from.lerp(_transfer.land, fall)
 			drop.x += sin(float(i) * 1.7) * 6.0 * (1.0 - s)
 			c.draw_circle(drop, lerpf(4.2, 2.2, s), Color(col2.r, col2.g, col2.b, 0.85 * fade * (1.0 - s * 0.35)))
+
+
+func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Vector2, fade: float, bury: float) -> void:
+	var col: Color = pose.get("color", Color("#8a7a52"))
+	var heap := at + lip * 0.42
+	var heap_k := clampf(float(pose["blob"]), 0.15, 1.0)
+	var mound := _shift_poly(_oval(24.0 * heap_k, 13.0 * heap_k), heap, rot)
+	var core := _shift_poly(_oval(14.0 * heap_k, 7.0 * heap_k), heap, rot)
+	if bury < 50000.0:
+		mound = _clip_above(mound, bury)
+		core = _clip_above(core, bury)
+	if mound.size() >= 3:
+		c.draw_colored_polygon(mound, Color(col.r, col.g, col.b, 0.96 * fade))
+	if core.size() >= 3:
+		c.draw_colored_polygon(core, Color(col.r * 0.78, col.g * 0.78, col.b * 0.7, 0.45 * fade))
+	var cs := cos(rot)
+	var sn := sin(rot)
+	for chip in pose.get("chips", []):
+		var local := Vector2(float(chip.get("sx", 0.0)), float(chip.get("sy", 0.0))) * 0.45 + lip * 0.5
+		var p := at + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y)
+		if p.y <= bury:
+			_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
+
+
+func _paint_motes(c: Control, pose: Dictionary) -> void:
+	for mote_v in pose.get("motes", []):
+		var mote: Dictionary = mote_v
+		var mc: Color = mote.get("color", Color("#8a7a52"))
+		var mr := float(mote.get("r", 2.0))
+		var ma := clampf(float(mote.get("life", 0.2)) / 0.4, 0.0, 1.0)
+		c.draw_circle(Vector2(float(mote.get("x", 0.0)), float(mote.get("y", 0.0))), mr, Color(mc.r, mc.g, mc.b, 0.8 * ma))
+
+
+## Front of the material, drawn over the spoon so the buried bowl stays in the herbs.
+## The cover is the opening ellipse below the pile surface, so it cannot paint the stone.
+func _draw_buried_herbs(c: Control, level: float, fade: float, col: Color) -> void:
+	if level < 0.12 or fade <= 0.02:
+		return
+	var surface := MortarPile.pile_surface_y(level)
+	var mouth_c := MortarPile.scene_mouth()
+	var mouth_r := MortarPile.scene_mouth_r()
+	var ell := _ellipse_pts(mouth_c, mouth_r.x * 0.96, mouth_r.y * 0.96, 36)
+	var below := PackedVector2Array([
+		Vector2(mouth_c.x - mouth_r.x * 1.5, surface - 1.0),
+		Vector2(mouth_c.x + mouth_r.x * 1.5, surface - 1.0),
+		Vector2(mouth_c.x + mouth_r.x * 1.5, surface + mouth_r.y * 3.0),
+		Vector2(mouth_c.x - mouth_r.x * 1.5, surface + mouth_r.y * 3.0),
+	])
+	var parts: Array = Geometry2D.intersect_polygons(ell, below)
+	for poly in parts:
+		if (poly as PackedVector2Array).size() >= 3:
+			c.draw_colored_polygon(poly, Color(col.r, col.g, col.b, 0.98 * fade))
+
+
+func _ellipse_pts(center: Vector2, rx: float, ry: float, n: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	pts.resize(n)
+	for i in n:
+		var a := TAU * float(i) / float(n)
+		pts[i] = center + Vector2(cos(a) * rx, sin(a) * ry)
+	return pts
 
 
 func _shift_poly(local: PackedVector2Array, at: Vector2, rot: float) -> PackedVector2Array:
@@ -3164,6 +3262,8 @@ func jump_transfer(at: float) -> void:
 	if _vignette_mat:
 		_vignette_mat.set_shader_parameter("grind", 0.0)
 	_place_pestle()
+	if _transfer_back:
+		_transfer_back.queue_redraw()
 	if _transfer_draw:
 		_transfer_draw.queue_redraw()
 	if _mortar_fx:

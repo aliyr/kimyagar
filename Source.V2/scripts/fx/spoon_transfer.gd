@@ -65,23 +65,17 @@ func begin(mouth_center: Vector2, radii: Vector2) -> void:
 	_trail = 0.0
 	mouth = mouth_center
 	mouth_r = radii
-	var bowl_cx := MortarPile.BOWL_LEFT + MortarPile.BOWL_W * 0.5
-	var bowl_cy := MortarPile.BOWL_TOP + MortarPile.BOWL_H * 0.68
-	start = Vector2(
-		MortarPile.ZONE_X + (bowl_cx / 100.0) * MortarPile.ZONE_W,
-		MortarPile.ZONE_Y + (bowl_cy / 100.0) * MortarPile.ZONE_H - MORTAR_LIFT
-	)
-	orbit = Vector2(
-		MortarPile.ZONE_W * (MortarPile.BOWL_W / 100.0) * 0.3,
-		MortarPile.ZONE_H * (MortarPile.BOWL_H / 100.0) * 0.28
-	)
-	end = Vector2(mouth.x - mouth_r.x * 0.35, mouth.y - 68.0)
-	land = Vector2(mouth.x, mouth.y + mouth_r.y * 0.22)
-	control = Vector2((start.x + end.x) * 0.5, minf(start.y, end.y) - 230.0)
-	var floor_y := MortarPile.ZONE_Y + ((MortarPile.BOWL_TOP + MortarPile.BOWL_H * 0.90) / 100.0) * MortarPile.ZONE_H
-	dip = Vector2(start.x, maxf(start.y + 52.0, floor_y))
-	lift = Vector2(start.x, start.y - 16.0)
-	hover = Vector2(start.x - 36.0, start.y - 200.0)
+	# The bowl lands inside the opening, on the material, not on the front lip.
+	dip = MortarPile.scoop_point()
+	start = Vector2(dip.x, dip.y - 52.0)
+	var mr := MortarPile.scene_mouth_r()
+	orbit = Vector2(mr.x * 0.34, mr.y * 0.22)
+	# Pour from above the mouth, centred on the opening.
+	end = Vector2(mouth.x, mouth.y - mouth_r.y - 36.0)
+	land = Vector2(mouth.x, mouth.y + mouth_r.y * 0.12)
+	control = Vector2((start.x + end.x) * 0.5, minf(start.y, end.y) - 210.0)
+	lift = Vector2(dip.x, dip.y - 28.0)
+	hover = Vector2(dip.x - 16.0, MortarPile.scene_mouth().y - mr.y - 70.0)
 	mortar_level = 1.0
 	motes = []
 	_removed = 0.0
@@ -94,7 +88,7 @@ func begin(mouth_center: Vector2, radii: Vector2) -> void:
 	_had_material = false
 	_base_set = false
 	_mote_wait = 0.0
-	_ang = -28.0
+	_ang = 72.0
 	_ang_vel = 0.0
 	_hollow_sent = [false, false]
 
@@ -131,14 +125,16 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 				_base_color = pile.mean_color()
 				_base_set = true
 	if t < T_IN:
-		# Rise from rest beside the mortar, arc over, and settle into the dip.
+		# From above and to the side, tip first, down into the opening.
 		phase = "approach"
 		var k := _ease_in_out(t / T_IN)
-		var rest := Vector2(start.x + 96.0, start.y - 12.0)
-		var c1 := Vector2(start.x + 48.0, start.y - 92.0)
-		var c2 := Vector2(start.x - 18.0, dip.y - 20.0)
+		var mc := MortarPile.scene_mouth()
+		var mr := MortarPile.scene_mouth_r()
+		var rest := Vector2(mc.x + mr.x * 0.62, mc.y - mr.y - 34.0)
+		var c1 := Vector2(mc.x + mr.x * 0.22, rest.y - 28.0)
+		var c2 := Vector2(mc.x + 4.0, mc.y - mr.y * 0.35)
 		pos = _cubic(rest, c1, c2, dip, k)
-		rot = lerpf(-28.0, 18.0, k)
+		rot = _rot_target(t)
 	elif t < T_SCOOP:
 		phase = "scoop"
 		var k2 := (t - T_IN) / T_STIR
@@ -150,9 +146,6 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			phase = "dip"
 			depth = _ease_in(local / 0.34)
 			xoff = sin(local / 0.34 * PI) * orbit.x * 0.22
-			# The approach already seats the bowl. The second scoop drops in from the lift.
-			var from_rot := 18.0 if which == 0 else -2.0
-			rot = lerpf(from_rot, 48.0, _ease_in_out(local / 0.34))
 			if depth > 0.62 and which < _dip_sent.size() and not _dip_sent[which]:
 				_dip_sent[which] = true
 				cue = "dip"
@@ -160,7 +153,6 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			depth = 1.0
 			var drag := (local - 0.34) / 0.28
 			xoff = lerpf(0.0, orbit.x * 0.72, _ease_in_out(drag))
-			rot = lerpf(48.0, 14.0, drag)
 			if drag > 0.2 and which < _drag_sent.size() and not _drag_sent[which]:
 				_drag_sent[which] = true
 				cue = "drag"
@@ -168,10 +160,13 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			var lift_k := _ease_out((local - 0.62) / 0.38)
 			depth = 1.0 - lift_k
 			xoff = orbit.x * 0.72 * (1.0 - lift_k)
-			rot = lerpf(14.0, -2.0, lift_k)
 			shedding = lift_k > 0.08 and lift_k < 0.92
+		# The handle rises out of the cavity, over the opening, then eases
+		# level before the carry. The target is flat at both seams.
+		rot = _rot_target(t)
 		var high := dip.y if (which == 0 and local < 0.62) else lift.y
 		pos = Vector2(start.x + xoff, lerpf(high, dip.y, depth))
+		pos = _keep_in_mouth(pos)
 		var sunk := (float(which) + depth) / 2.0
 		if sunk > _removed:
 			_removed = sunk
@@ -474,6 +469,35 @@ func _chip_color() -> Color:
 	if n == 0:
 		return _base_color
 	return Color(r / float(n), g / float(n), b / float(n), 1.0)
+
+
+## The bowl pivot stays in the cavity. 54 deg sends the handle up and to the
+## side, across the opening and out above the rim, instead of along the front lip.
+const DIP_ROT := 54.0
+const REST_ROT := 72.0
+const UNWIND_AT := 1.22
+
+
+func _rot_target(now: float) -> float:
+	if now < T_IN:
+		return lerpf(REST_ROT, DIP_ROT, _ease_in_out(now / T_IN))
+	if now < UNWIND_AT:
+		return DIP_ROT
+	if now < T_SCOOP:
+		return lerpf(DIP_ROT, -2.0, _ease_in_out((now - UNWIND_AT) / (T_SCOOP - UNWIND_AT)))
+	return -2.0
+
+
+func _keep_in_mouth(p: Vector2) -> Vector2:
+	var mouth := MortarPile.scene_mouth()
+	var rad := MortarPile.scene_mouth_r()
+	var dx := (p.x - mouth.x) / rad.x
+	var dy := (p.y - mouth.y) / rad.y
+	var n := sqrt(dx * dx + dy * dy)
+	if n <= 0.72 or n < 0.001:
+		return p
+	var s := 0.72 / n
+	return Vector2(mouth.x + dx * s * rad.x, mouth.y + dy * s * rad.y)
 
 
 func _level_at(now: float) -> float:

@@ -108,7 +108,8 @@ func draw_front(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> voi
 	_liquid_marks()
 	_stir_wake()
 	if _sim != null and bool(_sim.is_stirring()) and _lrx > 2.0:
-		var wet := _ellipse_pts(_liq_center, _lrx, _lry, 28, 0.0)
+		# Inside the water, clear of the copper rim, so the front rim stays in front.
+		var wet := _ellipse_pts(_liq_center, _lrx * 0.78, _lry * 0.72, 28, 0.0)
 		_spoon.draw_through(_c, _sim, _mouth, _rx, _ry, wet)
 	_blooms()
 	_chips()

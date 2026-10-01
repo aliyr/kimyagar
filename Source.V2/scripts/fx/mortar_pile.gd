@@ -204,6 +204,36 @@ static func pile_surface_y(level: float) -> float:
 	return lerpf(PILE_LOW_Y, PILE_HIGH_Y, clampf(level, 0.0, 1.0))
 
 
+## Opening of the mortar bowl, in stage pixels. The front lip is the near edge.
+static func scene_mouth() -> Vector2:
+	return Vector2(ZONE_X + (MOUTH_CX / 100.0) * ZONE_W, ZONE_Y + (MOUTH_CY / 100.0) * ZONE_H)
+
+
+static func scene_mouth_r() -> Vector2:
+	return Vector2((MOUTH_RX / 100.0) * ZONE_W, (MOUTH_RY / 100.0) * ZONE_H)
+
+
+## Where the front stone becomes the near rim. The spoon bowl stays above this.
+static func front_lip_y() -> float:
+	return ZONE_Y + 0.4128 * ZONE_H
+
+
+## Centre of a scoop: inside the opening, about 70% of the bowl under a full pile.
+static func scoop_point() -> Vector2:
+	var mouth := scene_mouth()
+	var rad := scene_mouth_r()
+	var y := minf(PILE_HIGH_Y + 14.0, mouth.y + rad.y * 0.58)
+	return Vector2(mouth.x, y)
+
+
+static func mouth_norm(p: Vector2) -> float:
+	var mouth := scene_mouth()
+	var rad := scene_mouth_r()
+	var dx := (p.x - mouth.x) / maxf(1.0, rad.x)
+	var dy := (p.y - mouth.y) / maxf(1.0, rad.y)
+	return sqrt(dx * dx + dy * dy)
+
+
 func set_visual_level(level: float) -> void:
 	_visual_level = clampf(level, 0.0, 1.0)
 
