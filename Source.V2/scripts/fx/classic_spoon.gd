@@ -1,15 +1,16 @@
 class_name ClassicSpoon
 extends RefCounted
-## Plain wooden spoon. The picture is assets/art/workshop/wooden_spoon.png
-## (straight handle, round bowl). The bowl pixel sits on the same anchor the
-## cauldron spoon and the transfer spoon already use, so timing stays put.
-## In the pot the sprite is clipped to the rim and the mouth, same as before.
+## Carved walnut spoon. The picture is assets/art/workshop/wooden_spoon.png
+## (512×1280, bowl pivot at 256,1000). The bowl pixel sits on the same anchor
+## the cauldron spoon and the transfer spoon already use, so timing stays put.
+## In the pot the sprite is clipped to the rim and the mouth. While stirring,
+## the bowl rides an ellipse below the waterline and the handle leans out.
 
 const BOWL := Vector2(128.0, 210.0)
-const TEX_SIZE := Vector2(128.0, 320.0)
-const TEX_BOWL := Vector2(64.0, 250.0)
-## Texture bowl radius 50px matches the old 34-unit bowl.
-const TEX_SCALE := 34.0 / 50.0
+const TEX_SIZE := Vector2(512.0, 1280.0)
+const TEX_BOWL := Vector2(256.0, 1000.0)
+## Texture bowl radius 200px matches the old 34-unit bowl.
+const TEX_SCALE := 34.0 / 200.0
 
 static var _tex: Texture2D
 
@@ -25,6 +26,10 @@ var _lower := PackedVector2Array()
 var _mouth_clip := PackedVector2Array()
 var _free := false
 var _fade := 1.0
+var extras := true
+var _exiting := false
+var _prev_drop := 0.0
+var _drip := Color(0.55, 0.32, 0.12, 0.7)
 
 
 func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
@@ -42,12 +47,18 @@ func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	_rx = rx
 	_ry = ry
 	_sc = draw_w / 256.0
-	_rot = -cos(ang) * 16.0 * PI / 180.0
+	# Handle leans as the bowl travels the ellipse, so the grip stays out of the water.
+	_rot = -cos(ang) * 26.0 * PI / 180.0 - sin(ang) * 8.0 * PI / 180.0
+	var fig := sin(ang * 2.0) * 0.16
 	var bowl_ry: float = draw_w * (38.0 / 256.0)
 	_origin = Vector2(
-		mouth.x + cos(ang) * rx * 0.55,
-		mouth.y + sin(ang) * ry * 0.35 + bowl_ry * 0.1 * dip - (1.0 - dip) * ry * 8.0
+		mouth.x + cos(ang) * rx * (0.46 + fig),
+		mouth.y + sin(ang) * ry * 0.22 + ry * 0.50 * dip - (1.0 - dip) * ry * 7.0 + bowl_ry * 0.05 * dip
 	)
+	_exiting = drop + 0.015 < _prev_drop and not stirring
+	_prev_drop = drop
+	var ink: Color = sim.liquid_color()
+	_drip = Color(ink.r, ink.g, ink.b, 0.75)
 	_free = false
 	_fade = 1.0
 	_build_clip()
@@ -98,6 +109,10 @@ func _draw_sprite() -> void:
 	if _free:
 		_paint(screen, uvs, tex, tint)
 		return
+	if _exiting and extras:
+		for i in 3:
+			var drop_at := _origin + Vector2(float(i - 1) * 5.0, 16.0 + float(i) * 9.0)
+			_c.draw_circle(drop_at, 2.4 - float(i) * 0.3, Color(_drip.r, _drip.g, _drip.b, 0.55 - float(i) * 0.12))
 	var up: Array = _clip_uv(screen, uvs, _upper)
 	if (up[0] as PackedVector2Array).size() >= 3:
 		_paint(up[0], up[1], tex, tint)

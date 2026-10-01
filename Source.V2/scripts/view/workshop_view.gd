@@ -421,7 +421,7 @@ func _build() -> void:
 	_work.add_child(_fx_spin)
 	_fx_back = _painter(_draw_brew_back)
 	UiKit.fill(_fx_back)
-	_fx_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_fx_back.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_fx_spin.add_child(_fx_back)
 	_brew_painter.disc_interior = _radial_disc()
 	_brew_painter.disc_liquid = _radial_disc()
@@ -433,7 +433,7 @@ func _build() -> void:
 	_fx_spin.add_child(_brew_painter.disc_glow)
 	_fx = _painter(_draw_brew_front)
 	UiKit.fill(_fx)
-	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_fx_spin.add_child(_fx)
 	_hole_lip = _painter(_draw_hole_lip)
 	UiKit.fill(_hole_lip)
@@ -472,6 +472,7 @@ func _build() -> void:
 	_build_cabinet()
 	_transfer_draw = _painter(_draw_transfer)
 	UiKit.fill(_transfer_draw)
+	_transfer_draw.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_transfer_draw.z_index = 40
 	_work.add_child(_transfer_draw)
 	_discard_fx = _painter(_draw_discard_flight)
@@ -1414,6 +1415,7 @@ func _draw_pieces(c: Control) -> void:
 		return
 	var aim: Dictionary = _pile.pestle()
 	var shown: Array = _pile.chips()
+	_draw_mortar_bed(c)
 	if _mortar_parts:
 		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue())
 	var box: Dictionary = _pile.bowl()
@@ -1461,6 +1463,40 @@ func _draw_pieces(c: Control) -> void:
 			var tint2: Color = chip["color"]
 			c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint2.r, tint2.g, tint2.b, 0.22), true)
 			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_mortar_bed(c: Control) -> void:
+	if _pile == null:
+		return
+	var info: Dictionary = _pile.decor()
+	var level := float(info.get("level", 1.0))
+	var box: Dictionary = _pile.bowl()
+	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * ZONE_MORTAR.size
+	var bw := float(box["width"]) / 100.0 * ZONE_MORTAR.size.x
+	var bh := float(box["height"]) / 100.0 * ZONE_MORTAR.size.y
+	var col: Color = info.get("color", Color("#8a7a52"))
+	if level > 0.1:
+		var cx := origin.x + bw * 0.5
+		var cy := origin.y + bh * (0.8 - 0.14 * level)
+		var rx := bw * 0.32 * (0.5 + 0.5 * level)
+		var ry := bh * 0.18 * (0.4 + 0.6 * level)
+		c.draw_set_transform(Vector2(cx, cy), 0.0, Vector2.ONE)
+		c.draw_colored_polygon(_oval(rx, ry), Color(col.r, col.g, col.b, 0.94))
+		c.draw_colored_polygon(_oval(rx * 0.72, ry * 0.62), Color(col.r * 0.82, col.g * 0.82, col.b * 0.78, 0.55))
+		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		for hollow_v in info.get("hollows", []):
+			var hollow: Dictionary = hollow_v
+			var hx := origin.x + float(hollow.get("x", 50.0)) / 100.0 * bw
+			var hy := origin.y + float(hollow.get("y", 60.0)) / 100.0 * bh
+			c.draw_set_transform(Vector2(hx, hy), 0.0, Vector2.ONE)
+			c.draw_colored_polygon(_oval(rx * 0.28, ry * 0.55), Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.85))
+			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for spill_v in info.get("spills", []):
+		var spill: Dictionary = spill_v
+		var sc: Color = spill.get("color", col)
+		var sx := origin.x + float(spill.get("x", 50.0)) / 100.0 * bw
+		var sy := origin.y + float(spill.get("y", 70.0)) / 100.0 * bh
+		c.draw_circle(Vector2(sx, sy), 3.4, Color(sc.r, sc.g, sc.b, 0.9))
 
 
 func _draw_mortar_fx(c: Control) -> void:
@@ -1817,8 +1853,14 @@ func _tick_transfer(dt: float) -> void:
 	var pose: Dictionary = _transfer.update(dt, _pile)
 	_transfer_last = pose
 	transfer_t = _transfer.t
+	var cue := str(pose.get("cue", ""))
+	if cue == "dip":
+		Sfx.spoon_dip(str(pose.get("kind", "powder")))
+		Haptics.pulse("light")
+	elif cue == "drag":
+		Sfx.spoon_drag(str(pose.get("kind", "powder")))
 	var trails := int(pose.get("trail", 0))
-	if trails > 0 and _mortar_parts:
+	if trails > 0 and _mortar_parts and Settings.effects_enabled:
 		var col: Color = pose.get("color", Color("#8a7a52"))
 		for _i in trails:
 			_mortar_parts.burst("trail", Vector2(float(pose["x"]), float(pose["y"]) + 10.0), {"color": "#" + col.to_html(false)})
@@ -2314,12 +2356,17 @@ func _draw_transfer(c: Control) -> void:
 	var rot := deg_to_rad(float(pose["rot"]))
 	var fade := float(pose["opacity"])
 	var lip: Vector2 = pose.get("lip", Vector2(0, 24))
+	var phase := str(pose.get("phase", ""))
+	if phase == "dip" or phase == "scoop":
+		c.draw_circle(at + Vector2(8.0, 22.0), 18.0, Color(0.08, 0.04, 0.02, 0.22 * fade))
 	_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade)
 	if float(pose["blob"]) > 0.05:
 		var col: Color = pose.get("color", Color("#8a7a52"))
-		var heap := at + lip * 0.55
+		var heap := at + lip * 0.42
+		var heap_k := clampf(float(pose["blob"]), 0.15, 1.0)
 		c.draw_set_transform(heap, rot, Vector2.ONE)
-		c.draw_colored_polygon(_oval(22.0, 13.0), Color(col.r, col.g, col.b, 0.95 * fade))
+		c.draw_colored_polygon(_oval(24.0 * heap_k, 13.0 * heap_k), Color(col.r, col.g, col.b, 0.96 * fade))
+		c.draw_colored_polygon(_oval(14.0 * heap_k, 7.0 * heap_k), Color(col.r * 0.78, col.g * 0.78, col.b * 0.7, 0.45 * fade))
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		var cs := cos(rot)
 		var sn := sin(rot)
@@ -2335,6 +2382,13 @@ func _draw_transfer(c: Control) -> void:
 		var u := 1.0 - eased
 		var p2 := from * (u * u) + mid * (2.0 * u * eased) + dest * (eased * eased)
 		_draw_mini_chip(c, item["chip"], p2, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
+	if Settings.effects_enabled:
+		for mote_v in pose.get("motes", []):
+			var mote: Dictionary = mote_v
+			var mc: Color = mote.get("color", Color("#8a7a52"))
+			var mr := float(mote.get("r", 2.0))
+			var ma := clampf(float(mote.get("life", 0.2)) / 0.4, 0.0, 1.0)
+			c.draw_circle(Vector2(float(mote.get("x", 0.0)), float(mote.get("y", 0.0))), mr, Color(mc.r, mc.g, mc.b, 0.8 * ma))
 	if float(pose.get("pouring", 0.0)) > 0.5:
 		var col2: Color = pose.get("color", Color("#8a7a52"))
 		for i in 7:
@@ -2366,6 +2420,8 @@ func _transfer_pose() -> Dictionary:
 		"lip": _transfer_last.get("lip", Vector2(0, 24)),
 		"pouring": _transfer_last.get("pouring", 0.0),
 		"color": _transfer_last.get("color", Color("#8a7a52")),
+		"phase": _transfer_last.get("phase", ""),
+		"motes": _transfer_last.get("motes", []),
 	}
 
 
@@ -3054,6 +3110,10 @@ func jump_transfer(at: float) -> void:
 		return
 	transfer_t = 0.0
 	_transfer_dropped = false
+	if _pile:
+		_pile.force_refill()
+		if Game.mortar != null:
+			_pile.sync(Game.mortar)
 	_transfer.begin(_mouth, _mouth_r)
 	var steps := int(maxf(at, 0.0) * 60.0)
 	for _i in steps:

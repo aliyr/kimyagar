@@ -96,6 +96,9 @@ var _mix_groups: Array[Dictionary] = []
 var _snapshot_key: String = ""
 var _mix_key: String = ""
 var _applied_work: float = 0.0
+var _born := 1
+var _hollows: Array = []
+var _spills: Array = []
 var _pile_crush: float = 0.0
 var _pile_work: float = 0.0
 var _pile_area: float = 0.0
@@ -303,6 +306,106 @@ func scoop_under(scene_x: float, scene_y: float) -> Array[Dictionary]:
 	return _publish_all(taken)
 
 
+func surface_level() -> float:
+	if _born <= 0:
+		return 0.0
+	return clampf(float(_chips.size()) / float(_born), 0.0, 1.0)
+
+
+func mean_color() -> Color:
+	if _chips.is_empty():
+		if _residue_hex != "":
+			return Color(_residue_hex)
+		return Color("#8a7a52")
+	var r := 0.0
+	var g := 0.0
+	var b := 0.0
+	var n := 0
+	for chip_v in _publish_all(_chips):
+		var chip: Dictionary = chip_v
+		var col: Color = _as_color(chip.get("color", Color("#8a7a52")))
+		r += col.r
+		g += col.g
+		b += col.b
+		n += 1
+	return Color(r / float(n), g / float(n), b / float(n), 1.0)
+
+
+func material_kind() -> String:
+	var leaf := 0
+	var grain := 0
+	var powder := 0
+	for chip_v in _chips:
+		var chip: Dictionary = chip_v
+		var kind := str(chip.get("kind", ""))
+		if kind == "leaf" or kind == "flower" or kind == "petal" or kind == "thread":
+			leaf += 1
+		elif kind == "seed" or kind == "star":
+			grain += 1
+		else:
+			powder += 1
+	if powder >= leaf and powder >= grain and powder > 0:
+		return "powder"
+	if grain > leaf:
+		return "grain"
+	return "leaf"
+
+
+func decor() -> Dictionary:
+	return {
+		"level": surface_level(),
+		"color": mean_color(),
+		"hollows": _hollows,
+		"spills": _spills,
+	}
+
+
+func force_refill() -> void:
+	_snapshot_key = ""
+	_mix_key = ""
+
+
+func take_share(frac: float) -> Array[Dictionary]:
+	if _chips.is_empty():
+		return []
+	var ranked: Array[Dictionary] = []
+	for chip_v in _chips:
+		ranked.append(chip_v)
+	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.get("y", 0.0)) < float(b.get("y", 0.0))
+	)
+	var n := clampi(int(round(float(ranked.size()) * clampf(frac, 0.05, 1.0))), 1, ranked.size())
+	var taken: Array[Dictionary] = []
+	var stay: Array[Dictionary] = []
+	for i in ranked.size():
+		if i < n:
+			taken.append(ranked[i])
+		else:
+			stay.append(ranked[i])
+	_chips = stay
+	_add_residue(taken)
+	return _publish_all(taken)
+
+
+func note_hollow(scene_x: float, scene_y: float) -> void:
+	var z: Vector2 = scene_to_zone(scene_x, scene_y)
+	var at: Vector2 = zone_to_bowl(z.x, z.y)
+	_hollows.append({"x": at.x, "y": at.y})
+	if _hollows.size() > 6:
+		_hollows.pop_front()
+	var col := mean_color()
+	_spills.append({"x": at.x + 16.0, "y": at.y + 5.0, "color": col})
+	_spills.append({"x": at.x - 18.0, "y": at.y + 3.0, "color": col})
+	while _spills.size() > 6:
+		_spills.pop_front()
+
+
+func _as_color(raw: Variant) -> Color:
+	if raw is Color:
+		return raw
+	return Color(str(raw))
+
+
 func scoop_rest() -> Array[Dictionary]:
 	if _chips.is_empty():
 		return []
@@ -474,6 +577,9 @@ func _sync_pile(key: String, units: int, grind_work: float, ingredient_id: Strin
 		_refresh_crush()
 		_applied_work = grind_work
 		_apply_aim()
+		_born = maxi(1, _chips.size())
+		_hollows = []
+		_spills = []
 		return
 	_pile_units = units
 	_pile_work = grind_work
@@ -518,6 +624,9 @@ func _sync_mix(key: String, portions: Array[Dictionary]) -> void:
 			))
 		_mix_groups = groups
 		_chips = _flatten_groups()
+		_born = maxi(1, _chips.size())
+		_hollows = []
+		_spills = []
 		_pile_work = _focus_norm(portions)
 		_refresh_crush()
 		clear_residue()

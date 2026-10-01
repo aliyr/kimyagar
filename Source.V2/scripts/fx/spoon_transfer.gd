@@ -33,6 +33,17 @@ var orbit := Vector2.ZERO
 var dip := Vector2.ZERO
 var lift := Vector2.ZERO
 var hover := Vector2.ZERO
+var mortar_level := 1.0
+var motes: Array = []
+var _removed := 0.0
+var _carry_rot := 0.0
+var _scoops_taken := 0
+var _dip_sent: Array[bool] = [false, false]
+var _drag_sent: Array[bool] = [false, false]
+var _kind := "powder"
+var _base_color := Color("#8a7a52")
+var _base_set := false
+var _mote_wait := 0.0
 
 
 func begin(mouth_center: Vector2, radii: Vector2) -> void:
@@ -62,6 +73,16 @@ func begin(mouth_center: Vector2, radii: Vector2) -> void:
 	dip = Vector2(start.x, maxf(start.y + 52.0, floor_y))
 	lift = Vector2(start.x, start.y - 16.0)
 	hover = Vector2(start.x - 36.0, start.y - 200.0)
+	mortar_level = 1.0
+	motes = []
+	_removed = 0.0
+	_carry_rot = 0.0
+	_scoops_taken = 0
+	_dip_sent = [false, false]
+	_drag_sent = [false, false]
+	_kind = "powder"
+	_base_set = false
+	_mote_wait = 0.0
 
 
 func active() -> bool:
@@ -79,36 +100,94 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	var opacity := 1.0
 	var blob := 0.0
 	var pouring := 0.0
+	var cue := ""
+	var phase := "approach"
+	var depth := 0.0
+	var shedding := false
+	if pile != null:
+		_kind = pile.material_kind()
+		if not _base_set:
+			_base_color = pile.mean_color()
+			_base_set = true
 	if t < T_IN:
-		# Arc down into the pile, slowing as the bowl enters the material.
-		var k := _ease_out(t / T_IN)
-		var ctrl := Vector2(start.x + 54.0, (hover.y + dip.y) * 0.45)
-		pos = _quad(hover, ctrl, dip, k)
-		rot = lerpf(-34.0, 28.0, k)
+		# Rise from rest beside the mortar, arc over, and settle into the dip.
+		phase = "approach"
+		var k := _ease_in_out(t / T_IN)
+		var rest := Vector2(start.x + 96.0, start.y - 12.0)
+		var c1 := Vector2(start.x + 48.0, start.y - 92.0)
+		var c2 := Vector2(start.x - 18.0, dip.y - 20.0)
+		pos = _cubic(rest, c1, c2, dip, k)
+		rot = lerpf(-28.0, 18.0, k)
 	elif t < T_SCOOP:
+		phase = "scoop"
 		var k2 := (t - T_IN) / T_STIR
-		var depth := _scoop_depth(k2)
-		pos = Vector2(start.x + sin(k2 * TAU) * orbit.x * 0.85, lerpf(lift.y, dip.y, depth))
-		rot = lerpf(-8.0, 32.0, depth)
+		var cycle := clampf(k2, 0.0, 0.999) * 2.0
+		var which := int(floor(cycle))
+		var local := cycle - float(which)
+		var xoff := 0.0
+		if local < 0.34:
+			phase = "dip"
+			depth = _ease_in(local / 0.34)
+			xoff = sin(local / 0.34 * PI) * orbit.x * 0.22
+			# The approach already seats the bowl. The second scoop drops in from the lift.
+			var from_rot := 18.0 if which == 0 else -2.0
+			rot = lerpf(from_rot, 48.0, _ease_in_out(local / 0.34))
+			if depth > 0.62 and which < _dip_sent.size() and not _dip_sent[which]:
+				_dip_sent[which] = true
+				cue = "dip"
+		elif local < 0.62:
+			depth = 1.0
+			var drag := (local - 0.34) / 0.28
+			xoff = lerpf(0.0, orbit.x * 0.72, _ease_in_out(drag))
+			rot = lerpf(48.0, 14.0, drag)
+			if drag > 0.2 and which < _drag_sent.size() and not _drag_sent[which]:
+				_drag_sent[which] = true
+				cue = "drag"
+		else:
+			var lift_k := _ease_out((local - 0.62) / 0.38)
+			depth = 1.0 - lift_k
+			xoff = orbit.x * 0.72 * (1.0 - lift_k)
+			rot = lerpf(14.0, -2.0, lift_k)
+			shedding = lift_k > 0.08 and lift_k < 0.92
+		var high := dip.y if (which == 0 and local < 0.62) else lift.y
+		pos = Vector2(start.x + xoff, lerpf(high, dip.y, depth))
+		var sunk := (float(which) + depth) / 2.0
+		if sunk > _removed:
+			_removed = sunk
 		if pile != null:
 			_take(pile.scoop_under(pos.x, pos.y))
-			if k2 > 0.86 and not _swept:
+			if depth > 0.9 and _scoops_taken == which:
+				_scoops_taken += 1
+				_take(pile.take_share(0.5))
+				pile.note_hollow(pos.x, pos.y)
+			if k2 > 0.93 and not _swept:
 				_swept = true
 				_take(pile.scoop_rest())
 		blob = 0.0 if chips.is_empty() else minf(1.0, 0.45 + float(chips.size()) / 10.0)
 	elif t < T_SCOOP + T_CARRY:
+		phase = "carry"
 		var k3 := _dwell((t - T_SCOOP) / T_CARRY)
+		if _carry_rot == 0.0 and absf(rot) < 0.01:
+			_carry_rot = -2.0
 		pos = _carry(k3)
-		var ahead := _carry(minf(1.0, k3 + 0.04))
-		var tangent := ahead - pos
-		rot = clampf(-tangent.x * 0.045, -18.0, 18.0)
+		pos.x += sin(k3 * TAU) * 6.0
+		pos.y += sin(k3 * PI) * 5.0
+		if k3 > 0.84:
+			var over := sin((k3 - 0.84) / 0.16 * PI)
+			pos.x += over * 14.0
+			pos.y -= over * 7.0
+		var ahead := _carry(minf(1.0, k3 + 0.05))
+		var want := clampf(-(ahead.x - pos.x) * 0.025, -4.0, 4.0)
+		_carry_rot = lerpf(_carry_rot, want, 0.22)
+		rot = _carry_rot + sin(k3 * TAU) * 1.6
 		blob = 1.0
 		var fine := 0
 		for chip in chips:
 			if str(chip.get("kind", "")) == "dust":
 				fine += 1
-		_trail += dt * (6.0 + minf(18.0, float(fine) * 1.5))
+		_trail += dt * (4.0 + minf(10.0, float(fine)))
 	elif t < T_SCOOP + T_CARRY + T_DROP:
+		phase = "pour"
 		var k4 := (t - T_SCOOP - T_CARRY) / T_DROP
 		var tilt_k := _ease_in_out(clampf(k4 / DROP_AT, 0.0, 1.0))
 		# Small arc onto the mouth, then a pause at full tilt while it pours.
@@ -124,12 +203,13 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			if pour >= 0.92:
 				_landed = true
 				landed_now = true
-		blob = 0.0 if _released else 1.0
+		blob = 1.0 if not _released else 0.32 * (1.0 - clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0))
 	elif t < TOTAL:
+		phase = "exit"
 		if _released and not _landed:
 			_landed = true
 			landed_now = true
-		var k5 := _ease_in((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT)
+		var k5 := _ease_in_out((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT)
 		pos = Vector2(end.x + 18.0 - 28.0 * k5, end.y - 170.0 * k5)
 		rot = 76.0 * (1.0 - _ease_out(k5))
 		opacity = 1.0 - k5
@@ -144,6 +224,8 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	if t >= T_SCOOP and t < T_SCOOP + T_CARRY:
 		trail_n = int(floor(_trail))
 		_trail -= float(trail_n)
+	mortar_level = 1.0 - 0.92 * _removed
+	_tick_motes(dt, pos, shedding, _chip_color())
 	return {
 		"alive": true,
 		"landed": landed_now,
@@ -159,6 +241,12 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 		"prev": prev,
 		"lip": lip_offset(rot),
 		"pouring": pouring,
+		"phase": phase,
+		"cue": cue,
+		"kind": _kind,
+		"level": mortar_level,
+		"depth": depth,
+		"motes": motes,
 	}
 
 
@@ -293,13 +381,61 @@ func _bezier(k: float) -> Vector2:
 	)
 
 
+func _cubic(a: Vector2, b: Vector2, c: Vector2, d: Vector2, k: float) -> Vector2:
+	var u := 1.0 - clampf(k, 0.0, 1.0)
+	var t := clampf(k, 0.0, 1.0)
+	return a * (u * u * u) + b * (3.0 * u * u * t) + c * (3.0 * u * t * t) + d * (t * t * t)
+
+
+func _tick_motes(dt: float, origin: Vector2, shedding: bool, col: Color) -> void:
+	var keep: Array = []
+	for item_v in motes:
+		var item: Dictionary = item_v
+		item["life"] = float(item.get("life", 0.0)) - dt
+		item["x"] = float(item.get("x", 0.0)) + float(item.get("vx", 0.0)) * dt
+		item["y"] = float(item.get("y", 0.0)) + float(item.get("vy", 0.0)) * dt
+		item["vy"] = float(item.get("vy", 0.0)) + float(item.get("g", 0.0)) * dt
+		if float(item["life"]) > 0.0:
+			keep.append(item)
+	motes = keep
+	if not shedding:
+		return
+	_mote_wait -= dt
+	if _mote_wait > 0.0 or motes.size() >= 6:
+		return
+	_mote_wait = 0.08
+	motes.append({
+		"x": origin.x - 4.0, "y": origin.y + 10.0, "vx": -22.0, "vy": 70.0, "g": 80.0,
+		"life": 0.32, "r": 3.4, "dust": false, "color": col,
+	})
+	motes.append({
+		"x": origin.x + 8.0, "y": origin.y + 2.0, "vx": 16.0, "vy": -28.0, "g": 6.0,
+		"life": 0.42, "r": 1.7, "dust": true, "color": col,
+	})
+
+
 func _chip_color() -> Color:
 	if chips.is_empty():
-		return Color("#8a7a52")
-	var chip: Dictionary = chips[0]
-	if chip.get("color") is Color:
-		return chip["color"]
-	return Color("#8a7a52")
+		return _base_color
+	var r := 0.0
+	var g := 0.0
+	var b := 0.0
+	var n := 0
+	for chip_v in chips:
+		var chip: Dictionary = chip_v
+		var col: Color = _base_color
+		var raw: Variant = chip.get("color", null)
+		if raw is Color:
+			col = raw
+		elif raw != null and str(raw) != "":
+			col = Color(str(raw))
+		r += col.r
+		g += col.g
+		b += col.b
+		n += 1
+	if n == 0:
+		return _base_color
+	return Color(r / float(n), g / float(n), b / float(n), 1.0)
 
 
 func _ease_out(k: float) -> float:

@@ -70,6 +70,7 @@ func _run() -> void:
 	_stage_fit()
 	_layers()
 	_spoon_motion()
+	_spoon_pile()
 	_bottle_glass()
 	_gate_text()
 	_round2()
@@ -580,23 +581,64 @@ func _spoon_motion() -> void:
 	var pour_rot := 0.0
 	var exit_rot := 99.0
 	var saw_dip := false
+	var prev := Vector2.ZERO
+	var prev_rot := 0.0
+	var prev_step := 0.0
+	var have_prev := false
+	var max_step := 0.0
+	var max_accel := 0.0
+	var max_ang := 0.0
+	var carry_ang := 0.0
+	var carry_abs := 0.0
+	var approach: Array = []
+	var level := 1.0
+	var level_drops: Array = []
+	var dip_cues := 0
+	var drag_cues := 0
+	var saw_mote := false
 	while s.active():
 		var pose: Dictionary = s.update(1.0 / 60.0, null)
 		if not bool(pose.get("alive", false)):
 			break
 		var y := float(pose["y"])
+		var here := Vector2(float(pose["x"]), y)
+		var step := 0.0
+		var drot := 0.0
+		if have_prev:
+			step = here.distance_to(prev)
+			max_step = maxf(max_step, step)
+			max_accel = maxf(max_accel, absf(step - prev_step))
+			drot = absf(float(pose["rot"]) - prev_rot) * 60.0
+			max_ang = maxf(max_ang, drot)
+		have_prev = true
+		prev = here
+		prev_step = step
+		prev_rot = float(pose["rot"])
 		var tt: float = s.t
+		if tt < 0.32:
+			approach.append(here)
 		if tt > 0.45 and tt < 1.92:
 			if y > deepest:
 				deepest = y
 			if y > s.dip.y - 4.0:
 				saw_dip = true
+			var next_level := float(pose.get("level", 1.0))
+			level_drops.append(next_level)
+			level = next_level
 		if tt > 1.92 and tt < 2.62:
-			carry.append(Vector2(float(pose["x"]), y))
+			carry.append(here)
+			carry_ang = maxf(carry_ang, drot)
+			carry_abs = maxf(carry_abs, absf(float(pose["rot"])))
 		if tt > 2.62 and tt < 3.50:
 			pour_rot = maxf(pour_rot, absf(float(pose["rot"])))
 		if tt > 3.70:
 			exit_rot = absf(float(pose["rot"]))
+		if str(pose.get("cue", "")) == "dip":
+			dip_cues += 1
+		if str(pose.get("cue", "")) == "drag":
+			drag_cues += 1
+		if (pose.get("motes", []) as Array).size() > 0:
+			saw_mote = true
 	check(saw_dip and deepest > s.start.y + 36.0, "spoon dips into the mortar got %s start %s" % [deepest, s.start.y])
 	var dev := 0.0
 	if carry.size() >= 3:
@@ -611,6 +653,68 @@ func _spoon_motion() -> void:
 	var lip1: Vector2 = s.lip_offset(76.0)
 	check(lip0.y > 12.0, "material sits in the bowl")
 	check(lip0.distance_to(lip1) > 8.0, "material slides to the lip as the spoon tilts")
+	var chord := 0.0
+	var path_len := 0.0
+	if approach.size() >= 2:
+		chord = (approach[0] as Vector2).distance_to(approach[approach.size() - 1])
+		var walk := approach[0] as Vector2
+		for p in approach:
+			path_len += (p as Vector2).distance_to(walk)
+			walk = p
+	var curve := 1.0 if chord < 1.0 else path_len / chord
+	check(curve > 1.12, "approach is a curve, ratio %s" % curve)
+	check(max_step < 22.0, "path step %s px" % max_step)
+	check(max_accel < 12.0, "path acceleration %s" % max_accel)
+	check(carry_abs < 12.0, "bowl stays level while carrying, rot %s" % carry_abs)
+	check(carry_ang < 160.0, "carry angular velocity %s deg/s" % carry_ang)
+	var mono := true
+	var prev_l := 1.0
+	var drop_sum := 0.0
+	for lv in level_drops:
+		var now := float(lv)
+		if now > prev_l + 0.002:
+			mono = false
+		drop_sum += maxf(0.0, prev_l - now)
+		prev_l = now
+	check(mono, "mortar level falls monotonically")
+	check(level < 0.15, "mortar is nearly empty after the scoops, level %s" % level)
+	check(dip_cues == 2 and drag_cues == 2, "two dips and two drags, %s %s" % [dip_cues, drag_cues])
+	check(saw_mote, "lift sheds material")
+	print("ROUND13 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f" % [curve, max_step, max_accel, max_ang, carry_ang, carry_abs, level, drop_sum])
+
+
+func _spoon_pile() -> void:
+	var pile: MortarPile = MortarPile.new()
+	pile.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 1.2, "grinding": false})
+	var before: Color = pile.mean_color()
+	var spoon: GDScript = load("res://scripts/fx/spoon_transfer.gd")
+	var s = spoon.new()
+	s.begin(Vector2(900, 640), Vector2(180, 70))
+	var matched := false
+	var bottom := 1.0
+	var saw_hollow := false
+	while s.active():
+		var pose: Dictionary = s.update(1.0 / 60.0, pile)
+		if not bool(pose.get("alive", false)):
+			break
+		if float(s.t) > 1.2 and float(s.t) < 1.9 and float(pose.get("blob", 0.0)) > 0.4:
+			var col: Color = pose.get("color", Color(0, 0, 0))
+			var err := maxf(absf(col.r - before.r), maxf(absf(col.g - before.g), absf(col.b - before.b)))
+			matched = err < 0.04
+		bottom = minf(bottom, pile.surface_level())
+		var hollows: Array = pile.decor()["hollows"]
+		if hollows.size() > 0:
+			saw_hollow = true
+	check(matched, "spoon mound matches the mortar colour %s" % before)
+	check(bottom < 0.12, "mortar bottom shows when empty, fill %s" % bottom)
+	check(saw_hollow, "the spoon leaves a hollow")
+	var spills: Array = pile.decor()["spills"]
+	check(spills.size() > 0, "material spills beside the hollow")
+	var sfx_script: GDScript = load("res://scripts/autoload/sfx.gd")
+	var names := ""
+	for method_v in sfx_script.get_script_method_list():
+		names += str(method_v.get("name", "")) + ","
+	check(names.contains("spoon_dip") and names.contains("spoon_drag"), "dip and drag sounds")
 
 
 func _bottle_glass() -> void:

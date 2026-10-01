@@ -724,6 +724,32 @@ func scoop() -> void:
 	noise_burst(0.18, "highpass", 1400.0, 0.18)
 
 
+## Dip and drag change with the material. Leaf rustles, powder hisses, grain clicks.
+func spoon_dip(kind: String) -> void:
+	if kind == "grain":
+		noise_burst(0.04, "bandpass", 1800.0, 0.16, 2.4)
+		noise_burst(0.03, "highpass", 3200.0, 0.08, 1.6)
+		tone(420.0, 0.04, 0.04, "triangle", 180.0)
+	elif kind == "leaf":
+		noise_burst(0.12, "highpass", 2400.0, 0.14, 0.7, 900.0)
+		noise_burst(0.06, "bandpass", 1600.0, 0.08, 1.4)
+	else:
+		noise_burst(0.1, "lowpass", 900.0, 0.12, 0.6, 400.0)
+		noise_burst(0.05, "bandpass", 1400.0, 0.06, 1.2)
+
+
+func spoon_drag(kind: String) -> void:
+	if kind == "grain":
+		noise_burst(0.16, "bandpass", 2200.0, 0.1, 3.2, 900.0)
+		noise_burst(0.08, "highpass", 3600.0, 0.05, 1.8)
+	elif kind == "leaf":
+		noise_burst(0.2, "highpass", 1800.0, 0.11, 0.8, 600.0)
+		noise_burst(0.1, "bandpass", 900.0, 0.06, 1.1)
+	else:
+		noise_burst(0.18, "lowpass", 700.0, 0.1, 0.5, 280.0)
+		noise_burst(0.08, "bandpass", 1100.0, 0.05)
+
+
 func sparkle() -> void:
 	var notes := [784.0, 988.0, 1175.0, 1568.0]
 	for i in notes.size():
