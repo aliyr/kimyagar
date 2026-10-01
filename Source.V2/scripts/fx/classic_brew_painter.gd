@@ -11,6 +11,7 @@ extends RefCounted
 ## The spoon is drawn by ClassicSpoon between heat haze and the mouth interior.
 
 const RoomFx = preload("res://scripts/fx/workshop_fx.gd")
+const Poly = preload("res://scripts/fx/poly_draw.gd")
 const SCENE_MOUTH_RX: float = 378.0 * 280.0 / 750.0
 const SPLASH_DEPTH: float = 84.0 / 378.0
 const DOME: float = 0.78
@@ -824,9 +825,7 @@ func _bound(a: Vector2, b: Vector2) -> Vector2:
 func _paint(pts: PackedVector2Array, color: Color) -> void:
 	if _c == null or color.a <= 0.004:
 		return
-	var clean: PackedVector2Array = _clean(pts)
-	if clean.size() >= 3:
-		_c.draw_colored_polygon(clean, color)
+	Poly.draw_colored(_c, _clean(pts), color)
 
 
 func _paint_tex(pts: PackedVector2Array, uvs: PackedVector2Array, tex: Texture2D, modulate: Color) -> void:
@@ -851,6 +850,8 @@ func _paint_tex(pts: PackedVector2Array, uvs: PackedVector2Array, tex: Texture2D
 		area += a.x * b.y - b.x * a.y
 	# A clipped chip can collapse into a sliver. Godot's triangulator errors on it.
 	if absf(area) < 1.5:
+		return
+	if Geometry2D.triangulate_polygon(clean).is_empty():
 		return
 	var cols: PackedColorArray = PackedColorArray()
 	cols.resize(clean.size())

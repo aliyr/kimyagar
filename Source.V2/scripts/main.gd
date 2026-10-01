@@ -571,6 +571,37 @@ func _prepare_shot() -> void:
 			workshop.pour = ""
 			_seed_brush_residue()
 			_warm_workshop(0.2)
+		"refill":
+			phase = "workshop"
+			gate.visible = false
+			var rf: Dictionary = Alchemy.create_brew()
+			rf = Alchemy.add_ingredient(rf, "ginger", 1.0, "crushed", Game.defs)
+			Game.brew = rf
+			workshop.begin_discard()
+			for _i in 260:
+				workshop.advance(1.0 / 60.0, tilt, true)
+				if str(workshop._brew.spawn_phase) == "settle" and float(workshop._brew.fill) > 0.32 and float(workshop._brew.fill) < 0.72:
+					break
+			workshop._sync_liquid()
+		"carry":
+			phase = "workshop"
+			gate.visible = false
+			var cr: Dictionary = Alchemy.create_brew()
+			cr = Alchemy.add_ingredient(cr, "chamomile", 1.0, "fine", Game.defs)
+			cr = Alchemy.add_ingredient(cr, "saffron", 1.0, "fine", Game.defs)
+			cr = Alchemy.advance_time(cr, 16.0, Game.defs)
+			cr = Alchemy.stir(cr, Game.defs)
+			Game.brew = cr
+			Game.bottle_brew()
+			Game.result = null
+			Game.evaluation = {"band": "good", "reactionFa": "گرفت", "score": 1}
+			workshop.pour = ""
+			workshop.jump_customer("leave", 0.28)
+			workshop._park_bottle()
+			workshop._pickup_bottle(1.0)
+			workshop._tick_carry(0.0)
+			workshop._sync_liquid()
+			_seed_brush_residue()
 		"bottle-desk":
 			phase = "workshop"
 			gate.visible = false

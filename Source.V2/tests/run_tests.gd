@@ -76,6 +76,7 @@ func _run() -> void:
 	_round3()
 	_round4()
 	_round5()
+	_round6()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -1170,6 +1171,185 @@ func _round5() -> void:
 	overlays.advance(0.0)
 	root.remove_child(main)
 	main.free()
+
+
+func _round6() -> void:
+	var poly = load("res://scripts/fx/poly_draw.gd")
+	var two := PackedVector2Array([Vector2.ZERO, Vector2(4, 0)])
+	check(poly.kept_polygon(two).is_empty(), "a two-point polygon is not drawn")
+	var flat := PackedVector2Array([Vector2.ZERO, Vector2(3, 0), Vector2(8, 0)])
+	check(poly.kept_polygon(flat).is_empty(), "a collinear polygon is not drawn")
+	var bow := PackedVector2Array([Vector2(0, 0), Vector2(12, 10), Vector2(0, 10), Vector2(12, 0)])
+	check(poly.kept_polygon(bow).is_empty(), "a self-intersecting polygon is not drawn")
+	var tri := PackedVector2Array([Vector2(0, 0), Vector2(20, 0), Vector2(0, 16)])
+	check(poly.kept_polygon(tri).size() == 3, "a real triangle is kept")
+	var host := Node2D.new()
+	root.add_child(host)
+	var motion = load("res://scripts/fx/discard_motion.gd")
+	motion._spatter(host, {"r": 0.0, "stretch": 2.4, "ang": 0.3, "x": 4.0, "y": 6.0}, 0.0, Color(0.45, 0.2, 0.1))
+	motion._tendril(host, {"len": 0.0, "width": 0.0, "x": 2.0, "y": 2.0, "ang": 0.4}, 0.0, Color(0.4, 0.15, 0.08))
+	var glass = load("res://scripts/fx/bottle_glass.gd")
+	glass.draw(host, Rect2(0, 0, 1.0, 1.0), "tilt", 0.0, [], Callable(self, "_round6_tint"), 0.0)
+	var painter = load("res://scripts/fx/classic_brew_painter.gd").new()
+	painter._c = host
+	painter._paint(PackedVector2Array([Vector2.ZERO, Vector2(1, 0), Vector2(2, 0)]), Color(0.25, 0.45, 0.55))
+	var chip := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	chip.fill(Color.WHITE)
+	var chip_tex := ImageTexture.create_from_image(chip)
+	painter._paint_tex(
+		PackedVector2Array([Vector2.ZERO, Vector2(0.3, 0.0), Vector2(0.6, 0.01)]),
+		PackedVector2Array([Vector2.ZERO, Vector2.ONE, Vector2(0, 1)]),
+		chip_tex,
+		Color.WHITE
+	)
+	painter._c = null
+	root.remove_child(host)
+	host.free()
+	var emo_tex: Texture2D = load("res://assets/art/customer/customer_woman_cloth_happy.png") as Texture2D
+	var idle_tex: Texture2D = load("res://assets/art/customer/customer_woman_cloth.png") as Texture2D
+	var emo_img: Image = emo_tex.get_image()
+	var idle_img: Image = idle_tex.get_image()
+	var mask_script = load("res://scripts/view/workshop_view.gd")
+	var holder: Node = mask_script.new()
+	var masked: Image = holder._mask_hand_image(emo_img, idle_img)
+	holder.free()
+	var hand_at := _far_pixel(emo_img, idle_img, 0.55, 0.82)
+	var face_at := _far_pixel(emo_img, idle_img, 0.08, 0.22)
+	check(hand_at.x >= 0, "the happy portrait differs from idle in the hands")
+	var hand_m: Color = masked.get_pixel(hand_at.x, hand_at.y)
+	var hand_i: Color = idle_img.get_pixel(hand_at.x, hand_at.y)
+	var hand_e: Color = emo_img.get_pixel(hand_at.x, hand_at.y)
+	check(absf(hand_m.r - hand_i.r) + absf(hand_m.g - hand_i.g) + absf(hand_m.b - hand_i.b) < 0.02, "the painted hand bottle is replaced by the idle hands")
+	check(absf(hand_e.r - hand_i.r) + absf(hand_e.g - hand_i.g) + absf(hand_e.b - hand_i.b) > 0.15, "that hand pixel was the baked bottle, not idle")
+	check(face_at.x >= 0, "the happy face differs from idle")
+	var face_m: Color = masked.get_pixel(face_at.x, face_at.y)
+	var face_e: Color = emo_img.get_pixel(face_at.x, face_at.y)
+	check(absf(face_m.r - face_e.r) + absf(face_m.g - face_e.g) + absf(face_m.b - face_e.b) < 0.02, "the reaction face stays on the portrait")
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	var water := Color("#3f6f8f")
+	game.start_fresh()
+	var coloured: Dictionary = Alchemy.create_brew()
+	coloured = Alchemy.add_ingredient(coloured, "chamomile", 1.0, "fine", game.defs)
+	coloured = Alchemy.add_ingredient(coloured, "saffron", 1.0, "fine", game.defs)
+	coloured = Alchemy.advance_time(coloured, 16.0, game.defs)
+	coloured = Alchemy.stir(coloured, game.defs)
+	game.brew = coloured
+	game.bottle_brew()
+	workshop._cust_index = game.customer_index
+	workshop._cust_phase = "idle"
+	workshop.pour = "deliver"
+	workshop.pour_t = 2.65
+	workshop._tick_pour(0.2)
+	var ink: Color = workshop._carry_ink
+	var ink_far := absf(ink.r - water.r) + absf(ink.g - water.g) + absf(ink.b - water.b)
+	check(ink_far > 0.25, "the parked bottle keeps the potion colour %s" % ink)
+	workshop._carry_level = 0.55
+	workshop._cust_phase = "leave"
+	game.next_customer()
+	workshop._sync_liquid()
+	workshop._tick_carry(0.3)
+	var after: Color = workshop._carry_ink
+	check(absf(after.r - ink.r) < 0.001 and absf(after.g - ink.g) < 0.001 and absf(after.b - ink.b) < 0.001, "leaving does not recolour the bottle")
+	check(absf(float(workshop._carry_level) - 0.55) < 0.001, "leaving does not change the carried level")
+	var carry_key := str(workshop._bottle_paint_key())
+	check(carry_key.begins_with("carry:"), "the carried bottle still paints, key %s" % carry_key)
+	check(carry_key.find("%.3f" % ink.r) >= 0, "the paint key keeps the potion red %s" % carry_key)
+	check(carry_key.find("0.55") >= 0, "the paint key keeps the carried level %s" % carry_key)
+	var emptied: Color = glass.blend_color([], Callable(self, "_round6_tint"), 1.0)
+	check(absf(emptied.r - water.r) < 0.02 and absf(workshop._carry_ink.r - emptied.r) > 0.05, "an empty brew would be water, the bottle is not")
+	game.customer_index = 0
+	game.evaluation = {"band": "good", "reactionFa": "خوب", "score": 1}
+	workshop.jump_customer("react", 0.15)
+	check(workshop._customer.material == null, "the reaction portrait is a picture, not a second glass")
+	var shown: Image = (workshop._customer.texture as Texture2D).get_image()
+	var shown_hand: Color = shown.get_pixel(hand_at.x, hand_at.y)
+	var shown_face: Color = shown.get_pixel(face_at.x, face_at.y)
+	check(absf(shown_hand.r - hand_i.r) + absf(shown_hand.g - hand_i.g) + absf(shown_hand.b - hand_i.b) < 0.02, "the customer on screen has no baked bottle")
+	check(absf(shown_face.r - face_e.r) + absf(shown_face.g - face_e.g) + absf(shown_face.b - face_e.b) < 0.02, "the customer on screen keeps the happy face")
+	workshop.jump_customer("idle", 0.2)
+	check(workshop._customer.material == null, "the idle portrait is not masked")
+	check(str(workshop._customer.texture.resource_path).find("customer_woman_cloth.png") >= 0, "idle uses the plain portrait")
+	game.start_fresh()
+	var thrown: Dictionary = Alchemy.create_brew()
+	thrown = Alchemy.add_ingredient(thrown, "ginger", 1.0, "crushed", game.defs)
+	game.brew = thrown
+	workshop.begin_discard()
+	var saw_flight := false
+	var saw_rise := false
+	var rose_fill := 0.0
+	var saw_more := false
+	var min_drop := 0.0
+	var dt := 1.0 / 60.0
+	for _n in 320:
+		workshop._sync_brew(dt)
+		workshop._tick_discard(dt)
+		workshop._sync_liquid()
+		workshop._sync_pot_spin()
+		var t := float(workshop.discard_t)
+		var phase := str(workshop._brew.spawn_phase)
+		if t >= 0.0 and phase == "fall":
+			if not saw_flight:
+				check(str(workshop._water_draw_key) == "hidden", "water stays hidden while the new pot is still falling")
+			saw_flight = true
+			min_drop = minf(min_drop, float(workshop._brew.spawn_y))
+		if t < 0.0:
+			continue
+		var fill := float(workshop._brew.fill)
+		if phase == "settle" and fill > 0.12 and fill < 0.82 and not saw_rise:
+			saw_rise = true
+			rose_fill = fill
+			check(str(workshop._water_draw_key).begins_with("show"), "water is drawn once the pot has landed")
+			workshop._brew_painter.present_water(workshop._brew, workshop._mouth, workshop._mouth_r.x, workshop._mouth_r.y)
+			var disc: ColorRect = workshop._brew_painter.disc_liquid
+			check(disc != null and disc.visible, "the rising water is visible")
+			if disc != null:
+				var mat := disc.material as ShaderMaterial
+				var stop0: Color = mat.get_shader_parameter("stop0")
+				check(stop0.a > 0.4, "rising water alpha %s" % stop0.a)
+				check(float(mat.get_shader_parameter("grad_radius")) > 1.0, "rising water gradient")
+			var col: Color = workshop._brew.mix_liquid()
+			check(absf(col.r - water.r) < 0.08 and absf(col.g - water.g) < 0.08 and absf(col.b - water.b) < 0.08, "the new pot fills with clean blue %s" % col)
+			check(t < 4.8, "the fill is underway before the throw animation ends")
+		elif saw_rise and not saw_more and phase != "fall" and fill > rose_fill + 0.18 and t >= 0.0:
+			saw_more = true
+			check(str(workshop._water_draw_key).begins_with("show"), "water stays up as the level rises")
+			workshop._brew_painter.present_water(workshop._brew, workshop._mouth, workshop._mouth_r.x, workshop._mouth_r.y)
+			check(workshop._brew_painter.disc_liquid.visible, "the fuller water is still visible")
+	check(saw_flight, "the new pot falls back in")
+	check(min_drop < -200.0, "the new pot drops from above the frame, y %s" % min_drop)
+	check(saw_rise, "water rises from the bottom after landing")
+	check(saw_more, "the water keeps rising during the throw")
+	root.remove_child(main)
+	main.free()
+
+
+func _far_pixel(a: Image, b: Image, y0: float, y1: float) -> Vector2i:
+	var w := mini(a.get_width(), b.get_width())
+	var y_start := int(float(a.get_height()) * y0)
+	var y_end := int(float(a.get_height()) * y1)
+	var best := Vector2i(-1, -1)
+	var best_d := 0.12
+	var step := 5
+	for y in range(y_start, y_end, step):
+		if y >= b.get_height():
+			break
+		for x in range(0, w, step):
+			var ca: Color = a.get_pixel(x, y)
+			var cb: Color = b.get_pixel(x, y)
+			if ca.a < 0.5 or cb.a < 0.5:
+				continue
+			var d := absf(ca.r - cb.r) + absf(ca.g - cb.g) + absf(ca.b - cb.b)
+			if d > best_d:
+				best_d = d
+				best = Vector2i(x, y)
+	return best
+
+
+func _round6_tint(_id: String) -> Color:
+	return Color("#c45a12")
 
 
 func mat_stop_a(workshop: Node) -> float:

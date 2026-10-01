@@ -1,5 +1,7 @@
 class_name DiscardMotion
 extends RefCounted
+
+const Poly = preload("res://scripts/fx/poly_draw.gd")
 ## Web/src/scene/cauldron/discardMotion.ts plus the wall stain in DiscardWallFx.
 
 const SHELF_BOTTOM := 448.0
@@ -229,8 +231,7 @@ static func draw_wall(c: CanvasItem, t: float, scene: Dictionary, tone: Dictiona
 		if bg <= 0.0:
 			continue
 		var poly := _blob_poly(b, bg)
-		if poly.size() >= 3:
-			c.draw_colored_polygon(poly, Color(base.r, base.g, base.b, alpha * 0.95))
+		Poly.draw_colored(c, poly, Color(base.r, base.g, base.b, alpha * 0.95))
 	for b2 in scene.get("blobs", []):
 		if float(b2["rx"]) < 60.0:
 			continue
@@ -364,7 +365,7 @@ static func _spatter(c: CanvasItem, s: Dictionary, g: float, col: Color) -> void
 	pts.append(_spin(Vector2(-rad, 0.0), ang, Vector2(float(s["x"]), float(s["y"]))))
 	pts.append(_spin(Vector2(rad * stretch, 0.0), ang, Vector2(float(s["x"]), float(s["y"]))))
 	pts.append(_spin(Vector2(-rad * 0.2, rad * 0.7), ang, Vector2(float(s["x"]), float(s["y"]))))
-	c.draw_colored_polygon(pts, col)
+	Poly.draw_colored(c, pts, col)
 
 
 static func _tendril(c: CanvasItem, td: Dictionary, g: float, col: Color) -> void:
@@ -375,8 +376,9 @@ static func _tendril(c: CanvasItem, td: Dictionary, g: float, col: Color) -> voi
 	var a := _spin(Vector2(-4.0, -w * 0.5), ang, origin)
 	var tip := _spin(Vector2(length, 0.0), ang, origin)
 	var b := _spin(Vector2(-4.0, w * 0.5), ang, origin)
-	c.draw_colored_polygon(PackedVector2Array([a, tip, b]), col)
-	c.draw_circle(tip, w * 0.32, col)
+	Poly.draw_colored(c, PackedVector2Array([a, tip, b]), col)
+	if w > 0.2:
+		c.draw_circle(tip, w * 0.32, col)
 
 
 static func _spin(local: Vector2, ang: float, origin: Vector2) -> Vector2:

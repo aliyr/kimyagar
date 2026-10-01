@@ -71,6 +71,12 @@ var _water_draw_key := ""
 ## "" shelf, "desk" intact bottle on the counter, "hand" the customer is carrying it.
 var _carry := ""
 var _carry_t := 0.0
+## Colour and level frozen when the bottle is set down, so a later brew reset
+## cannot turn the carried liquor back into cauldron water.
+var _carry_ink := Color("#3f6f8f")
+var _carry_level := 1.0
+## Happy/sad portraits bake a bottle into the hands. Cache the idle-handed version.
+var _hand_cache: Dictionary = {}
 var _stream: Control
 var _pestle: TextureRect
 var _mortar_fx: Control
@@ -1098,7 +1104,9 @@ func _brew_drawable() -> bool:
 		return false
 	if not _brew.pot_visible():
 		return false
-	if discard_t >= 0.0:
+	# The thrown pot's liquor is the flight ellipse. The hearth discs stay
+	# hidden until the new pot has landed; then fill rises from the bottom.
+	if discard_t >= 0.0 and str(_brew.spawn_phase) == "fall":
 		return false
 	return true
 
@@ -1208,7 +1216,10 @@ func _sync_brew(dt: float) -> void:
 				Haptics.pulse("heavy" if impact > 1100.0 else "light")
 		if _brew.take_fill_start():
 			Sfx.water_fill(0.95)
-	if pour == "" and _pot_pivot and discard_t < 0.0:
+	# The flight sprite is drawn on its own canvas. The hearth pot, including a
+	# pot that is still falling back in, follows the sim so the new water rides
+	# with it after it lands.
+	if pour == "" and _pot_pivot and (discard_t < 0.0 or _brew.pot_visible()):
 		var sq: Vector2 = _brew.squash()
 		_pot_pivot.position = _pot_base + Vector2(0, _brew.spawn_y)
 		_pot_pivot.rotation_degrees = _brew.tilt + _brew.rock
@@ -1272,9 +1283,7 @@ func _bottle_paint_key() -> String:
 	if pour != "":
 		return "pour"
 	if _carry != "":
-		var carried: Array = Game.brew["entries"]
-		var ink := GlassLib.blend_color(carried, Callable(self, "_ingredient_color"), 1.0)
-		return "carry:%s:%.3f:%.3f:%.3f" % [_carry, ink.r, ink.g, ink.b]
+		return "carry:%s:%.3f:%.3f:%.3f:%.2f" % [_carry, _carry_ink.r, _carry_ink.g, _carry_ink.b, _carry_level]
 	if bool(Game.brew.get("bottled", false)):
 		var entries: Array = Game.brew["entries"]
 		var body := GlassLib.blend_color(entries, Callable(self, "_ingredient_color"), 1.0)
@@ -1313,7 +1322,10 @@ func _draw_bottle_fill(c: Control) -> void:
 		return
 	var rect := Rect2(node.position, node.size)
 	var entries: Array = Game.brew["entries"]
-	GlassLib.draw(c, rect, phase, pour_t, entries, Callable(self, "_ingredient_color"), pour_t * 8.0)
+	if _carry != "" and pour == "":
+		GlassLib.draw(c, rect, phase, pour_t, entries, Callable(self, "_ingredient_color"), pour_t * 8.0, _carry_ink, _carry_level)
+	else:
+		GlassLib.draw(c, rect, phase, pour_t, entries, Callable(self, "_ingredient_color"), pour_t * 8.0)
 
 
 func _draw_stream(c: Control) -> void:
@@ -1627,7 +1639,68 @@ func _counter_spot() -> Vector2:
 	return Vector2(1560, counter_y - 196)
 
 
+## Hands on the happy/sad portraits include a painted bottle. Below the shoulders
+## those pixels are the idle portrait, so only the bottle we draw is visible.
+func _mask_hand_image(emo: Image, idle: Image) -> Image:
+	var out: Image = emo.duplicate()
+	if out.get_format() != Image.FORMAT_RGBA8:
+		out.convert(Image.FORMAT_RGBA8)
+	var base: Image = idle
+	if base.get_format() != Image.FORMAT_RGBA8:
+		base = idle.duplicate()
+		base.convert(Image.FORMAT_RGBA8)
+	var ow: int = out.get_width()
+	var oh: int = out.get_height()
+	if base.get_width() != ow or base.get_height() != oh:
+		if base == idle:
+			base = idle.duplicate()
+			if base.get_format() != Image.FORMAT_RGBA8:
+				base.convert(Image.FORMAT_RGBA8)
+		base.resize(ow, oh, Image.INTERPOLATE_BILINEAR)
+	# Bottles sit in the hands, from about 40% down. The face stays the reaction.
+	var cut: int = int(float(oh) * 0.34)
+	var feather: int = maxi(1, int(float(oh) * 0.02))
+	var y_solid: int = mini(oh, cut + feather)
+	if oh > y_solid:
+		out.blit_rect(base, Rect2i(0, y_solid, ow, oh - y_solid), Vector2i(0, y_solid))
+	for i in feather:
+		var y: int = cut + i
+		if y < 0 or y >= oh:
+			continue
+		var t: float = float(i + 1) / float(feather + 1)
+		for x in ow:
+			var ea: Color = emo.get_pixel(x, y)
+			var ba: Color = base.get_pixel(x, y)
+			out.set_pixel(x, y, ea.lerp(ba, t))
+	return out
+
+
+func _masked_portrait(emo_rel: String, idle_rel: String) -> Texture2D:
+	if _hand_cache.has(emo_rel):
+		return _hand_cache[emo_rel] as Texture2D
+	var emo_tex := UiKit.tex(emo_rel)
+	var idle_tex := UiKit.tex(idle_rel)
+	if emo_tex == null:
+		return null
+	if idle_tex == null:
+		return emo_tex
+	var emo_img := emo_tex.get_image()
+	var idle_img := idle_tex.get_image()
+	if emo_img == null or idle_img == null or emo_img.is_empty():
+		return emo_tex
+	var tex := ImageTexture.create_from_image(_mask_hand_image(emo_img, idle_img))
+	_hand_cache[emo_rel] = tex
+	return tex
+
+
+func _snapshot_carry() -> void:
+	var entries: Array = Game.brew["entries"]
+	_carry_level = 1.0
+	_carry_ink = GlassLib.blend_color(entries, Callable(self, "_ingredient_color"), _carry_level)
+
+
 func _park_bottle() -> void:
+	_snapshot_carry()
 	_carry = "desk"
 	_carry_t = 0.0
 	if _pour_bottle == null:
@@ -2464,7 +2537,13 @@ func _apply_customer_visual() -> void:
 	var pose := _customer_pose(_cust_phase, _cust_t)
 	var emo := _cust_emo if (_cust_phase == "react" or _cust_phase == "leave") else ""
 	var rel := "customer/customer_%s%s.png" % [_cust_look, emo]
-	if rel != _last_customer:
+	_customer.material = null
+	if emo != "":
+		var masked := _masked_portrait(rel, "customer/customer_%s.png" % _cust_look)
+		if masked != null and _customer.texture != masked:
+			_customer.texture = masked
+			_last_customer = rel
+	elif rel != _last_customer:
 		var tex := UiKit.tex(rel)
 		if tex != null:
 			_customer.texture = tex

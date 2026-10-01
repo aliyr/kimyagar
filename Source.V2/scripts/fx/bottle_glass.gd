@@ -1,5 +1,7 @@
 class_name BottleGlass
 extends RefCounted
+
+const Poly = preload("res://scripts/fx/poly_draw.gd")
 ## Liquid clipped to the inner profile. The glass texture is a rim, a thin
 ## body tint, highlights and a label; its interior alpha stays near 0 so the
 ## liquid drawn behind it remains visible at rest and after the cork.
@@ -169,13 +171,17 @@ static func bubble_at(rect: Rect2, level: float, i: int, time: float) -> Vector3
 	return Vector3(x, y, rad)
 
 
-static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entries: Array, color_of: Callable, time: float) -> void:
+static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entries: Array, color_of: Callable, time: float, ink_override = null, level_override = null) -> void:
 	var resting := phase == "rest"
 	if phase != "tilt" and phase != "stream" and phase != "deliver" and not resting:
 		return
 	var level := fill_level(phase, pour_t)
+	if level_override != null:
+		level = float(level_override)
 	var wave := 0.0 if resting else time * 5.5
 	var body := blend_color(entries, color_of, level)
+	if ink_override != null:
+		body = ink_override as Color
 	var incoming := blend_color(entries, color_of, clampf(level + 0.15, 0.0, 1.0))
 	var poly := liquid_polygon(rect, level, wave)
 	if poly.size() >= 3:
@@ -186,7 +192,7 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 		for i in poly.size():
 			var t := clampf((poly[i].y - rect.position.y) / rect.size.y, 0.0, 1.0)
 			cols[i] = light.lerp(deep, t)
-		c.draw_polygon(poly, cols)
+		Poly.draw_vertex_colors(c, poly, cols)
 		var edge := PackedVector2Array()
 		for i in mini(13, poly.size()):
 			edge.append(poly[i])
@@ -214,7 +220,7 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 			gloss_ok = false
 			break
 	if gloss_ok and level > 0.08:
-		c.draw_colored_polygon(gloss, Color(1, 1, 1, 0.16))
+		Poly.draw_colored(c, gloss, Color(1, 1, 1, 0.16))
 	if phase == "stream" or (phase == "tilt" and pour_t > 0.35):
 		var path := pour_path(rect, maxf(level, 0.02), wave)
 		if path.size() >= 2:
