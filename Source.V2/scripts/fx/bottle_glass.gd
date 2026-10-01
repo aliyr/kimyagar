@@ -288,26 +288,38 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 	if poly.size() >= 3:
 		# Stacked bands, not one smooth polygon. The mid-belly band stays on
 		# the snapshot. Above it the paint is lighter; below it, down to the
-		# label, the paint is clearly darker. Brush dabs stay out of that band.
+		# label, the paint is clearly darker. More bands, plus a small per-segment
+		# wobble, so the horizontal steps do not read as stripes.
 		var deep := shade(body, -0.38)
 		var light := _saturate(shade(body, 0.18), 0.28)
-		var n_bands := 8
+		var n_bands := 18
 		for i in n_bands:
 			var d0 := float(i) / float(n_bands)
 			var d1 := float(i + 1) / float(n_bands)
 			var depth := (d0 + d1) * 0.5
+			var nse := sin(float(i) * 6.5) * 0.010
+			if depth > 0.16 and depth < 0.30:
+				nse *= 0.25
+			depth = clampf(depth + nse, 0.0, 1.0)
 			var u0 := lerpf(surf, LIQUID_BOTTOM, d0)
 			var u1 := lerpf(surf, LIQUID_BOTTOM, d1)
 			var col := _liquor_band(body, light, deep, depth)
-			var y0 := rect.position.y + u0 * rect.size.y + sin(u0 * 18.0 + wave) * 0.8
-			var y1 := rect.position.y + u1 * rect.size.y + sin(u1 * 18.0 + wave + 0.6) * 0.8 + 1.4
+			var y0 := rect.position.y + u0 * rect.size.y + sin(u0 * 22.0 + wave) * 1.3
+			var y1 := rect.position.y + u1 * rect.size.y + sin(u1 * 22.0 + wave + 0.6) * 1.3 + 1.6
 			for s in 3:
 				var a0 := -1.0 + float(s) * (2.0 / 3.0)
 				var a1 := a0 + 2.0 / 3.0
 				var edge := 0.0
 				if s != 1:
 					edge = 0.12
+				var wob := 0.0
+				if s != 1 or depth < 0.16 or depth > 0.32:
+					wob = sin(float(i) * 4.1 + float(s) * 2.7) * 0.030
 				var bc := col.lerp(deep, edge)
+				if wob >= 0.0:
+					bc = bc.lerp(light, wob)
+				else:
+					bc = bc.lerp(deep, -wob)
 				var hw0 := half_width(clampf(u0, 0.0, 1.0)) * rect.size.x * 0.90
 				var hw1 := half_width(clampf(u1, 0.0, 1.0)) * rect.size.x * 0.90
 				var band := PackedVector2Array()

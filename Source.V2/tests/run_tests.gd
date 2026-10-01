@@ -80,6 +80,7 @@ func _run() -> void:
 	_round7()
 	_round8()
 	_round9()
+	_round11()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -1595,6 +1596,192 @@ func _round9() -> void:
 	var span := ink_r - ink_l + 1
 	check(best_w > int(float(span) * 0.62), "the ink is one word across the label, width %s of %s" % [best_w, span])
 	check(second_n * 2 < best_n, "the word is not three separate boxes, %s vs %s" % [best_n, second_n])
+
+
+func _round11() -> void:
+	var open_tex: Texture2D = load("res://assets/art/bottles/glass_open.webp")
+	var img: Image = open_tex.get_image()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var y0 := int(0.55 * float(h))
+	var y1 := int(0.82 * float(h))
+	var x0 := int(0.18 * float(w))
+	var x1 := int(0.82 * float(w))
+	var bw := x1 - x0
+	var bh := y1 - y0
+	var mask := PackedByteArray()
+	mask.resize(bw * bh)
+	var ink_n := 0
+	for y in range(y0, y1):
+		for x in range(x0, x1):
+			var px: Color = img.get_pixel(x, y)
+			var luma := 0.299 * px.r + 0.587 * px.g + 0.114 * px.b
+			if px.a > 0.85 and luma < 70.0 / 255.0 and px.r < 0.28 and px.r > px.b:
+				mask[(y - y0) * bw + (x - x0)] = 1
+				ink_n += 1
+	check(ink_n > 400, "the word still has a body of ink, %s px" % ink_n)
+	var sizes := _eight_sizes(mask, bw, bh)
+	var best_n := 0
+	var second_n := 0
+	if sizes.size() > 0:
+		best_n = sizes[0]
+	if sizes.size() > 1:
+		second_n = sizes[1]
+	var big := 0
+	for n in sizes:
+		if n >= 12:
+			big += 1
+	check(best_n >= int(float(ink_n) * 0.85), "the ink is one 8-connected stroke, %s of %s" % [best_n, ink_n])
+	check(second_n < 40 and big == 1, "the label has no stray ink, %s px second, %s pieces" % [second_n, big])
+	var iou_d := _mask_iou(mask, bw, bh, "res://tests/ref/dawa_ref.png")
+	var iou_w := _mask_iou(mask, bw, bh, "res://tests/ref/wa_ref.png")
+	check(iou_d > iou_w + 0.15 and iou_d > 0.45, "the label reads دوا, IoU %.3f vs وا %.3f" % [iou_d, iou_w])
+
+
+func _eight_sizes(mask: PackedByteArray, bw: int, bh: int) -> Array:
+	var seen := PackedByteArray()
+	seen.resize(mask.size())
+	var sizes: Array = []
+	var stack: Array[int] = []
+	for i in mask.size():
+		if mask[i] == 0 or seen[i] != 0:
+			continue
+		stack.clear()
+		stack.append(i)
+		seen[i] = 1
+		var n := 0
+		var sp := 0
+		while sp < stack.size():
+			var cur: int = stack[sp]
+			sp += 1
+			n += 1
+			var cx := cur % bw
+			var cy := int(cur / float(bw))
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					if dx == 0 and dy == 0:
+						continue
+					var nx := cx + dx
+					var ny := cy + dy
+					if nx < 0 or ny < 0 or nx >= bw or ny >= bh:
+						continue
+					var nb: int = ny * bw + nx
+					if mask[nb] == 1 and seen[nb] == 0:
+						seen[nb] = 1
+						stack.append(nb)
+		sizes.append(n)
+	sizes.sort()
+	sizes.reverse()
+	return sizes
+
+
+func _mask_iou(mask: PackedByteArray, bw: int, bh: int, ref_path: String) -> float:
+	var minx := bw
+	var maxx := 0
+	var miny := bh
+	var maxy := 0
+	var any := false
+	for y in bh:
+		for x in bw:
+			if mask[y * bw + x] == 0:
+				continue
+			any = true
+			minx = mini(minx, x)
+			maxx = maxi(maxx, x)
+			miny = mini(miny, y)
+			maxy = maxi(maxy, y)
+	if not any:
+		return 0.0
+	var cw := maxx - minx + 1
+	var ch := maxy - miny + 1
+	var baked := Image.create(cw, ch, false, Image.FORMAT_L8)
+	baked.fill(Color(0, 0, 0))
+	for y in ch:
+		for x in cw:
+			if mask[(y + miny) * bw + (x + minx)] == 1:
+				baked.set_pixel(x, y, Color(1, 1, 1))
+	var ref := Image.new()
+	var err := ref.load(ProjectSettings.globalize_path(ref_path))
+	if err != OK:
+		return 0.0
+	ref.convert(Image.FORMAT_L8)
+	var rminx := ref.get_width()
+	var rmaxx := 0
+	var rminy := ref.get_height()
+	var rmaxy := 0
+	for y in ref.get_height():
+		for x in ref.get_width():
+			if ref.get_pixel(x, y).r < 0.45:
+				continue
+			rminx = mini(rminx, x)
+			rmaxx = maxi(rmaxx, x)
+			rminy = mini(rminy, y)
+			rmaxy = maxi(rmaxy, y)
+	if rmaxx < rminx:
+		return 0.0
+	var rw := rmaxx - rminx + 1
+	var rh := rmaxy - rminy + 1
+	var ref_c := Image.create(rw, rh, false, Image.FORMAT_L8)
+	ref_c.fill(Color(0, 0, 0))
+	for y in rh:
+		for x in rw:
+			if ref.get_pixel(x + rminx, y + rminy).r >= 0.45:
+				ref_c.set_pixel(x, y, Color(1, 1, 1))
+	var tw := maxi(1, int(round(float(cw) * float(rh) / float(ch))))
+	baked.resize(tw, rh, Image.INTERPOLATE_BILINEAR)
+	var rad := 5
+	var pad := rad + 2
+	var canvas_w := maxi(tw, rw) + pad * 2
+	var canvas_h := rh + pad * 2
+	var A := PackedByteArray()
+	var B := PackedByteArray()
+	A.resize(canvas_w * canvas_h)
+	B.resize(canvas_w * canvas_h)
+	var ax := pad + int((maxi(tw, rw) - tw) / 2.0)
+	var bx := pad + int((maxi(tw, rw) - rw) / 2.0)
+	for y in rh:
+		for x in tw:
+			if baked.get_pixel(x, y).r > 0.45:
+				A[(y + pad) * canvas_w + (x + ax)] = 1
+		for x2 in rw:
+			if ref_c.get_pixel(x2, y).r > 0.45:
+				B[(y + pad) * canvas_w + (x2 + bx)] = 1
+	A = _dilate_mask(A, canvas_w, canvas_h, rad)
+	B = _dilate_mask(B, canvas_w, canvas_h, rad)
+	var inter := 0
+	var union := 0
+	for i in A.size():
+		var a := A[i] == 1
+		var b := B[i] == 1
+		if a and b:
+			inter += 1
+		if a or b:
+			union += 1
+	if union == 0:
+		return 0.0
+	return float(inter) / float(union)
+
+
+func _dilate_mask(mask: PackedByteArray, w: int, h: int, rad: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(mask.size())
+	var r2 := rad * rad
+	for y in h:
+		for x in w:
+			if mask[y * w + x] == 0:
+				continue
+			for dy in range(-rad, rad + 1):
+				for dx in range(-rad, rad + 1):
+					if dx * dx + dy * dy > r2:
+						continue
+					var nx := x + dx
+					var ny := y + dy
+					if nx < 0 or ny < 0 or nx >= w or ny >= h:
+						continue
+					out[ny * w + nx] = 1
+	return out
 
 
 func _far_pixel(a: Image, b: Image, y0: float, y1: float) -> Vector2i:

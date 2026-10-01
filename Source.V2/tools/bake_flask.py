@@ -238,12 +238,88 @@ def _dilate_mask(ink, rad):
     return out
 
 
-def _thin_calligraphy(src):
-    """Open the waw and dal counters and bring the pen to about 60% weight.
+def _paint_disk(canvas, y, x, rad):
+    r = int(math.ceil(rad))
+    h, w = canvas.shape
+    y0 = max(int(math.floor(y)) - r, 0)
+    y1 = min(int(math.floor(y)) + r + 1, h)
+    x0 = max(int(math.floor(x)) - r, 0)
+    x1 = min(int(math.floor(x)) + r + 1, w)
+    if y0 >= y1 or x0 >= x1:
+        return
+    yy, xx = np.ogrid[y0:y1, x0:x1]
+    canvas[y0:y1, x0:x1] |= (yy - y) ** 2 + (xx - x) ** 2 <= rad * rad
 
-    src is the natural Aref Ruqaa render. Letter bodies stay apart. The alif
-    foot drops onto the waw's tail, and a tapered stroke joins waw to dal
-    along the baseline.
+
+def _pen_stroke(canvas, y0, x0, y1, x1, thick, sag):
+    """Baseline stroke. The ends stay fat enough that scaling does not open a gap."""
+    span = max(abs(float(x1) - float(x0)), abs(float(y1) - float(y0)), 1.0)
+    steps = int(span * 2.4) + 1
+    y0 = float(y0)
+    x0 = float(x0)
+    y1 = float(y1)
+    x1 = float(x1)
+    for i in range(steps + 1):
+        t = i / float(steps)
+        # Run a little past each anchor so the joint is buried in the letter.
+        te = (t - 0.06) / 0.88
+        x = (1.0 - te) * x0 + te * x1
+        y = (1.0 - te) * y0 + te * y1 + sag * math.sin(np.clip(t, 0.0, 1.0) * math.pi)
+        rad = thick * (0.78 + 0.22 * math.sin(np.clip(t, 0.0, 1.0) * math.pi))
+        _paint_disk(canvas, y, x, rad)
+
+
+def _nearest_ink(a, b):
+    aa = a if len(a) <= 700 else a[::max(1, len(a) // 700)]
+    bb = b if len(b) <= 700 else b[::max(1, len(b) // 700)]
+    best_d = 1e18
+    best = (int(aa[0, 0]), int(aa[0, 1]), int(bb[0, 0]), int(bb[0, 1]))
+    for y, x in aa:
+        d = (bb[:, 0] - int(y)) ** 2 + (bb[:, 1] - int(x)) ** 2
+        i = int(np.argmin(d))
+        if float(d[i]) < best_d:
+            best_d = float(d[i])
+            best = (int(y), int(x), int(bb[i, 0]), int(bb[i, 1]))
+    return best
+
+
+def _components(ink, min_n, eight):
+    h, w = ink.shape
+    vis = np.zeros(ink.shape, np.uint8)
+    out = []
+    if eight:
+        neigh = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
+    else:
+        neigh = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    ys, xs = np.where(ink)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        if vis[y, x]:
+            continue
+        q = deque([(y, x)])
+        vis[y, x] = 1
+        pts = []
+        while q:
+            cy, cx = q.popleft()
+            pts.append((cy, cx))
+            for dy, dx in neigh:
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not vis[ny, nx]:
+                    vis[ny, nx] = 1
+                    q.append((ny, nx))
+        if len(pts) >= min_n:
+            out.append(np.array(pts, np.int32))
+    return out
+
+
+def _thin_calligraphy(src):
+    """Open the counters and keep dal, waw, and alif.
+
+    Thinning splits the waw into a head and a tail, so a left-to-right take of
+    the first three pieces treats the waw loop as the dal and drops the real
+    one. The dal is the rightmost letter. The waw is every piece between the
+    alif and that dal, joined head to tail. A tapered stroke then ties the
+    three letters along the baseline. Specks go. The result is one
+    8-connected component, about as wide as the Aref Ruqaa word.
     """
     ink = src[:, :, 3] > 0.35
     if int(ink.sum()) < 20:
@@ -266,50 +342,65 @@ def _thin_calligraphy(src):
         punched[yy[core], xx[core]] = False
     D2 = _dist_bg(punched)
     R2 = _maxfilt(D2.astype(np.float32), 8)
-    # A step finer than the round-10 pen. The centerline stays, so the word
-    # does not break into separate heads and tails.
     cut = 0.46 * R2
     thin = punched & ((D2 >= cut) | (D2 + 1.0 >= R2))
-    parts = _ink_components(thin, 40)
+    parts = _ink_components(thin, 80)
     if len(parts) < 3:
         ys, xs = np.where(ink)
         return ink[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
-    alif, waw, dal = parts[0], parts[1], parts[2]
-    pad = 80
+    alif = None
+    for pts in parts:
+        height = int(pts[:, 0].max() - pts[:, 0].min() + 1)
+        width = int(pts[:, 1].max() - pts[:, 1].min() + 1)
+        if height > width * 1.8 and (alif is None or int(pts[:, 1].min()) < int(alif[:, 1].min())):
+            alif = pts
+    if alif is None:
+        alif = min(parts, key=lambda p: int(p[:, 1].min()))
+    dal = max((p for p in parts if p is not alif), key=lambda p: int(p[:, 1].max()))
+    waw_parts = [p for p in parts if p is not alif and p is not dal]
+    if not waw_parts:
+        ys, xs = np.where(thin)
+        return thin[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
+    pad = 16
     h, w = thin.shape
     canvas = np.zeros((h + pad * 2, w + pad * 2), bool)
-    waw_m = np.zeros_like(canvas)
-    waw_m[waw[:, 0] + pad, waw[:, 1] + pad] = True
-    touch = 0
-    for dy in range(0, 140):
-        yy = alif[:, 0] + pad + dy
-        xx = alif[:, 1] + pad
-        if yy.max() >= canvas.shape[0]:
-            break
-        if np.any(waw_m[yy, xx]):
-            touch = dy
-            break
-    canvas[alif[:, 0] + pad + touch + 5, alif[:, 1] + pad] = True
-    canvas[waw[:, 0] + pad, waw[:, 1] + pad] = True
+    canvas[alif[:, 0] + pad, alif[:, 1] + pad] = True
     canvas[dal[:, 0] + pad, dal[:, 1] + pad] = True
-    wb = waw[waw[:, 0] > np.percentile(waw[:, 0], 78)]
-    db = dal[dal[:, 0] > np.percentile(dal[:, 0], 78)]
-    x0 = int(wb[:, 1].max()) + pad
-    x1 = int(db[:, 1].min()) + pad
-    near_w = wb[wb[:, 1] > wb[:, 1].max() - 10]
-    near_d = db[db[:, 1] < db[:, 1].min() + 10]
-    y0 = int(np.median(near_w[:, 0])) + pad
-    y1 = int(np.median(near_d[:, 0])) + pad
-    span = max(x1 - x0, 1)
-    for x in range(x0 - 3, x1 + 4):
-        t = float(np.clip((x - x0) / float(span), 0.0, 1.0))
-        thick = 1.35 + 1.7 * np.sin(t * np.pi)
-        yy = (1.0 - t) * y0 + t * y1 - 1.6 * np.sin(t * np.pi)
-        for k in range(int(-thick) - 1, int(thick) + 2):
-            ny = int(yy + k)
-            if 0 <= ny < canvas.shape[0] and 0 <= x < canvas.shape[1]:
-                canvas[ny, x] = True
+    for pts in waw_parts:
+        canvas[pts[:, 0] + pad, pts[:, 1] + pad] = True
+    # The head only touches its tail on a diagonal. A short solid joint keeps
+    # them one piece after the label is scaled down.
+    for i, pts in enumerate(waw_parts):
+        others = [q for j, q in enumerate(waw_parts) if j != i]
+        if not others:
+            continue
+        rest = np.concatenate(others, 0)
+        y0, x0, y1, x1 = _nearest_ink(pts, rest)
+        _pen_stroke(canvas, y0 + pad, x0 + pad, y1 + pad, x1 + pad, 4.2, 0.0)
+    waw_all = np.concatenate(waw_parts, 0)
+    a_foot = alif[alif[:, 0] >= np.percentile(alif[:, 0], 88)]
+    a_foot = a_foot[a_foot[:, 1] >= np.percentile(a_foot[:, 1], 40)]
+    w_low = waw_all[waw_all[:, 0] >= np.percentile(waw_all[:, 0], 55)]
+    w_low = w_low[w_low[:, 1] <= np.percentile(w_low[:, 1], 45)]
+    if len(a_foot) and len(w_low):
+        y0, x0, y1, x1 = _nearest_ink(a_foot, w_low)
+        _pen_stroke(canvas, y0 + pad, x0 + pad, y1 + pad, x1 + pad, 4.6, 1.4)
+    w_right = waw_all[waw_all[:, 0] >= np.percentile(waw_all[:, 0], 45)]
+    w_right = w_right[w_right[:, 1] >= np.percentile(w_right[:, 1], 70)]
+    d_left = dal[dal[:, 0] >= np.percentile(dal[:, 0], 50)]
+    d_left = d_left[d_left[:, 1] <= np.percentile(d_left[:, 1], 35)]
+    if len(w_right) and len(d_left):
+        y0, x0, y1, x1 = _nearest_ink(w_right, d_left)
+        _pen_stroke(canvas, y0 + pad, x0 + pad, y1 + pad, x1 + pad, 6.2, 0.6)
+    parts8 = _components(canvas, 1, True)
+    if parts8:
+        parts8.sort(key=len, reverse=True)
+        kept = np.zeros_like(canvas)
+        kept[parts8[0][:, 0], parts8[0][:, 1]] = True
+        canvas = kept
     ys, xs = np.where(canvas)
+    if len(xs) == 0:
+        return thin.astype(np.float32)
     return canvas[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
 
 
@@ -398,11 +489,13 @@ def paint(corked: bool) -> np.ndarray:
     rgb = np.zeros((H, W, 3), np.float32)
     alpha = np.zeros((H, W), np.float32)
 
-    # Faint body tint. The bore stays clear: a milky film here reads as fogged glass.
+    # A little body in the upper belly, so the bulb is not only the rim and the
+    # crescent. The tint stays warm enough that the liquor colour check holds.
     fresnel = np.clip((inner_img - nx) * W / 36.0, 0.0, 1.0)
     fresnel = 1.0 - fresnel
-    body_a = np.where(hole, 0.026 + 0.040 * fresnel * fresnel, 0.0) * cover
-    body_rgb = np.array([0.80, 0.88, 0.80], np.float32)
+    upper = np.clip((v - 0.39) / 0.04, 0.0, 1.0) * np.clip((0.57 - v) / 0.05, 0.0, 1.0)
+    body_a = np.where(hole, 0.024 + 0.044 * upper + 0.006 * fresnel * fresnel, 0.0) * cover
+    body_rgb = np.array([0.80, 0.86, 0.70], np.float32)
     light_side = np.clip((0.62 - u) / 0.55, 0.0, 1.0)
     rim_dark = np.array([0.16, 0.24, 0.16], np.float32)
     rim_lit = np.array([0.42, 0.54, 0.38], np.float32)
@@ -590,41 +683,45 @@ def _wire(rgb, alpha, u, v, mask, base, hi, freq, over_fn):
 
 
 def _label(rgb, alpha, u, v, hw_img, over_fn):
-    ang = np.deg2rad(-6.0)
-    # Lower belly, about 62% of the previous card, so liquor shows above it.
-    cu, cv = 0.50, 0.718
+    # Level card. A tilt left a scrap of hem floating above the parchment.
+    ang = 0.0
+    # About 14% smaller than the previous card, low enough that liquor shows above it.
+    cu, cv = 0.50, 0.716
     du = u - cu
     dv = v - cv
-    ru = du * np.cos(ang) + dv * np.sin(ang)
-    rv = -du * np.sin(ang) + dv * np.cos(ang)
-    hw, hh = 0.240, 0.094
+    ru = du * math.cos(ang) + dv * math.sin(ang)
+    rv = -du * math.sin(ang) + dv * math.cos(ang)
+    hw, hh = 0.226, 0.086
     edge = np.maximum(np.abs(ru) / hw, np.abs(rv) / hh)
     paper = (edge < 1.0) & (nx_inside(u, v, hw_img))
     n = hash2((u * W).astype(np.int32) // 3, (v * H).astype(np.int32) // 3)
     stain = hash2((u * W).astype(np.int32) // 11, (v * H).astype(np.int32) // 13)
     paper_rgb = np.array([0.86, 0.75, 0.56]) * (0.95 + 0.07 * n)[..., None]
     paper_rgb = np.where((stain > 0.82)[..., None], paper_rgb * 0.92 + np.array([0.45, 0.28, 0.12]) * 0.10, paper_rgb)
-    # A narrow scorched hem, not a wide charred frame.
-    fringe = np.clip((edge - 0.90) / 0.10, 0.0, 1.0)
-    scorch = fringe * (0.70 + 0.30 * stain)
-    paper_rgb = np.clip(paper_rgb * (1.0 - 0.38 * scorch[..., None]) + np.array([0.28, 0.12, 0.05]) * (0.42 * scorch[..., None]), 0.0, 1.0)
+    # A neat thin border on the outer edge, not a scorched fringe.
+    hem = np.clip((edge - 0.962) / 0.038, 0.0, 1.0)
+    paper_rgb = np.clip(
+        paper_rgb * (1.0 - 0.62 * hem[..., None]) + np.array([0.34, 0.16, 0.07]) * (0.85 * hem[..., None]),
+        0.0,
+        1.0,
+    )
     rgb[:], alpha[:] = over_fn(rgb, alpha, paper_rgb, paper.astype(np.float32) * 0.98)
 
     fibre = 0.62 + 0.38 * (0.5 + 0.5 * np.sin(ru * W * 0.55))
-    string = np.exp(-((rv + hh * 0.92) / 0.0036) ** 2) * (np.abs(ru) < hw * 1.02)
-    # Side strings start just above this lower card, so they do not cross the liquor.
-    tie = cv - hh - 0.012
-    string = string + np.exp(-((u - (0.32 + (v - tie) * 0.08)) / 0.0032) ** 2) * (v > tie) * (v < cv + hh)
-    string = string + np.exp(-((u - (0.68 - (v - tie) * 0.07)) / 0.0032) ** 2) * (v > tie) * (v < cv + hh)
-    string = np.clip(string, 0.0, 1.0) * fibre * (nx_inside(u, v, hw_img))
-    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.34, 0.20, 0.09], np.float32), string * 0.88)
+    string = np.exp(-((rv + hh * 0.955) / 0.0028) ** 2) * (np.abs(ru) < hw * 0.94)
+    # Side strings stay on the card, inset from the hem and clear of the word.
+    top = cv - hh
+    string = string + np.exp(-((u - 0.300) / 0.0028) ** 2) * (v > top + 0.004) * (v < cv + hh * 0.90)
+    string = string + np.exp(-((u - 0.700) / 0.0028) ** 2) * (v > top + 0.004) * (v < cv + hh * 0.90)
+    string = np.clip(string, 0.0, 1.0) * fibre * paper.astype(np.float32)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.36, 0.22, 0.10], np.float32), string * 0.90)
 
     mark = _MARK
     mh, mw = mark.shape
     aspect = float(mw) / float(max(mh, 1))
-    # Fit the word inside the card without stretching it.
-    box_w = hw * 2.0 * W * 0.80
-    box_h = hh * 2.0 * H * 0.74
+    # The word fills the card. Height leads, so the pen is not stretched wide.
+    box_w = hw * 2.0 * W * 0.94
+    box_h = hh * 2.0 * H * 0.84
     if box_w / max(box_h, 1.0) > aspect:
         tw = max(int(box_h * aspect), 8)
         th = max(int(box_h), 8)
@@ -640,10 +737,10 @@ def _label(rgb, alpha, u, v, hw_img, over_fn):
     ix = np.clip(((mu + 1.0) * 0.5 * (tw - 1)).astype(np.int32), 0, tw - 1)
     iy = np.clip(((mv + 1.0) * 0.5 * (th - 1)).astype(np.int32), 0, th - 1)
     ink = stamp[iy, ix]
-    # Drop the soft resize halo so the stroke stays a pen line.
-    tooth = 0.94 + 0.06 * hash2((u * W).astype(np.int32), (v * H).astype(np.int32))
-    ink_a = np.clip((ink - 0.28) / 0.72, 0.0, 1.0) * tooth * on_word.astype(np.float32)
-    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.14, 0.05, 0.03], np.float32), ink_a * 0.96)
+    # Opaque core, soft edge. The previous fade washed the word out at 125 px.
+    tooth = 0.98 + 0.02 * hash2((u * W).astype(np.int32), (v * H).astype(np.int32))
+    ink_a = np.clip((ink - 0.30) / 0.42, 0.0, 1.0) * tooth * on_word.astype(np.float32)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.20, 0.072, 0.034], np.float32), ink_a)
 
 
 def nx_inside(u, v, hw_img):
@@ -728,6 +825,57 @@ def _hue(rgb):
     else:
         h = (r - g) / d + 4.0
     return h * 60.0
+
+
+def _crop_mask(mask):
+    ys, xs = np.where(mask)
+    if len(xs) == 0:
+        return mask
+    return mask[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1]
+
+
+def _load_ref_mask(name):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tests", "ref", name)
+    rgba = _load_rgba(path)
+    return rgba[:, :, 0] > 0.45
+
+
+def _label_ink(img):
+    luma = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
+    y0, y1 = int(0.55 * H), int(0.82 * H)
+    x0, x1 = int(0.18 * W), int(0.82 * W)
+    ink = (img[y0:y1, x0:x1, 3] > 0.85) & (luma[y0:y1, x0:x1] < 70.0 / 255.0)
+    return ink & (img[y0:y1, x0:x1, 0] < 0.28) & (img[y0:y1, x0:x1, 0] > img[y0:y1, x0:x1, 2])
+
+
+def _height_iou(baked, ref, rad):
+    """Dilated IoU after matching height and centering the two ink masks."""
+    baked = _crop_mask(baked)
+    ref = _crop_mask(ref)
+    bh, bw = baked.shape
+    rh, rw = ref.shape
+    if bh < 2 or rh < 2 or bw < 2 or rw < 2:
+        return 0.0
+    tw = max(1, int(round(bw * (float(rh) / float(bh)))))
+    small = _resize(baked.astype(np.float32), tw, rh) > 0.45
+    pad = int(rad) + 2
+    hh = rh + pad * 2
+    ww = max(small.shape[1], rw) + pad * 2
+    A = np.zeros((hh, ww), bool)
+    B = np.zeros((hh, ww), bool)
+    ay = pad
+    ax = (ww - small.shape[1]) // 2
+    bx = (ww - rw) // 2
+    A[ay:ay + small.shape[0], ax:ax + small.shape[1]] = small
+    B[ay:ay + rh, bx:bx + rw] = ref
+    if rad > 0:
+        A = _dilate(A.astype(np.uint8), rad).astype(bool)
+        B = _dilate(B.astype(np.uint8), rad).astype(bool)
+    inter = int(np.logical_and(A, B).sum())
+    union = int(np.logical_or(A, B).sum())
+    if union == 0:
+        return 0.0
+    return inter / float(union)
 
 
 def verify(open_img, cork_img):
@@ -845,6 +993,23 @@ def verify(open_img, cork_img):
     print(f"ink width={width} span={span} count={count} second={second}")
     if span < 8 or width < span * 0.62 or second > count * 0.45:
         print("FAIL joined word")
+        ok = False
+    ink_mask = _label_ink(open_img)
+    ys_i, xs_i = np.where(ink_mask)
+    aspect = 0.0
+    if len(xs_i):
+        aspect = float(xs_i.max() - xs_i.min() + 1) / float(max(ys_i.max() - ys_i.min() + 1, 1))
+    iou_d = _height_iou(ink_mask, _load_ref_mask("dawa_ref.png"), 5)
+    iou_w = _height_iou(ink_mask, _load_ref_mask("wa_ref.png"), 5)
+    parts8 = _components(ink_mask, 1, True)
+    parts8.sort(key=len, reverse=True)
+    sizes = [len(p) for p in parts8]
+    print(f"ink aspect={aspect:.3f} iou_dawa={iou_d:.3f} iou_wa={iou_w:.3f} ink8={sizes[:6]}")
+    if aspect < 1.12 or iou_d + 1e-6 < iou_w + 0.15 or iou_d < 0.45:
+        print("FAIL dal")
+        ok = False
+    if not sizes or (len(sizes) > 1 and sizes[1] >= 40):
+        print("FAIL ink components")
         ok = False
     # Bottom is a chord, not a needle: half-width near the contact stays wide.
     y_bot = int((V_CONTACT - 0.004) * H)
