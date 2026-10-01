@@ -12,6 +12,9 @@ const ZONE_CABINET := Rect2(10, 100, 270, 950)
 const ZONE_CAULDRON := Rect2(647, 490, 400, 280)
 const ZONE_MORTAR := Rect2(290, 506, 250, 273)
 const ZONE_BOTTLE := Rect2(1150, 560, 125, 220)
+## The round base sits above the texture bottom. Drop the rect so the contact
+## lands where the old pointed base used to meet the shelf, desk and hand.
+const BOTTLE_DROP := 26.0
 const GLASS_OPEN := "bottles/glass_open.webp"
 const GLASS_CORK := "bottles/glass_cork.webp"
 const ZONE_COUNTER := Rect2(1430, 603, 510, 485)
@@ -446,9 +449,13 @@ func _build() -> void:
 
 	_bottle = UiKit.sprite(GLASS_OPEN, ZONE_BOTTLE, "contain")
 	_bottle.z_index = 7
+	_bottle.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_bottle.position.y += BOTTLE_DROP
 	_work.add_child(_bottle)
 	_pour_bottle = UiKit.sprite(GLASS_OPEN, ZONE_BOTTLE, "contain")
 	_pour_bottle.z_index = 7
+	_pour_bottle.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_pour_bottle.position.y += BOTTLE_DROP
 	_pour_bottle.visible = false
 	_work.add_child(_pour_bottle)
 	_bottle_fill = _painter(_draw_bottle_fill)
@@ -1636,7 +1643,7 @@ func _release_orphaned_bottle() -> void:
 
 func _counter_spot() -> Vector2:
 	var counter_y := ZONE_COUNTER.position.y + (ZONE_COUNTER.size.y * 72.0 / 620.0)
-	return Vector2(1560, counter_y - 196)
+	return Vector2(1560, counter_y - 196.0 + BOTTLE_DROP)
 
 
 ## Hands on the happy/sad portraits include a painted bottle. Below the shoulders
@@ -1758,7 +1765,7 @@ func _tick_carry(dt: float) -> void:
 	var u := clampf(_carry_t / 0.45, 0.0, 1.0)
 	var hand := _counter_spot()
 	if _customer:
-		hand = _customer.position + Vector2(ZONE_CUSTOMER.size.x * 0.22, ZONE_CUSTOMER.size.y * 0.42)
+		hand = _customer.position + Vector2(ZONE_CUSTOMER.size.x * 0.22, ZONE_CUSTOMER.size.y * 0.42 + BOTTLE_DROP)
 	_pour_bottle.position = _counter_spot().lerp(hand, u)
 	var alpha := 1.0
 	if _cust_phase == "leave" and _customer:
@@ -1778,7 +1785,7 @@ func _place_pour_bottle() -> void:
 	var spot := _counter_spot()
 	if pour == "tilt":
 		var u := clampf(pour_t / 0.5, 0.0, 1.0)
-		_pour_bottle.position = ZONE_BOTTLE.position.lerp(fill_pos, u)
+		_pour_bottle.position = (ZONE_BOTTLE.position + Vector2(0, BOTTLE_DROP)).lerp(fill_pos, u)
 	elif pour == "stream":
 		_pour_bottle.position = fill_pos
 	elif pour == "deliver":

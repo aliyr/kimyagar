@@ -78,6 +78,7 @@ func _run() -> void:
 	_round5()
 	_round6()
 	_round7()
+	_round8()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -1339,13 +1340,30 @@ func _round7() -> void:
 	check(img.get_width() == glass.TEX_W and img.get_height() == glass.TEX_H, "flask texture %s" % img.get_size())
 	var belly: Color = img.get_pixel(glass.SAMPLE_X, glass.SAMPLE_Y)
 	check(belly.a < 0.12, "the upper belly stays clear for the liquor %s" % belly.a)
-	var hi: Color = img.get_pixel(int(0.36 * float(glass.TEX_W)), int(0.50 * float(glass.TEX_H)))
-	check(hi.a > belly.a + 0.08, "a shoulder highlight sits on the glass %s" % hi.a)
-	var shade: Color = img.get_pixel(int(0.50 * float(glass.TEX_W)), int(0.978 * float(glass.TEX_H)))
+	var hi_a := 0.0
+	var hy := int(0.54 * float(img.get_height()))
+	for x in range(0, int(img.get_width() / 2)):
+		var px: Color = img.get_pixel(x, hy)
+		if px.r > 0.92 and px.g > 0.90:
+			hi_a = maxf(hi_a, px.a)
+	check(hi_a > 0.08, "a crescent highlight sits on the glass %s" % hi_a)
+	var contact := 0
+	for y in range(img.get_height() - 1, int(0.5 * float(img.get_height())), -1):
+		var glass_row := false
+		var x := int(float(img.get_width()) * 0.35)
+		while x < int(float(img.get_width()) * 0.65):
+			var row_px: Color = img.get_pixel(x, y)
+			if row_px.a > 0.35 and row_px.g + 0.02 > row_px.r:
+				glass_row = true
+				break
+			x += 3
+		if glass_row:
+			contact = y
+			break
+	var shade: Color = img.get_pixel(int(img.get_width() / 2), mini(contact + 10, img.get_height() - 1))
 	check(shade.a > 0.04 and shade.a < 0.7, "a soft shadow sits under the flask %s" % shade.a)
 	var feet := 0
-	var y0 := int(0.978 * float(img.get_height()))
-	for y in range(y0, img.get_height(), 3):
+	for y in range(contact + 4, img.get_height(), 3):
 		for x in range(0, img.get_width(), 6):
 			if img.get_pixel(x, y).a > 0.8:
 				feet += 1
@@ -1360,6 +1378,146 @@ func _round7() -> void:
 			hi_x = maxf(hi_x, p.x)
 		span = hi_x - lo
 	check(poly.size() >= 20 and span > 40.0, "a low fill still follows the round belly, span %s" % span)
+
+
+func _round8() -> void:
+	var glass = load("res://scripts/fx/bottle_glass.gd")
+	var open_tex: Texture2D = load("res://assets/art/bottles/glass_open.webp")
+	var cork_tex: Texture2D = load("res://assets/art/bottles/glass_cork.webp")
+	var img: Image = open_tex.get_image()
+	var cork: Image = cork_tex.get_image()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	if cork.get_format() != Image.FORMAT_RGBA8:
+		cork.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var rows: Array[float] = []
+	rows.resize(h)
+	var best := 0.0
+	for y in h:
+		var left := -1
+		var right := -1
+		for x in w:
+			if img.get_pixel(x, y).a > 0.20:
+				if left < 0:
+					left = x
+				right = x
+		var half := 0.0 if left < 0 else float(right - left) * 0.5
+		rows[y] = half
+		best = maxf(best, half)
+	var y_lo := -1
+	var y_hi := -1
+	for y in h:
+		if rows[y] >= best - 2.0:
+			if y_lo < 0:
+				y_lo = y
+			y_hi = y
+	var mid := float(y_lo + y_hi) * 0.5 / float(h)
+	check(mid > 0.55 and mid < 0.60, "the widest row sits in the lower middle, got %s" % mid)
+	var rms_best := 1.0
+	var cy := y_lo
+	while cy <= y_hi:
+		var acc := 0.0
+		var n := 0
+		var y := int(0.48 * float(h))
+		var y_end := mini(int(float(cy) + best * 0.70), h)
+		while y < y_end:
+			var dy := float(y - cy)
+			var pred := sqrt(maxf(best * best - dy * dy, 0.0))
+			var err := rows[y] - pred
+			acc += err * err
+			n += 1
+			y += 1
+		if n > 10:
+			rms_best = minf(rms_best, sqrt(acc / float(n)) / best)
+		cy += 1
+	check(rms_best < 0.03, "belly circle-fit residual %s of the radius" % rms_best)
+	var contact_half := 0.0
+	for y in range(h - 1, int(0.55 * float(h)), -1):
+		var left := -1
+		var right := -1
+		var x := 0
+		while x < w:
+			var px: Color = img.get_pixel(x, y)
+			if px.a > 0.35 and px.g + 0.02 > px.r:
+				if left < 0:
+					left = x
+				right = x
+			x += 2
+		if left >= 0:
+			var half := float(right - left) * 0.5
+			if half > best * 0.18:
+				contact_half = half
+				break
+	check(contact_half > best * 0.18, "the base is a flat chord, half %s" % contact_half)
+	var wax := 0
+	var outside := 0
+	for y in range(int(0.08 * float(h)), int(0.26 * float(h))):
+		var edge_l := -1
+		var edge_r := -1
+		for x in w:
+			if img.get_pixel(x, y).a > 0.20:
+				if edge_l < 0:
+					edge_l = x
+				edge_r = x
+		if edge_l < 0:
+			continue
+		for x in range(edge_l, edge_r + 1):
+			var px: Color = cork.get_pixel(x, y)
+			if px.a > 0.70 and px.r > 0.48 and px.g < 0.34 and px.b < 0.24 and px.r > px.g + 0.25:
+				wax += 1
+				if x <= edge_l + 1 or x >= edge_r - 1:
+					outside += 1
+	check(wax > 80, "the wax seal is visible, %s px" % wax)
+	check(outside == 0, "wax stays inside the neck, %s px outside" % outside)
+	var dark := 0
+	var dark_l := 0.0
+	var paper := 0
+	var paper_l := 0.0
+	for y in range(int(0.58 * float(h)), int(0.78 * float(h))):
+		for x in range(int(0.30 * float(w)), int(0.75 * float(w))):
+			var px: Color = img.get_pixel(x, y)
+			if px.a < 0.85:
+				continue
+			var luma := 0.299 * px.r + 0.587 * px.g + 0.114 * px.b
+			if luma < 60.0 / 255.0 and px.r > px.b:
+				dark += 1
+				dark_l += luma
+			elif luma > 0.45 and px.r > 0.55 and px.g > 0.40:
+				paper += 1
+				paper_l += luma
+	check(dark > 200, "the label carries ink, %s px" % dark)
+	check(paper > 200, "the label card is there, %s px" % paper)
+	var ink_luma := dark_l / float(maxi(dark, 1))
+	var card_luma := paper_l / float(maxi(paper, 1))
+	check(ink_luma * 255.0 < 60.0, "ink luma %s" % (ink_luma * 255.0))
+	check(card_luma - ink_luma > 0.25, "ink contrast against the card %s" % (card_luma - ink_luma))
+	var crest: Array[int] = []
+	for vf in [0.46, 0.57, 0.70]:
+		var y := int(vf * float(h))
+		var best_x := 0
+		var best_s := 0.0
+		for x in range(0, int(w / 2)):
+			var px: Color = img.get_pixel(x, y)
+			var s := px.r if px.a > 0.08 else 0.0
+			if s > best_s:
+				best_s = s
+				best_x = x
+		crest.append(best_x)
+	check(absi(crest[0] - crest[1]) > 8 and absi(crest[2] - crest[1]) > 8, "the highlight bends with the belly %s %s %s" % [crest[0], crest[1], crest[2]])
+	var wall := 0.0
+	var wall_n := 0
+	var wy := int(0.52 * float(h))
+	var edge := 0
+	for x in range(0, int(w / 2)):
+		if img.get_pixel(x, wy).a > 0.20:
+			edge = x
+			break
+	for x in range(edge, mini(edge + 28, w)):
+		wall += img.get_pixel(x, wy).a
+		wall_n += 1
+	check(wall_n > 0 and wall / float(wall_n) > 0.35, "the glass wall reads at desk size %s" % (wall / float(maxi(wall_n, 1))))
 
 
 func _far_pixel(a: Image, b: Image, y0: float, y1: float) -> Vector2i:

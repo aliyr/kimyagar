@@ -9,8 +9,10 @@ const Poly = preload("res://scripts/fx/poly_draw.gd")
 const STREAM_START := 0.5
 const STREAM_END := 1.7
 ## Shoulder (full) and base (empty), as fractions of the bottle rect height.
-const SURFACE_FULL := 0.40
-const SURFACE_EMPTY := 0.91
+const SURFACE_FULL := 0.43
+const SURFACE_EMPTY := 0.77
+## Round inner bottom. The profile falls away below this, outside the glass.
+const LIQUID_BOTTOM := 0.785
 const TEX_W := 512
 const TEX_H := 896
 ## Upper belly, above the parchment label and clear of the shoulder highlight.
@@ -18,43 +20,69 @@ const SAMPLE_X := 256
 const SAMPLE_Y := 502
 ## Inner bore of the round flask. (y fraction, half-width fraction). No feet.
 const PROFILE: Array[Vector2] = [
-	Vector2(0.240, 0.050),
-	Vector2(0.260, 0.088),
-	Vector2(0.280, 0.095),
-	Vector2(0.300, 0.125),
-	Vector2(0.320, 0.161),
-	Vector2(0.340, 0.178),
-	Vector2(0.360, 0.196),
-	Vector2(0.380, 0.236),
-	Vector2(0.400, 0.277),
-	Vector2(0.420, 0.295),
-	Vector2(0.440, 0.302),
-	Vector2(0.460, 0.319),
-	Vector2(0.480, 0.340),
-	Vector2(0.500, 0.357),
-	Vector2(0.520, 0.364),
+	Vector2(0.200, 0.056),
+	Vector2(0.210, 0.059),
+	Vector2(0.220, 0.061),
+	Vector2(0.230, 0.063),
+	Vector2(0.240, 0.064),
+	Vector2(0.250, 0.068),
+	Vector2(0.260, 0.076),
+	Vector2(0.270, 0.088),
+	Vector2(0.280, 0.099),
+	Vector2(0.290, 0.107),
+	Vector2(0.300, 0.111),
+	Vector2(0.310, 0.116),
+	Vector2(0.320, 0.129),
+	Vector2(0.330, 0.143),
+	Vector2(0.340, 0.151),
+	Vector2(0.350, 0.151),
+	Vector2(0.360, 0.154),
+	Vector2(0.370, 0.161),
+	Vector2(0.380, 0.175),
+	Vector2(0.390, 0.193),
+	Vector2(0.400, 0.215),
+	Vector2(0.410, 0.238),
+	Vector2(0.420, 0.262),
+	Vector2(0.430, 0.284),
+	Vector2(0.440, 0.304),
+	Vector2(0.450, 0.318),
+	Vector2(0.460, 0.326),
+	Vector2(0.470, 0.333),
+	Vector2(0.480, 0.338),
+	Vector2(0.490, 0.344),
+	Vector2(0.500, 0.349),
+	Vector2(0.510, 0.353),
+	Vector2(0.520, 0.358),
+	Vector2(0.530, 0.362),
 	Vector2(0.540, 0.365),
-	Vector2(0.560, 0.366),
-	Vector2(0.580, 0.368),
-	Vector2(0.600, 0.370),
-	Vector2(0.620, 0.372),
-	Vector2(0.640, 0.373),
-	Vector2(0.660, 0.370),
-	Vector2(0.680, 0.365),
-	Vector2(0.700, 0.358),
-	Vector2(0.720, 0.352),
-	Vector2(0.740, 0.348),
-	Vector2(0.760, 0.345),
-	Vector2(0.780, 0.326),
-	Vector2(0.800, 0.301),
-	Vector2(0.820, 0.282),
-	Vector2(0.840, 0.271),
-	Vector2(0.860, 0.225),
-	Vector2(0.880, 0.178),
-	Vector2(0.900, 0.156),
-	Vector2(0.920, 0.087),
-	Vector2(0.940, 0.051),
-	Vector2(0.950, 0.013),
+	Vector2(0.550, 0.368),
+	Vector2(0.560, 0.370),
+	Vector2(0.570, 0.371),
+	Vector2(0.580, 0.372),
+	Vector2(0.590, 0.372),
+	Vector2(0.600, 0.371),
+	Vector2(0.610, 0.370),
+	Vector2(0.620, 0.368),
+	Vector2(0.630, 0.365),
+	Vector2(0.640, 0.362),
+	Vector2(0.650, 0.358),
+	Vector2(0.660, 0.353),
+	Vector2(0.670, 0.348),
+	Vector2(0.680, 0.341),
+	Vector2(0.690, 0.334),
+	Vector2(0.700, 0.326),
+	Vector2(0.710, 0.317),
+	Vector2(0.720, 0.307),
+	Vector2(0.730, 0.296),
+	Vector2(0.740, 0.284),
+	Vector2(0.750, 0.271),
+	Vector2(0.760, 0.256),
+	Vector2(0.770, 0.240),
+	Vector2(0.780, 0.222),
+	Vector2(0.790, 0.201),
+	Vector2(0.800, 0.178),
+	Vector2(0.820, 0.000),
+	Vector2(0.960, 0.000),
 ]
 
 
@@ -158,12 +186,12 @@ static func liquid_polygon(rect: Rect2, level: float, wave: float) -> PackedVect
 	var side_n := 12
 	for i in side_n:
 		var t2 := float(i + 1) / float(side_n)
-		var u := lerpf(surf + 0.01, 0.948, t2)
+		var u := lerpf(surf + 0.01, LIQUID_BOTTOM, t2)
 		var hw2 := half_width(u) * rect.size.x * 0.90
 		pts.append(Vector2(cx + hw2, rect.position.y + u * rect.size.y))
 	for i in side_n:
 		var t3 := float(side_n - 1 - i) / float(side_n)
-		var u2 := lerpf(surf + 0.01, 0.948, t3)
+		var u2 := lerpf(surf + 0.01, LIQUID_BOTTOM, t3)
 		if u2 <= surf:
 			continue
 		var hw3 := half_width(u2) * rect.size.x * 0.90
@@ -229,36 +257,36 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 	var surf := surface_u(level)
 	var cx := rect.position.x + rect.size.x * 0.5
 	if poly.size() >= 3:
-		var deep := shade(body, -0.42)
-		var light := shade(body, 0.28)
-		deep.a = 0.86
-		light.a = 0.48
+		var deep := shade(body, -0.06)
+		var light := shade(body, 0.03)
+		deep.a = 0.95
+		light.a = 0.93
 		var cols := PackedColorArray()
 		cols.resize(poly.size())
 		for i in poly.size():
 			var t := clampf((poly[i].y - rect.position.y) / rect.size.y, 0.0, 1.0)
-			var depth := clampf((t - surf) / maxf(0.94 - surf, 0.05), 0.0, 1.0)
+			var depth := clampf((t - surf) / maxf(LIQUID_BOTTOM - surf, 0.05), 0.0, 1.0)
 			var col := light.lerp(deep, depth)
 			var side := absf(poly[i].x - cx) / maxf(rect.size.x * half_width(clampf(t, 0.0, 1.0)), 1.0)
-			col = col.lerp(deep, clampf(side, 0.0, 1.0) * 0.28)
-			col.a = lerpf(0.46, 0.84, depth)
+			col = col.lerp(deep, clampf(side, 0.0, 1.0) * 0.08)
+			col.a = lerpf(0.93, 0.95, depth)
 			cols[i] = col
 		Poly.draw_vertex_colors(c, poly, cols)
 		var men_rx := half_width(surf) * rect.size.x * 0.90
 		var men_ry := maxf(2.2, rect.size.y * 0.018)
 		var men := _ellipse(Vector2(cx, rect.position.y + surf * rect.size.y + men_ry * 0.3), men_rx, men_ry, 18)
-		var men_col := shade(body, 0.35)
-		men_col.a = 0.55
+		var men_col := shade(body, 0.08)
+		men_col.a = 0.40
 		Poly.draw_colored(c, men, men_col)
-		var cau_u := lerpf(surf + 0.08, 0.90, 0.72)
+		var cau_u := lerpf(surf + 0.06, LIQUID_BOTTOM - 0.02, 0.65)
 		var cau := _ellipse(
 			Vector2(cx - rect.size.x * 0.04, rect.position.y + cau_u * rect.size.y),
 			half_width(cau_u) * rect.size.x * 0.42,
 			maxf(2.0, rect.size.y * 0.03),
 			14
 		)
-		var cau_col := shade(body, 0.45)
-		cau_col.a = 0.16
+		var cau_col := shade(body, 0.10)
+		cau_col.a = 0.08
 		Poly.draw_colored(c, cau, cau_col)
 	if level > 0.08:
 		for i in 3:
@@ -273,8 +301,8 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 	if phase == "stream" or (phase == "tilt" and pour_t > 0.35):
 		var path := pour_path(rect, maxf(level, 0.02), wave)
 		if path.size() >= 2:
-			var ribbon := shade(incoming, 0.12)
-			ribbon.a = 0.92
+			var ribbon := shade(incoming, 0.04)
+			ribbon.a = 0.94
 			c.draw_polyline(path, ribbon, maxf(3.0, rect.size.x * 0.045), true)
 			c.draw_polyline(path, Color(1, 1, 1, 0.45), 1.4, true)
 
