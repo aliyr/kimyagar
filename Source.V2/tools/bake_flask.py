@@ -13,6 +13,7 @@ import math
 import os
 import subprocess
 import sys
+from collections import deque
 
 import numpy as np
 
@@ -173,17 +174,153 @@ def _resize(img, tw, th):
     return top * (1.0 - fy)[:, None] + bot * fy[:, None]
 
 
+def _dist_bg(ink):
+    """City-block distance from each ink pixel to the nearest clear pixel."""
+    h, w = ink.shape
+    dist = np.full((h, w), -1, np.int16)
+    q = deque()
+    ys, xs = np.where(~ink)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        dist[y, x] = 0
+        q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        nd = int(dist[y, x]) + 1
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and dist[ny, nx] < 0:
+                dist[ny, nx] = nd
+                q.append((ny, nx))
+    return dist
+
+
+def _maxfilt(a, rad):
+    h, w = a.shape
+    p = np.pad(a, rad, mode="edge")
+    acc = p[rad:rad + h, rad:rad + w].copy()
+    for dy in range(-rad, rad + 1):
+        for dx in range(-rad, rad + 1):
+            acc = np.maximum(acc, p[rad + dy:rad + dy + h, rad + dx:rad + dx + w])
+    return acc
+
+
+def _ink_components(ink, min_n=1):
+    h, w = ink.shape
+    vis = np.zeros(ink.shape, np.uint8)
+    out = []
+    for y, x in zip(*np.where(ink)):
+        if vis[y, x]:
+            continue
+        q = deque([(int(y), int(x))])
+        vis[y, x] = 1
+        pts = []
+        while q:
+            cy, cx = q.popleft()
+            pts.append((cy, cx))
+            for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not vis[ny, nx]:
+                    vis[ny, nx] = 1
+                    q.append((ny, nx))
+        if len(pts) >= min_n:
+            out.append(np.array(pts, np.int32))
+    out.sort(key=lambda p: int(p[:, 1].min()))
+    return out
+
+
+def _dilate_mask(ink, rad):
+    out = ink.copy()
+    h, w = ink.shape
+    ys, xs = np.where(ink)
+    for dy in range(-rad, rad + 1):
+        for dx in range(-rad, rad + 1):
+            out[np.clip(ys + dy, 0, h - 1), np.clip(xs + dx, 0, w - 1)] = True
+    return out
+
+
+def _thin_calligraphy(src):
+    """Open the waw and dal counters and bring the pen to about 60% weight.
+
+    src is the natural Aref Ruqaa render. Letter bodies stay apart. The alif
+    foot drops onto the waw's tail, and a tapered stroke joins waw to dal
+    along the baseline.
+    """
+    ink = src[:, :, 3] > 0.35
+    if int(ink.sum()) < 20:
+        return src[:, :, 3]
+    D = _dist_bg(ink)
+    R = _maxfilt(D.astype(np.float32), 10)
+    punched = ink.copy()
+    for pts in _ink_components(ink, 30):
+        height = int(pts[:, 0].max() - pts[:, 0].min() + 1)
+        width = int(pts[:, 1].max() - pts[:, 1].min() + 1)
+        if height > width * 2.2:
+            continue
+        y0 = int(pts[:, 0].min())
+        y1 = int(pts[:, 0].max())
+        # Only the head, so the stroke down to the baseline stays attached.
+        top = y0 + int(0.50 * (y1 - y0))
+        sel = pts[:, 0] <= top
+        yy, xx = pts[sel, 0], pts[sel, 1]
+        core = D[yy, xx] > 0.62 * np.maximum(R[yy, xx], 1.0)
+        punched[yy[core], xx[core]] = False
+    D2 = _dist_bg(punched)
+    R2 = _maxfilt(D2.astype(np.float32), 8)
+    cut = 0.35 * R2
+    thin = punched & ((D2 >= cut) | (D2 + 1.0 >= R2))
+    parts = _ink_components(thin, 40)
+    if len(parts) < 3:
+        ys, xs = np.where(ink)
+        return ink[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
+    alif, waw, dal = parts[0], parts[1], parts[2]
+    pad = 80
+    h, w = thin.shape
+    canvas = np.zeros((h + pad * 2, w + pad * 2), bool)
+    waw_m = np.zeros_like(canvas)
+    waw_m[waw[:, 0] + pad, waw[:, 1] + pad] = True
+    touch = 0
+    for dy in range(0, 140):
+        yy = alif[:, 0] + pad + dy
+        xx = alif[:, 1] + pad
+        if yy.max() >= canvas.shape[0]:
+            break
+        if np.any(waw_m[yy, xx]):
+            touch = dy
+            break
+    canvas[alif[:, 0] + pad + touch + 5, alif[:, 1] + pad] = True
+    canvas[waw[:, 0] + pad, waw[:, 1] + pad] = True
+    canvas[dal[:, 0] + pad, dal[:, 1] + pad] = True
+    wb = waw[waw[:, 0] > np.percentile(waw[:, 0], 78)]
+    db = dal[dal[:, 0] > np.percentile(dal[:, 0], 78)]
+    x0 = int(wb[:, 1].max()) + pad
+    x1 = int(db[:, 1].min()) + pad
+    near_w = wb[wb[:, 1] > wb[:, 1].max() - 10]
+    near_d = db[db[:, 1] < db[:, 1].min() + 10]
+    y0 = int(np.median(near_w[:, 0])) + pad
+    y1 = int(np.median(near_d[:, 0])) + pad
+    span = max(x1 - x0, 1)
+    for x in range(x0 - 3, x1 + 4):
+        t = float(np.clip((x - x0) / float(span), 0.0, 1.0))
+        thick = 2.4 + 3.2 * np.sin(t * np.pi)
+        yy = (1.0 - t) * y0 + t * y1 - 1.6 * np.sin(t * np.pi)
+        for k in range(int(-thick) - 1, int(thick) + 2):
+            ny = int(yy + k)
+            if 0 <= ny < canvas.shape[0] and 0 <= x < canvas.shape[1]:
+                canvas[ny, x] = True
+    ys, xs = np.where(canvas)
+    return canvas[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
+
+
 def _mark():
     """دوا in Aref Ruqaa, shaped by Godot's text server.
 
     ffmpeg drawtext has no Arabic shaping and drew three hollow boxes.
-    tools/dawa_ink.png is that same font, RTL. The alif is dropped onto the
-    waw's tail and the dal is pulled until it touches, so the word is one
-    connected mark and the three letters stay readable. See render_dawa.gd.
+    tools/dawa_src.png is the natural RTL render. Counters stay open, the
+    pen is about 60% of that weight, and the letters meet along the baseline.
+    See render_dawa.gd.
     """
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dawa_ink.png")
-    img = _load_rgba(path)
-    ink = img[:, :, 3]
+    src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dawa_src.png")
+    ink = _thin_calligraphy(_load_rgba(src_path))
     ys, xs = np.where(ink > 0.12)
     if len(xs) == 0:
         return ink
@@ -259,10 +396,10 @@ def paint(corked: bool) -> np.ndarray:
     rgb = np.zeros((H, W, 3), np.float32)
     alpha = np.zeros((H, W), np.float32)
 
-    # Faint body tint. The centre stays nearly clear so the liquor keeps its colour.
+    # Faint body tint. The bore stays clear: a milky film here reads as fogged glass.
     fresnel = np.clip((inner_img - nx) * W / 36.0, 0.0, 1.0)
     fresnel = 1.0 - fresnel
-    body_a = np.where(hole, 0.050 + 0.10 * fresnel * fresnel, 0.0) * cover
+    body_a = np.where(hole, 0.026 + 0.040 * fresnel * fresnel, 0.0) * cover
     body_rgb = np.array([0.80, 0.88, 0.80], np.float32)
     light_side = np.clip((0.62 - u) / 0.55, 0.0, 1.0)
     rim_dark = np.array([0.10, 0.16, 0.11], np.float32)
@@ -271,9 +408,9 @@ def paint(corked: bool) -> np.ndarray:
     rim_rgb = np.clip(rim_rgb * (0.86 + 0.18 * grain[..., None]), 0.0, 1.0)
     rim_a = rim * 0.66 * cover
     thick_rgb = np.clip(np.array([0.74, 0.84, 0.66], np.float32) * (0.88 + 0.16 * grain[..., None]), 0.0, 1.0)
-    thick_a = band * np.where(hole, 0.16, 0.50) * cover
+    thick_a = band * np.where(hole, 0.05, 0.48) * cover
     line_rgb = np.array([0.90, 0.96, 0.84], np.float32)
-    line_a = inner_band * 0.55 * cover
+    line_a = inner_band * 0.28 * cover
 
     rgb, alpha = over(rgb, alpha, body_rgb, body_a)
     rgb, alpha = over(rgb, alpha, thick_rgb, thick_a)
@@ -348,20 +485,12 @@ def paint(corked: bool) -> np.ndarray:
     # Keep bare glass under the warm-pixel test. Brass, cork and the label come next.
     alpha = np.minimum(alpha, 0.68)
 
-    # Brass lip on the flare, copper collar where the neck meets the shoulder.
+    # Wound brass wire on the lip, wound copper wire on the collar. Grooves
+    # stay translucent so the bands are not flat orange stickers.
     lip = (v > 0.010) & (v < 0.058) & (nx < hw_img) & (nx > inner_img * 0.82) & (cover > 0.25)
-    lip_t = np.clip((v - 0.010) / 0.048, 0.0, 1.0)
-    lip_rgb = (1.0 - lip_t)[..., None] * np.array([0.42, 0.26, 0.10]) + lip_t[..., None] * np.array([0.93, 0.76, 0.36])
-    lip_hi = np.exp(-((u - 0.40) / 0.08) ** 2)
-    lip_rgb = np.clip(lip_rgb * (0.70 + 0.42 * lip_hi[..., None]) * (0.95 + 0.06 * grain[..., None]), 0.0, 1.0)
-    rgb, alpha = over(rgb, alpha, lip_rgb, lip * 0.97)
-
-    collar = (v > 0.292) & (v < 0.348) & (nx < hw_img * 1.01) & (nx > inner_img * 0.35) & (cover > 0.2)
-    col_t = np.clip((v - 0.292) / 0.056, 0.0, 1.0)
-    col_rgb = (1.0 - col_t)[..., None] * np.array([0.55, 0.24, 0.10]) + col_t[..., None] * np.array([0.84, 0.46, 0.18])
-    col_hi = np.exp(-((u - 0.40) / 0.06) ** 2)
-    col_rgb = np.clip(col_rgb * (0.66 + 0.50 * col_hi[..., None]) * (0.94 + 0.08 * grain[..., None]), 0.0, 1.0)
-    rgb, alpha = over(rgb, alpha, col_rgb, collar * 0.97)
+    _wire(rgb, alpha, u, v, lip, np.array([0.46, 0.28, 0.10]), np.array([0.93, 0.74, 0.32]), 0.48, over)
+    collar = (v > 0.292) & (v < 0.348) & (nx < hw_img * 1.01) & (nx > inner_img * 0.22) & (cover > 0.2)
+    _wire(rgb, alpha, u, v, collar, np.array([0.50, 0.22, 0.09]), np.array([0.78, 0.40, 0.16]), 0.36, over)
 
     if corked:
         _cork(rgb, alpha, u, v, nx, hw_img, over)
@@ -436,15 +565,28 @@ def _cork(rgb, alpha, u, v, nx, hw_img, over_fn):
     rgb[:], alpha[:] = over_fn(rgb, alpha, wax_col, wax_m * 0.98)
 
 
+def _wire(rgb, alpha, u, v, mask, base, hi, freq, over_fn):
+    """Helical wire: dark groove, bright strand, a little fibre."""
+    phase = u * W * freq + v * H * 0.90
+    strand = 0.5 + 0.5 * np.sin(phase)
+    ply = 0.5 + 0.5 * np.sin(phase * 2.0 + 1.1)
+    fibre = hash2((u * W).astype(np.int32) // 2, (v * H).astype(np.int32) // 2)
+    col = base * (0.55 + 0.35 * strand[..., None]) + hi * (0.15 + 0.55 * ply[..., None])
+    col = np.clip(col * (0.88 + 0.16 * fibre[..., None]), 0.0, 1.0)
+    # Grooves open onto the glass. Strands stay warm and opaque.
+    a = mask.astype(np.float32) * (0.28 + 0.70 * np.clip((strand - 0.25) / 0.75, 0.0, 1.0))
+    rgb[:], alpha[:] = over_fn(rgb, alpha, col, a)
+
+
 def _label(rgb, alpha, u, v, hw_img, over_fn):
     ang = np.deg2rad(-6.0)
-    cu, cv = 0.50, 0.655
+    # Lower belly, about 62% of the previous card, so liquor shows above it.
+    cu, cv = 0.50, 0.718
     du = u - cu
     dv = v - cv
     ru = du * np.cos(ang) + dv * np.sin(ang)
     rv = -du * np.sin(ang) + dv * np.cos(ang)
-    # Big enough that the word is readable on the 125×220 sprite, still inside the belly.
-    hw, hh = 0.30, 0.120
+    hw, hh = 0.240, 0.094
     edge = np.maximum(np.abs(ru) / hw, np.abs(rv) / hh)
     paper = (edge < 1.0) & (nx_inside(u, v, hw_img))
     n = hash2((u * W).astype(np.int32) // 8, (v * H).astype(np.int32) // 8)
@@ -458,8 +600,10 @@ def _label(rgb, alpha, u, v, hw_img, over_fn):
 
     fibre = 0.78 + 0.22 * np.sin(u * W * 0.11)
     string = np.exp(-((rv + hh * 0.86) / 0.012) ** 2) * (np.abs(ru) < hw * 1.08)
-    string = string + np.exp(-((u - (0.28 + (v - 0.42) * 0.16)) / 0.008) ** 2) * (v > 0.42) * (v < cv + hh)
-    string = string + np.exp(-((u - (0.74 - (v - 0.42) * 0.14)) / 0.008) ** 2) * (v > 0.42) * (v < cv + hh)
+    # Side strings start just above this lower card, so they do not cross the liquor.
+    tie = cv - hh - 0.02
+    string = string + np.exp(-((u - (0.30 + (v - tie) * 0.12)) / 0.008) ** 2) * (v > tie) * (v < cv + hh)
+    string = string + np.exp(-((u - (0.70 - (v - tie) * 0.10)) / 0.008) ** 2) * (v > tie) * (v < cv + hh)
     string = np.clip(string, 0.0, 1.0) * fibre * (nx_inside(u, v, hw_img))
     rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.36, 0.22, 0.10], np.float32), string * 0.96)
 

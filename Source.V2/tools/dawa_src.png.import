@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dh7xc26thb77d"
-path="res://.godot/imported/dawa_ink.png-677800d6075a44d0b0a7049ae9bc656f.ctex"
+uid="uid://cjtkmuvgrcmnv"
+path="res://.godot/imported/dawa_src.png-cfc424b859864f8d14f300d5693825d4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://tools/dawa_ink.png"
-dest_files=["res://.godot/imported/dawa_ink.png-677800d6075a44d0b0a7049ae9bc656f.ctex"]
+source_file="res://tools/dawa_src.png"
+dest_files=["res://.godot/imported/dawa_src.png-cfc424b859864f8d14f300d5693825d4.ctex"]
 
 [params]
 

@@ -115,6 +115,24 @@ static func _saturate(c: Color, amount: float) -> Color:
 	)
 
 
+static func _liquor_band(body: Color, light: Color, deep: Color, depth: float) -> Color:
+	## Plateau around depth 0.2 is the snapshot. Lift is only the surface;
+	## the darkening is already strong by the top of the label.
+	var lift := clampf(1.0 - depth / 0.11, 0.0, 1.0)
+	lift *= lift
+	var sink := clampf((depth - 0.36) / 0.24, 0.0, 1.0)
+	var col := body.lerp(light, lift)
+	col = col.lerp(deep, sink)
+	if depth < 0.14 or depth > 0.40:
+		var grit := sin(depth * 47.0) * 0.035
+		var grit_col := deep
+		if grit > 0.0:
+			grit_col = light
+		col = col.lerp(grit_col, absf(grit))
+	col.a = lerpf(0.90, 0.96, sink)
+	return col
+
+
 static func shade(c: Color, amount: float) -> Color:
 	if amount >= 0.0:
 		return Color(
@@ -268,55 +286,101 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 	var surf := surface_u(level)
 	var cx := rect.position.x + rect.size.x * 0.5
 	if poly.size() >= 3:
-		var deep := shade(body, -0.16)
-		var light := shade(body, 0.08)
-		light = _saturate(light, 0.16)
-		deep.a = 0.95
-		light.a = 0.90
-		var cols := PackedColorArray()
-		cols.resize(poly.size())
-		for i in poly.size():
-			var t := clampf((poly[i].y - rect.position.y) / rect.size.y, 0.0, 1.0)
-			var depth := clampf((t - surf) / maxf(LIQUID_BOTTOM - surf, 0.05), 0.0, 1.0)
-			# The upper belly stays on the snapshot colour. Dark pools at the
-			# bottom; only a thin band under the surface lifts and saturates.
-			var lift := clampf(1.0 - depth / 0.10, 0.0, 1.0)
-			lift *= lift
-			var sink := clampf((depth - 0.28) / 0.72, 0.0, 1.0)
-			sink *= sink
-			var col := body.lerp(light, lift)
-			col = col.lerp(deep, sink)
-			var side := absf(poly[i].x - cx) / maxf(rect.size.x * half_width(clampf(t, 0.0, 1.0)), 1.0)
-			col = col.lerp(deep, clampf(side, 0.0, 1.0) * 0.10)
-			col.a = lerpf(0.90, 0.95, sink)
-			cols[i] = col
-		Poly.draw_vertex_colors(c, poly, cols)
-		var men_rx := half_width(surf) * rect.size.x * 0.90
-		var men_ry := maxf(2.8, rect.size.y * 0.024)
-		var men := _ellipse(Vector2(cx, rect.position.y + surf * rect.size.y + men_ry * 0.25), men_rx, men_ry, 18)
-		var men_col := _saturate(shade(body, 0.20), 0.12)
-		men_col.a = 0.55
+		# Stacked bands, not one smooth polygon. The mid-belly band stays on
+		# the snapshot. Above it the paint is lighter; below it, down to the
+		# label, the paint is clearly darker. Brush dabs stay out of that band.
+		var deep := shade(body, -0.38)
+		var light := _saturate(shade(body, 0.18), 0.28)
+		var n_bands := 8
+		for i in n_bands:
+			var d0 := float(i) / float(n_bands)
+			var d1 := float(i + 1) / float(n_bands)
+			var depth := (d0 + d1) * 0.5
+			var u0 := lerpf(surf, LIQUID_BOTTOM, d0)
+			var u1 := lerpf(surf, LIQUID_BOTTOM, d1)
+			var col := _liquor_band(body, light, deep, depth)
+			var y0 := rect.position.y + u0 * rect.size.y + sin(u0 * 18.0 + wave) * 0.8
+			var y1 := rect.position.y + u1 * rect.size.y + sin(u1 * 18.0 + wave + 0.6) * 0.8 + 1.4
+			for s in 3:
+				var a0 := -1.0 + float(s) * (2.0 / 3.0)
+				var a1 := a0 + 2.0 / 3.0
+				var edge := 0.0
+				if s != 1:
+					edge = 0.12
+				var bc := col.lerp(deep, edge)
+				var hw0 := half_width(clampf(u0, 0.0, 1.0)) * rect.size.x * 0.90
+				var hw1 := half_width(clampf(u1, 0.0, 1.0)) * rect.size.x * 0.90
+				var band := PackedVector2Array()
+				band.append(Vector2(cx + a0 * hw0, y0))
+				band.append(Vector2(cx + a1 * hw0, y0 + sin(float(s) + float(i)) * 0.6))
+				band.append(Vector2(cx + a1 * hw1, y1))
+				band.append(Vector2(cx + a0 * hw1, y1))
+				Poly.draw_colored(c, band, bc)
+		for b in 6:
+			var bd := 0.02 + float(b) * 0.03
+			var use_light := true
+			if b >= 3:
+				bd = 0.52 + float(b - 3) * 0.12
+				use_light = false
+			var bu := lerpf(surf, LIQUID_BOTTOM, bd)
+			var bhw := half_width(bu) * rect.size.x * (0.42 + 0.08 * sin(float(b) * 1.7))
+			var by := rect.position.y + bu * rect.size.y
+			var bx := cx + sin(float(b) * 2.1) * rect.size.x * 0.06
+			var brush := _ellipse(Vector2(bx, by), bhw, maxf(1.6, rect.size.y * 0.018), 10)
+			var paint := light
+			if not use_light:
+				paint = deep
+			paint.a = 0.12
+			Poly.draw_colored(c, brush, paint)
+		var men := PackedVector2Array()
+		var men_n := 12
+		for i in men_n + 1:
+			var t := float(i) / float(men_n)
+			var hw := half_width(surf) * rect.size.x * 0.86
+			var y := rect.position.y + surf * rect.size.y + sin(t * PI) * rect.size.y * 0.010 + sin(t * TAU * 2.0 + wave) * 0.7
+			men.append(Vector2(cx - hw + t * hw * 2.0, y))
+		for i in men_n + 1:
+			var t2 := float(men_n - i) / float(men_n)
+			var hw2 := half_width(surf) * rect.size.x * 0.78
+			var y2 := rect.position.y + (surf + 0.028) * rect.size.y + sin(t2 * PI) * rect.size.y * 0.006
+			men.append(Vector2(cx - hw2 + t2 * hw2 * 2.0, y2))
+		var men_col := _saturate(shade(body, 0.22), 0.12)
+		men_col.a = 0.48
 		Poly.draw_colored(c, men, men_col)
-		var glow_u := lerpf(surf + 0.05, LIQUID_BOTTOM - 0.02, 0.32)
-		var glow := _ellipse(
-			Vector2(cx - rect.size.x * 0.07, rect.position.y + glow_u * rect.size.y),
-			half_width(glow_u) * rect.size.x * 0.36,
-			maxf(3.0, rect.size.y * 0.055),
-			16
-		)
-		var glow_col := shade(body, 0.12)
-		glow_col.a = 0.13
-		Poly.draw_colored(c, glow, glow_col)
-		var cau_u := lerpf(surf + 0.06, LIQUID_BOTTOM - 0.02, 0.65)
+		var rim_l := PackedVector2Array()
+		var rim_r := PackedVector2Array()
+		for i in 8:
+			var rt := float(i) / 7.0
+			var ru := lerpf(surf + 0.015, minf(surf + 0.20, LIQUID_BOTTOM - 0.02), rt)
+			var rhw := half_width(ru) * rect.size.x * 0.86
+			var ry := rect.position.y + ru * rect.size.y
+			rim_l.append(Vector2(cx - rhw, ry))
+			rim_r.append(Vector2(cx + rhw, ry))
+		var rim_col := _saturate(shade(body, 0.20), 0.06)
+		rim_col.a = 0.28
+		if rim_l.size() >= 2:
+			c.draw_polyline(rim_l, rim_col, 1.25, true)
+			c.draw_polyline(rim_r, rim_col, 1.25, true)
+		var cau_d := 0.46
+		var cau_u := lerpf(surf, LIQUID_BOTTOM, cau_d)
 		var cau := _ellipse(
 			Vector2(cx - rect.size.x * 0.04, rect.position.y + cau_u * rect.size.y),
-			half_width(cau_u) * rect.size.x * 0.42,
-			maxf(2.0, rect.size.y * 0.03),
-			14
+			half_width(cau_u) * rect.size.x * 0.36,
+			maxf(2.4, rect.size.y * 0.032),
+			12
 		)
 		var cau_col := shade(body, 0.10)
-		cau_col.a = 0.10
+		cau_col.a = 0.13
 		Poly.draw_colored(c, cau, cau_col)
+		for i in 6:
+			var sd := 0.08 + float(i) * 0.13
+			var su := lerpf(surf, LIQUID_BOTTOM, sd)
+			var sx := cx + sin(float(i) * 2.3 + 0.4) * half_width(su) * rect.size.x * 0.42
+			var sy := rect.position.y + su * rect.size.y
+			if not contains(rect, Vector2(sx, sy)):
+				continue
+			var sr := 0.45 + float(i % 3) * 0.28
+			c.draw_circle(Vector2(sx, sy), sr, Color(1, 1, 1, 0.20))
 	if level > 0.08:
 		for i in 3:
 			var b := bubble_at(rect, level, i, 0.0 if resting else time)
