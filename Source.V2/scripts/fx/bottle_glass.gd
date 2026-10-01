@@ -10,22 +10,51 @@ const STREAM_START := 0.5
 const STREAM_END := 1.7
 ## Shoulder (full) and base (empty), as fractions of the bottle rect height.
 const SURFACE_FULL := 0.40
-const SURFACE_EMPTY := 0.93
-const TEX_W := 192
-const TEX_H := 338
-## Body sample, clear of the rim, highlight, label and cork.
-const SAMPLE_X := 96
-const SAMPLE_Y := 210
-## (y fraction, half-width fraction) of the inner glass.
+const SURFACE_EMPTY := 0.91
+const TEX_W := 512
+const TEX_H := 896
+## Upper belly, above the parchment label and clear of the shoulder highlight.
+const SAMPLE_X := 256
+const SAMPLE_Y := 502
+## Inner bore of the round flask. (y fraction, half-width fraction). No feet.
 const PROFILE: Array[Vector2] = [
-	Vector2(0.17, 0.10),
-	Vector2(0.26, 0.12),
-	Vector2(0.34, 0.14),
-	Vector2(0.42, 0.24),
-	Vector2(0.52, 0.34),
-	Vector2(0.70, 0.33),
-	Vector2(0.84, 0.29),
-	Vector2(0.93, 0.18),
+	Vector2(0.240, 0.050),
+	Vector2(0.260, 0.088),
+	Vector2(0.280, 0.095),
+	Vector2(0.300, 0.125),
+	Vector2(0.320, 0.161),
+	Vector2(0.340, 0.178),
+	Vector2(0.360, 0.196),
+	Vector2(0.380, 0.236),
+	Vector2(0.400, 0.277),
+	Vector2(0.420, 0.295),
+	Vector2(0.440, 0.302),
+	Vector2(0.460, 0.319),
+	Vector2(0.480, 0.340),
+	Vector2(0.500, 0.357),
+	Vector2(0.520, 0.364),
+	Vector2(0.540, 0.365),
+	Vector2(0.560, 0.366),
+	Vector2(0.580, 0.368),
+	Vector2(0.600, 0.370),
+	Vector2(0.620, 0.372),
+	Vector2(0.640, 0.373),
+	Vector2(0.660, 0.370),
+	Vector2(0.680, 0.365),
+	Vector2(0.700, 0.358),
+	Vector2(0.720, 0.352),
+	Vector2(0.740, 0.348),
+	Vector2(0.760, 0.345),
+	Vector2(0.780, 0.326),
+	Vector2(0.800, 0.301),
+	Vector2(0.820, 0.282),
+	Vector2(0.840, 0.271),
+	Vector2(0.860, 0.225),
+	Vector2(0.880, 0.178),
+	Vector2(0.900, 0.156),
+	Vector2(0.920, 0.087),
+	Vector2(0.940, 0.051),
+	Vector2(0.950, 0.013),
 ]
 
 
@@ -117,25 +146,38 @@ static func liquid_polygon(rect: Rect2, level: float, wave: float) -> PackedVect
 		return pts
 	var surf := surface_u(level)
 	var cx := rect.position.x + rect.size.x * 0.5
-	var steps := 12
+	var steps := 16
 	for i in steps + 1:
 		var t := float(i) / float(steps)
-		var wobble := sin(t * TAU * 1.5 + wave) * 0.010 * rect.size.y
-		var y := rect.position.y + surf * rect.size.y + wobble
-		var hw := half_width(clampf((y - rect.position.y) / rect.size.y, 0.0, 1.0)) * rect.size.x
+		# The front of the surface sits a little lower, so the fill reads as a curve.
+		var bow := sin(t * PI) * 0.012 * rect.size.y
+		var wobble := sin(t * TAU + wave) * 0.004 * rect.size.y
+		var y := rect.position.y + surf * rect.size.y + bow * 0.35 + wobble
+		var hw := half_width(clampf((y - rect.position.y) / rect.size.y, 0.0, 1.0)) * rect.size.x * 0.90
 		pts.append(Vector2(cx - hw + t * hw * 2.0, y))
-	var side := [0.55, 0.70, 0.84, 0.93]
-	for u in side:
-		if float(u) <= surf + 0.01:
+	var side_n := 12
+	for i in side_n:
+		var t2 := float(i + 1) / float(side_n)
+		var u := lerpf(surf + 0.01, 0.948, t2)
+		var hw2 := half_width(u) * rect.size.x * 0.90
+		pts.append(Vector2(cx + hw2, rect.position.y + u * rect.size.y))
+	for i in side_n:
+		var t3 := float(side_n - 1 - i) / float(side_n)
+		var u2 := lerpf(surf + 0.01, 0.948, t3)
+		if u2 <= surf:
 			continue
-		var hw2 := half_width(float(u)) * rect.size.x
-		pts.append(Vector2(cx + hw2, rect.position.y + float(u) * rect.size.y))
-	for i in range(side.size() - 1, -1, -1):
-		var u2: float = float(side[i])
-		if u2 <= surf + 0.01:
-			continue
-		var hw3 := half_width(u2) * rect.size.x
+		var hw3 := half_width(u2) * rect.size.x * 0.90
 		pts.append(Vector2(cx - hw3, rect.position.y + u2 * rect.size.y))
+	return pts
+
+
+static func _ellipse(center: Vector2, rx: float, ry: float, n: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	if rx < 0.5 or ry < 0.4 or n < 3:
+		return pts
+	for i in n:
+		var a := float(i) / float(n) * TAU
+		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
 	return pts
 
 
@@ -184,43 +226,50 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 		body = ink_override as Color
 	var incoming := blend_color(entries, color_of, clampf(level + 0.15, 0.0, 1.0))
 	var poly := liquid_polygon(rect, level, wave)
+	var surf := surface_u(level)
+	var cx := rect.position.x + rect.size.x * 0.5
 	if poly.size() >= 3:
-		var deep := shade(body, -0.28)
-		var light := shade(body, 0.22)
+		var deep := shade(body, -0.42)
+		var light := shade(body, 0.28)
+		deep.a = 0.86
+		light.a = 0.48
 		var cols := PackedColorArray()
 		cols.resize(poly.size())
 		for i in poly.size():
 			var t := clampf((poly[i].y - rect.position.y) / rect.size.y, 0.0, 1.0)
-			cols[i] = light.lerp(deep, t)
+			var depth := clampf((t - surf) / maxf(0.94 - surf, 0.05), 0.0, 1.0)
+			var col := light.lerp(deep, depth)
+			var side := absf(poly[i].x - cx) / maxf(rect.size.x * half_width(clampf(t, 0.0, 1.0)), 1.0)
+			col = col.lerp(deep, clampf(side, 0.0, 1.0) * 0.28)
+			col.a = lerpf(0.46, 0.84, depth)
+			cols[i] = col
 		Poly.draw_vertex_colors(c, poly, cols)
-		var edge := PackedVector2Array()
-		for i in mini(13, poly.size()):
-			edge.append(poly[i])
-		if edge.size() >= 2:
-			c.draw_polyline(edge, Color(1, 1, 1, 0.55), 1.6, true)
-	if level > 0.04 and phase != "tilt" and not resting:
-		for i in 5:
-			var b := bubble_at(rect, level, i, time)
+		var men_rx := half_width(surf) * rect.size.x * 0.90
+		var men_ry := maxf(2.2, rect.size.y * 0.018)
+		var men := _ellipse(Vector2(cx, rect.position.y + surf * rect.size.y + men_ry * 0.3), men_rx, men_ry, 18)
+		var men_col := shade(body, 0.35)
+		men_col.a = 0.55
+		Poly.draw_colored(c, men, men_col)
+		var cau_u := lerpf(surf + 0.08, 0.90, 0.72)
+		var cau := _ellipse(
+			Vector2(cx - rect.size.x * 0.04, rect.position.y + cau_u * rect.size.y),
+			half_width(cau_u) * rect.size.x * 0.42,
+			maxf(2.0, rect.size.y * 0.03),
+			14
+		)
+		var cau_col := shade(body, 0.45)
+		cau_col.a = 0.16
+		Poly.draw_colored(c, cau, cau_col)
+	if level > 0.08:
+		for i in 3:
+			var b := bubble_at(rect, level, i, 0.0 if resting else time)
 			if b.z < 0.5 or b.y < 0.0:
 				continue
 			if not contains(rect, Vector2(b.x, b.y)):
 				continue
-			c.draw_circle(Vector2(b.x, b.y), b.z, Color(1, 1, 1, 0.28))
-			c.draw_arc(Vector2(b.x, b.y), b.z, 0.4, 4.2, 8, Color(1, 1, 1, 0.7), 1.0, true)
-	# Highlight stays on the body, inside the inner profile. No shader.
-	var gloss := PackedVector2Array([
-		rect.position + Vector2(rect.size.x * 0.40, rect.size.y * 0.48),
-		rect.position + Vector2(rect.size.x * 0.48, rect.size.y * 0.46),
-		rect.position + Vector2(rect.size.x * 0.46, rect.size.y * 0.78),
-		rect.position + Vector2(rect.size.x * 0.38, rect.size.y * 0.80),
-	])
-	var gloss_ok := true
-	for g in gloss:
-		if not contains(rect, g):
-			gloss_ok = false
-			break
-	if gloss_ok and level > 0.08:
-		Poly.draw_colored(c, gloss, Color(1, 1, 1, 0.16))
+			var rad := b.z * rect.size.y / 220.0
+			c.draw_circle(Vector2(b.x, b.y), rad, Color(1, 1, 1, 0.22))
+			c.draw_circle(Vector2(b.x - rad * 0.25, b.y - rad * 0.25), maxf(0.6, rad * 0.28), Color(1, 1, 1, 0.55))
 	if phase == "stream" or (phase == "tilt" and pour_t > 0.35):
 		var path := pour_path(rect, maxf(level, 0.02), wave)
 		if path.size() >= 2:

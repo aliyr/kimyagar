@@ -77,6 +77,7 @@ func _run() -> void:
 	_round4()
 	_round5()
 	_round6()
+	_round7()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -1324,6 +1325,41 @@ func _round6() -> void:
 	check(saw_more, "the water keeps rising during the throw")
 	root.remove_child(main)
 	main.free()
+
+
+func _round7() -> void:
+	var glass = load("res://scripts/fx/bottle_glass.gd")
+	check(glass.half_width(0.62) > 0.30, "the flask belly is round")
+	check(glass.half_width(0.62) > glass.half_width(0.24) * 4.0, "the belly is much wider than the neck")
+	check(glass.half_width(0.96) < 0.04, "the flask has no stand")
+	var open_tex: Texture2D = load("res://assets/art/bottles/glass_open.webp")
+	var img: Image = open_tex.get_image()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	check(img.get_width() == glass.TEX_W and img.get_height() == glass.TEX_H, "flask texture %s" % img.get_size())
+	var belly: Color = img.get_pixel(glass.SAMPLE_X, glass.SAMPLE_Y)
+	check(belly.a < 0.12, "the upper belly stays clear for the liquor %s" % belly.a)
+	var hi: Color = img.get_pixel(int(0.36 * float(glass.TEX_W)), int(0.50 * float(glass.TEX_H)))
+	check(hi.a > belly.a + 0.08, "a shoulder highlight sits on the glass %s" % hi.a)
+	var shade: Color = img.get_pixel(int(0.50 * float(glass.TEX_W)), int(0.978 * float(glass.TEX_H)))
+	check(shade.a > 0.04 and shade.a < 0.7, "a soft shadow sits under the flask %s" % shade.a)
+	var feet := 0
+	var y0 := int(0.978 * float(img.get_height()))
+	for y in range(y0, img.get_height(), 3):
+		for x in range(0, img.get_width(), 6):
+			if img.get_pixel(x, y).a > 0.8:
+				feet += 1
+	check(feet == 0, "nothing opaque stands under the round bottom")
+	var poly: PackedVector2Array = glass.liquid_polygon(Rect2(0, 0, 120, 220), 0.35, 0.0)
+	var span := 0.0
+	if poly.size() > 0:
+		var lo := poly[0].x
+		var hi_x := poly[0].x
+		for p in poly:
+			lo = minf(lo, p.x)
+			hi_x = maxf(hi_x, p.x)
+		span = hi_x - lo
+	check(poly.size() >= 20 and span > 40.0, "a low fill still follows the round belly, span %s" % span)
 
 
 func _far_pixel(a: Image, b: Image, y0: float, y1: float) -> Vector2i:

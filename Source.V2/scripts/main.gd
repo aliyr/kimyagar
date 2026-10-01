@@ -536,10 +536,6 @@ func _prepare_shot() -> void:
 			overlays.prime_toast(1.05)
 			_seed_brush_residue()
 			_warm_workshop(1.1)
-		"bottle-empty":
-			phase = "workshop"
-			gate.visible = false
-			_warm_workshop(0.15)
 		"bottle-low", "bottle-high":
 			phase = "workshop"
 			gate.visible = false
@@ -583,12 +579,30 @@ func _prepare_shot() -> void:
 				if str(workshop._brew.spawn_phase) == "settle" and float(workshop._brew.fill) > 0.32 and float(workshop._brew.fill) < 0.72:
 					break
 			workshop._sync_liquid()
-		"carry":
+		"bottle-empty":
 			phase = "workshop"
 			gate.visible = false
+			Game.brew = Alchemy.create_brew()
+			workshop.pour = ""
+			_seed_brush_residue()
+			_warm_workshop(0.15)
+		"carry", "carry-mint", "carry-borage", "carry-saffron":
+			phase = "workshop"
+			gate.visible = false
+			var id_a := "chamomile"
+			var id_b := "saffron"
+			if _shot == "carry-mint":
+				id_a = "mint"
+				id_b = "mint"
+			elif _shot == "carry-borage":
+				id_a = "borage"
+				id_b = "borage"
+			elif _shot == "carry-saffron":
+				id_a = "saffron"
+				id_b = "saffron"
 			var cr: Dictionary = Alchemy.create_brew()
-			cr = Alchemy.add_ingredient(cr, "chamomile", 1.0, "fine", Game.defs)
-			cr = Alchemy.add_ingredient(cr, "saffron", 1.0, "fine", Game.defs)
+			cr = Alchemy.add_ingredient(cr, id_a, 1.0, "fine", Game.defs)
+			cr = Alchemy.add_ingredient(cr, id_b, 1.0, "fine", Game.defs)
 			cr = Alchemy.advance_time(cr, 16.0, Game.defs)
 			cr = Alchemy.stir(cr, Game.defs)
 			Game.brew = cr
