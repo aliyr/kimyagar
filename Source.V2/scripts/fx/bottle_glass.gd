@@ -17,7 +17,7 @@ const TEX_W := 512
 const TEX_H := 896
 ## Upper belly, above the parchment label and clear of the shoulder highlight.
 const SAMPLE_X := 256
-const SAMPLE_Y := 502
+const SAMPLE_Y := 421
 ## Inner bore of the round flask. (y fraction, half-width fraction). No feet.
 const PROFILE: Array[Vector2] = [
 	Vector2(0.200, 0.056),
@@ -101,6 +101,17 @@ static func over(glass_px: Color, behind: Color) -> Color:
 		glass_px.g * a + behind.g * (1.0 - a),
 		glass_px.b * a + behind.b * (1.0 - a),
 		1.0
+	)
+
+
+static func _saturate(c: Color, amount: float) -> Color:
+	var l := 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+	var k := 1.0 + amount
+	return Color(
+		clampf(l + (c.r - l) * k, 0.0, 1.0),
+		clampf(l + (c.g - l) * k, 0.0, 1.0),
+		clampf(l + (c.b - l) * k, 0.0, 1.0),
+		c.a
 	)
 
 
@@ -257,27 +268,45 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 	var surf := surface_u(level)
 	var cx := rect.position.x + rect.size.x * 0.5
 	if poly.size() >= 3:
-		var deep := shade(body, -0.06)
-		var light := shade(body, 0.03)
+		var deep := shade(body, -0.16)
+		var light := shade(body, 0.08)
+		light = _saturate(light, 0.16)
 		deep.a = 0.95
-		light.a = 0.93
+		light.a = 0.90
 		var cols := PackedColorArray()
 		cols.resize(poly.size())
 		for i in poly.size():
 			var t := clampf((poly[i].y - rect.position.y) / rect.size.y, 0.0, 1.0)
 			var depth := clampf((t - surf) / maxf(LIQUID_BOTTOM - surf, 0.05), 0.0, 1.0)
-			var col := light.lerp(deep, depth)
+			# The upper belly stays on the snapshot colour. Dark pools at the
+			# bottom; only a thin band under the surface lifts and saturates.
+			var lift := clampf(1.0 - depth / 0.10, 0.0, 1.0)
+			lift *= lift
+			var sink := clampf((depth - 0.28) / 0.72, 0.0, 1.0)
+			sink *= sink
+			var col := body.lerp(light, lift)
+			col = col.lerp(deep, sink)
 			var side := absf(poly[i].x - cx) / maxf(rect.size.x * half_width(clampf(t, 0.0, 1.0)), 1.0)
-			col = col.lerp(deep, clampf(side, 0.0, 1.0) * 0.08)
-			col.a = lerpf(0.93, 0.95, depth)
+			col = col.lerp(deep, clampf(side, 0.0, 1.0) * 0.10)
+			col.a = lerpf(0.90, 0.95, sink)
 			cols[i] = col
 		Poly.draw_vertex_colors(c, poly, cols)
 		var men_rx := half_width(surf) * rect.size.x * 0.90
-		var men_ry := maxf(2.2, rect.size.y * 0.018)
-		var men := _ellipse(Vector2(cx, rect.position.y + surf * rect.size.y + men_ry * 0.3), men_rx, men_ry, 18)
-		var men_col := shade(body, 0.08)
-		men_col.a = 0.40
+		var men_ry := maxf(2.8, rect.size.y * 0.024)
+		var men := _ellipse(Vector2(cx, rect.position.y + surf * rect.size.y + men_ry * 0.25), men_rx, men_ry, 18)
+		var men_col := _saturate(shade(body, 0.20), 0.12)
+		men_col.a = 0.55
 		Poly.draw_colored(c, men, men_col)
+		var glow_u := lerpf(surf + 0.05, LIQUID_BOTTOM - 0.02, 0.32)
+		var glow := _ellipse(
+			Vector2(cx - rect.size.x * 0.07, rect.position.y + glow_u * rect.size.y),
+			half_width(glow_u) * rect.size.x * 0.36,
+			maxf(3.0, rect.size.y * 0.055),
+			16
+		)
+		var glow_col := shade(body, 0.12)
+		glow_col.a = 0.13
+		Poly.draw_colored(c, glow, glow_col)
 		var cau_u := lerpf(surf + 0.06, LIQUID_BOTTOM - 0.02, 0.65)
 		var cau := _ellipse(
 			Vector2(cx - rect.size.x * 0.04, rect.position.y + cau_u * rect.size.y),
@@ -286,7 +315,7 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 			14
 		)
 		var cau_col := shade(body, 0.10)
-		cau_col.a = 0.08
+		cau_col.a = 0.10
 		Poly.draw_colored(c, cau, cau_col)
 	if level > 0.08:
 		for i in 3:

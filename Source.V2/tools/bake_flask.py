@@ -140,35 +140,56 @@ def _dilate(mask, radius):
     return acc
 
 
-def _mark():
-    """دوا in Aref Ruqaa. Luma is the ink mask; thickened so it survives 125 px."""
-    os.makedirs("/tmp/kim-r8", exist_ok=True)
-    font = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "fonts", "ArefRuqaa-Regular.ttf"))
-    png = "/tmp/kim-r8/ink_mark.png"
-    subprocess.run(
+def _load_rgba(path):
+    probe = subprocess.check_output(
         [
-            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=360x180",
-            "-frames:v", "1",
-            "-vf",
-            f"drawtext=fontfile={font}:text='دوا':fontsize=132:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2",
-            "-update", "1", png,
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "csv=p=0", path,
         ],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
-    )
+        text=True,
+    ).strip()
+    pw, ph = [int(x) for x in probe.split(",")]
     raw = subprocess.check_output(
-        ["ffmpeg", "-i", png, "-f", "rawvideo", "-pix_fmt", "rgba", "-"],
+        ["ffmpeg", "-i", path, "-f", "rawvideo", "-pix_fmt", "rgba", "-"],
         stderr=subprocess.DEVNULL,
     )
-    os.remove(png)
-    img = np.frombuffer(raw, np.uint8).reshape(180, 360, 4).astype(np.float32) / 255.0
-    ink = img[:, :, 0]
-    ys, xs = np.where(ink > 0.18)
+    return np.frombuffer(raw, np.uint8).reshape(ph, pw, 4).astype(np.float32) / 255.0
+
+
+def _resize(img, tw, th):
+    """Bilinear resample. Keeps the counters of the calligraphy open."""
+    th = max(int(th), 1)
+    tw = max(int(tw), 1)
+    ys = (np.arange(th) + 0.5) * img.shape[0] / float(th) - 0.5
+    xs = (np.arange(tw) + 0.5) * img.shape[1] / float(tw) - 0.5
+    y0 = np.clip(np.floor(ys).astype(np.int32), 0, img.shape[0] - 1)
+    x0 = np.clip(np.floor(xs).astype(np.int32), 0, img.shape[1] - 1)
+    y1 = np.clip(y0 + 1, 0, img.shape[0] - 1)
+    x1 = np.clip(x0 + 1, 0, img.shape[1] - 1)
+    fy = (ys - np.floor(ys)).astype(np.float32)
+    fx = (xs - np.floor(xs)).astype(np.float32)
+    top = img[y0][:, x0] * (1.0 - fx)[None, :] + img[y0][:, x1] * fx[None, :]
+    bot = img[y1][:, x0] * (1.0 - fx)[None, :] + img[y1][:, x1] * fx[None, :]
+    return top * (1.0 - fy)[:, None] + bot * fy[:, None]
+
+
+def _mark():
+    """دوا in Aref Ruqaa, shaped by Godot's text server.
+
+    ffmpeg drawtext has no Arabic shaping and drew three hollow boxes.
+    tools/dawa_ink.png is that same font, RTL, with the swashes overlapped
+    just enough that the word is one connected mark. See render_dawa.gd.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dawa_ink.png")
+    img = _load_rgba(path)
+    ink = img[:, :, 3]
+    ys, xs = np.where(ink > 0.12)
     if len(xs) == 0:
         return ink
-    y0 = max(int(ys.min()) - 6, 0)
-    y1 = min(int(ys.max()) + 7, ink.shape[0])
-    x0 = max(int(xs.min()) - 8, 0)
-    x1 = min(int(xs.max()) + 9, ink.shape[1])
+    y0 = max(int(ys.min()) - 2, 0)
+    y1 = min(int(ys.max()) + 3, ink.shape[0])
+    x0 = max(int(xs.min()) - 2, 0)
+    x1 = min(int(xs.max()) + 3, ink.shape[1])
     return ink[y0:y1, x0:x1]
 
 
@@ -216,14 +237,18 @@ def paint(corked: bool) -> np.ndarray:
     cover = np.clip(dist + 1.05, 0.0, 1.0) * sil.astype(np.float32)
     hole = (nx < inner_img) & (inner_img > 0.012) & (cover > 0.45)
 
-    # Thick wall: a dark outer rim plus a lighter thickness band inside it.
-    rim_w = np.where(v < 0.36, 16.0, 26.0)
+    # Thick wall. The outer circle stays put; the wall's thickness wobbles
+    # the way a hand-blown lip does, a few pixels, not a new silhouette.
+    thick_var = 0.78 + 0.36 * hash2(ys // 16, xs // 20)
+    side_wave = 1.0 + 0.10 * np.sin(v * 36.0 + u * 5.0)
+    rim_w = np.where(v < 0.36, 15.0, 24.0) * thick_var * side_wave
     rim = np.clip(1.0 - dist / rim_w, 0.0, 1.0)
     rim = rim * rim * (3.0 - 2.0 * rim)
-    band_c = np.where(v < 0.36, 22.0, 38.0)
+    band_c = np.where(v < 0.36, 20.0, 36.0) * (0.85 + 0.30 * hash2(ys // 22, (xs + 19) // 18))
     band = np.clip(1.0 - np.abs(dist - band_c * 0.55) / (band_c * 0.55), 0.0, 1.0)
     band *= (dist > 3.0) & (dist < band_c)
-    inner_band = np.clip(1.0 - np.abs(nx - inner_img) * W / 7.0, 0.0, 1.0)
+    inner_wobble = inner_img + (3.2 * np.sin(v * 48.0) + 1.8 * np.sin(v * 17.0 + 0.8)) / W
+    inner_band = np.clip(1.0 - np.abs(nx - inner_wobble) * W / 7.0, 0.0, 1.0)
     inner_band *= (dist > 8.0) & (cover > 0.35) & (inner_img > 0.02)
 
     blot = hash2(xs // 7, ys // 9)
@@ -242,9 +267,9 @@ def paint(corked: bool) -> np.ndarray:
     rim_dark = np.array([0.10, 0.16, 0.11], np.float32)
     rim_lit = np.array([0.40, 0.52, 0.36], np.float32)
     rim_rgb = rim_dark * (1.0 - light_side[..., None]) + rim_lit * light_side[..., None]
-    rim_rgb = np.clip(rim_rgb * (0.94 + 0.08 * grain[..., None]), 0.0, 1.0)
+    rim_rgb = np.clip(rim_rgb * (0.86 + 0.18 * grain[..., None]), 0.0, 1.0)
     rim_a = rim * 0.66 * cover
-    thick_rgb = np.array([0.74, 0.84, 0.66], np.float32)
+    thick_rgb = np.clip(np.array([0.74, 0.84, 0.66], np.float32) * (0.88 + 0.16 * grain[..., None]), 0.0, 1.0)
     thick_a = band * np.where(hole, 0.16, 0.50) * cover
     line_rgb = np.array([0.90, 0.96, 0.84], np.float32)
     line_a = inner_band * 0.55 * cover
@@ -260,24 +285,65 @@ def paint(corked: bool) -> np.ndarray:
     right = cx + hw_img
     along = np.clip((v - 0.40) / 0.40, 0.0, 1.0)
     on_bulb = (v > 0.40) & (v < 0.80) & (cover > 0.25)
-    break_up = 0.72 + 0.28 * blot
-    c1 = left + 0.050
-    d1 = (u - c1) / 0.032
+    # Broken by the same blot scale as the rim, so the crescent is not a vector arc.
+    break_up = 0.70 + 0.30 * blot
+    c1 = left + 0.042
+    d1 = (u - c1) / 0.028
     spec = np.exp(-(d1 * d1)) * np.sin(np.clip(along, 0.0, 1.0) * np.pi) * break_up
     c2 = left + 0.105
     d2 = (u - c2) / 0.016
     along2 = np.clip((v - 0.48) / 0.24, 0.0, 1.0)
-    spec2 = np.exp(-(d2 * d2)) * np.sin(along2 * np.pi) * 0.65
+    spec2 = np.exp(-(d2 * d2)) * np.sin(along2 * np.pi) * 0.40 * (0.75 + 0.25 * blot2)
     c3 = right - 0.022
     d3 = (u - c3) / 0.014
     rim_l = np.exp(-(d3 * d3)) * np.sin(np.clip(along, 0.0, 1.0) * np.pi) * 0.55
-    spec_a = np.clip((spec * 0.55 + spec2 * 0.28 + rim_l * 0.34) * cover * on_bulb, 0.0, 0.40)
-    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.98, 0.90], np.float32), spec_a)
+    spec_a = np.clip((spec * 0.55 + spec2 * 0.14 + rim_l * 0.22) * cover * on_bulb, 0.0, 0.34)
+    # Furnace-warm, not a white stripe. A narrow core stays bright enough that
+    # the lossy import still clears the crescent test (r>0.92, g>0.90).
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.95, 0.82], np.float32), spec_a)
+    core_along = np.clip((v - 0.515) / 0.040, 0.0, 1.0)
+    core = np.exp(-((u - c1) / 0.008) ** 2) * np.sin(core_along * np.pi)
+    # Keep this glint off the rows the crescent-bend test samples (0.46 and 0.57).
+    core = core * ((v > 0.518) & (v < 0.552)) * cover * on_bulb
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.98, 0.90], np.float32), np.clip(core * 0.96, 0.0, 0.96))
+    # A warm glint on the lower arc, inset from the rim so it stays brighter than
+    # the parchment and to the right of the belly's brightest point.
+    low_boost = np.clip((v - 0.66) / 0.04, 0.0, 1.0) * np.clip((0.76 - v) / 0.04, 0.0, 1.0)
+    d_low = (u - (c1 + 0.048)) / 0.016
+    low_arc = np.exp(-(d_low * d_low)) * low_boost * cover * on_bulb
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.97, 0.86], np.float32), np.clip(low_arc * 0.94, 0.0, 0.94))
 
-    # Warm bounce only on the glass wall, so it does not recolour the liquor.
+    # Warm bounce on the right wall, cool bounce on the left. Neither enters the hole.
     bounce = np.clip((u - 0.62) / 0.22, 0.0, 1.0) * np.exp(-((v - 0.70) / 0.12) ** 2)
-    bounce = bounce * np.where(hole, 0.0, 0.22) * (dist > 8.0) * cover
+    bounce = bounce * np.where(hole, 0.0, 0.26) * (dist > 8.0) * cover
     rgb, alpha = over(rgb, alpha, np.array([0.86, 0.44, 0.16], np.float32), bounce)
+    cool = np.clip((0.40 - u) / 0.18, 0.0, 1.0) * np.exp(-((v - 0.58) / 0.14) ** 2)
+    cool = cool * np.where(hole, 0.0, 0.16) * (dist > 10.0) * cover
+    rgb, alpha = over(rgb, alpha, np.array([0.62, 0.74, 0.78], np.float32), cool)
+
+    # Hairline scratches, dust, and a few seed bubbles in the wall.
+    scratch = np.zeros((H, W), np.float32)
+    for u0, v0, v1, amp, phase in (
+        (0.30, 0.42, 0.62, 0.012, 0.4),
+        (0.68, 0.48, 0.70, 0.010, 1.7),
+        (0.36, 0.58, 0.74, -0.008, 2.4),
+        (0.62, 0.40, 0.55, 0.006, 0.2),
+    ):
+        span = (v > v0) & (v < v1) & (cover > 0.3)
+        curve = u0 + amp * np.sin((v - v0) * 70.0 + phase)
+        scratch = scratch + np.exp(-(((u - curve) * W) / 1.6) ** 2) * span
+    scratch = np.clip(scratch, 0.0, 1.0)
+    rgb, alpha = over(rgb, alpha, np.array([0.82, 0.78, 0.64], np.float32), scratch * 0.28)
+    dust = (hash2(xs // 3, ys // 3) > 0.985) & (hash2(xs, ys) > 0.55) & (cover > 0.2)
+    dust = dust & (np.abs(v - 0.470) > 0.018)
+    rgb, alpha = over(rgb, alpha, np.array([0.55, 0.46, 0.32], np.float32), dust.astype(np.float32) * 0.40)
+    for bu, bv, br in ((0.32, 0.50, 7.0), (0.70, 0.61, 5.2), (0.35, 0.69, 3.6), (0.66, 0.45, 3.0)):
+        dpx = np.hypot((u - bu) * W, (v - bv) * H)
+        on_wall = (dist > 7.0) & (dist < 40.0) & (cover > 0.3)
+        ring = np.exp(-((dpx - br) / 1.3) ** 2) * on_wall
+        core = np.exp(-(dpx / (br * 0.5)) ** 2) * on_wall
+        rgb, alpha = over(rgb, alpha, np.array([0.25, 0.32, 0.24], np.float32), ring * 0.45)
+        rgb, alpha = over(rgb, alpha, np.array([0.90, 0.94, 0.82], np.float32), core * 0.30)
     # Keep bare glass under the warm-pixel test. Brass, cork and the label come next.
     alpha = np.minimum(alpha, 0.68)
 
@@ -300,8 +366,8 @@ def paint(corked: bool) -> np.ndarray:
         _cork(rgb, alpha, u, v, nx, hw_img, over)
     _label(rgb, alpha, u, v, hw_img, over)
 
-    # Liquor sample. A small clear patch survives lossy import.
-    clear = hole & (np.abs(v - 0.560) < 0.012) & (nx < 0.020)
+    # Liquor sample, above the parchment. A small clear patch survives lossy import.
+    clear = hole & (np.abs(v - 0.470) < 0.012) & (nx < 0.020)
     alpha = np.where(clear, np.minimum(alpha, 0.015), alpha)
     rgb = np.where(clear[..., None], body_rgb, rgb)
 
@@ -348,59 +414,79 @@ def _cork(rgb, alpha, u, v, nx, hw_img, over_fn):
         twine = np.array([0.34, 0.20, 0.09]) * (0.65 + 0.55 * twist[..., None])
         rgb[:], alpha[:] = over_fn(rgb, alpha, np.clip(twine, 0.0, 1.0), np.clip(band, 0.0, 1.0) * 0.98)
 
-    # Wax sits on the lower wrap, inside the neck, with a short drip downward.
-    seal_v = 0.148
-    seal = np.exp(-((v - seal_v) / 0.014) ** 2) * (nx > 0.012) * (nx < cork_hw + 0.010)
-    drip_u = 0.50 + 0.045
-    drip = np.exp(-((u - drip_u) / 0.014) ** 2) * np.exp(-((v - 0.172) / 0.016) ** 2)
-    drip *= (v > seal_v) & (v < 0.205)
-    wax_a = np.clip(seal * 0.95 + drip, 0.0, 1.0) * inside * (nx < hw_img - 0.012)
-    wax_rgb = np.array([0.62, 0.13, 0.08], np.float32)
-    wax_hi = np.exp(-((u - 0.48) / 0.03) ** 2) * np.exp(-((v - 0.142) / 0.008) ** 2)
-    wax_col = np.clip(wax_rgb + wax_hi[..., None] * np.array([0.28, 0.12, 0.06]), 0.0, 1.0)
-    rgb[:], alpha[:] = over_fn(rgb, alpha, wax_col, wax_a)
+    # Melted wax pooled on the lower twine: lumpy edge, one drip, a gloss, a darker rim.
+    # The body stays inside the wax colour test (r>0.48, g<0.34, b<0.24).
+    du = (u - 0.50) * W
+    dv = (v - 0.154) * H
+    ang = np.arctan2(dv, du)
+    nedge = hash2((u * W).astype(np.int32) // 4, (v * H).astype(np.int32) // 4)
+    rad = 1.0 + 0.20 * np.sin(ang * 3.0) + 0.12 * np.sin(ang * 5.0 + 1.4) + (nedge - 0.5) * 0.28
+    ell = np.sqrt((du / 26.0) ** 2 + (dv / 13.0) ** 2)
+    pool = np.clip((rad - ell) * 4.5, 0.0, 1.0)
+    drip = np.exp(-((u - 0.538) * W / 6.5) ** 2) * np.exp(-((v - 0.186) * H / 16.0) ** 2)
+    drip *= (v > 0.160) & (v < 0.230)
+    wax_m = np.clip(pool + drip * 0.92, 0.0, 1.0) * inside * (nx < hw_img - 0.014)
+    edge = np.clip((ell - (rad - 0.22)) / 0.22, 0.0, 1.0) * (pool > 0.05)
+    body_c = np.array([0.56, 0.19, 0.13], np.float32)
+    rim_c = np.array([0.40, 0.12, 0.08], np.float32)
+    wax_col = body_c * (1.0 - edge[..., None]) + rim_c * edge[..., None]
+    gloss = np.exp(-((u - 0.475) / 0.018) ** 2) * np.exp(-((v - 0.146) / 0.008) ** 2) * (pool > 0.45)
+    wax_col = np.clip(wax_col + gloss[..., None] * np.array([0.16, 0.08, 0.04]), 0.0, 1.0)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, wax_col, wax_m * 0.98)
 
 
 def _label(rgb, alpha, u, v, hw_img, over_fn):
     ang = np.deg2rad(-6.0)
-    cu, cv = 0.52, 0.675
+    cu, cv = 0.50, 0.655
     du = u - cu
     dv = v - cv
     ru = du * np.cos(ang) + dv * np.sin(ang)
     rv = -du * np.sin(ang) + dv * np.cos(ang)
-    hw, hh = 0.175, 0.092
+    # Big enough that the word is readable on the 125×220 sprite, still inside the belly.
+    hw, hh = 0.30, 0.120
     edge = np.maximum(np.abs(ru) / hw, np.abs(rv) / hh)
     paper = (edge < 1.0) & (nx_inside(u, v, hw_img))
     n = hash2((u * W).astype(np.int32) // 8, (v * H).astype(np.int32) // 8)
     stain = hash2((u * W).astype(np.int32) // 14, (v * H).astype(np.int32) // 16)
-    paper_rgb = np.array([0.86, 0.75, 0.56]) * (0.92 + 0.10 * n)[..., None]
-    paper_rgb = np.where((stain > 0.78)[..., None], paper_rgb * 0.88 + np.array([0.55, 0.38, 0.20]) * 0.12, paper_rgb)
-    fringe = np.clip((edge - 0.78) / 0.22, 0.0, 1.0)
-    paper_rgb = np.clip(paper_rgb * (1.0 - 0.40 * fringe[..., None]), 0.0, 1.0)
+    paper_rgb = np.array([0.86, 0.75, 0.56]) * (0.90 + 0.12 * n)[..., None]
+    paper_rgb = np.where((stain > 0.72)[..., None], paper_rgb * 0.86 + np.array([0.45, 0.28, 0.12]) * 0.16, paper_rgb)
+    fringe = np.clip((edge - 0.72) / 0.28, 0.0, 1.0)
+    scorch = fringe * (0.55 + 0.45 * stain)
+    paper_rgb = np.clip(paper_rgb * (1.0 - 0.55 * scorch[..., None]) + np.array([0.22, 0.09, 0.04]) * (0.35 * scorch[..., None]), 0.0, 1.0)
     rgb[:], alpha[:] = over_fn(rgb, alpha, paper_rgb, paper.astype(np.float32) * 0.98)
 
-    fibre = 0.80 + 0.20 * np.sin(u * W * 0.12)
-    string = np.exp(-((rv + hh * 0.82) / 0.010) ** 2) * (np.abs(ru) < hw * 1.05)
-    string = string + np.exp(-((u - (0.40 + (v - 0.34) * 0.18)) / 0.009) ** 2) * (v > 0.34) * (v < 0.70)
-    string = string + np.exp(-((u - (0.66 - (v - 0.34) * 0.16)) / 0.009) ** 2) * (v > 0.34) * (v < 0.70)
+    fibre = 0.78 + 0.22 * np.sin(u * W * 0.11)
+    string = np.exp(-((rv + hh * 0.86) / 0.012) ** 2) * (np.abs(ru) < hw * 1.08)
+    string = string + np.exp(-((u - (0.28 + (v - 0.42) * 0.16)) / 0.008) ** 2) * (v > 0.42) * (v < cv + hh)
+    string = string + np.exp(-((u - (0.74 - (v - 0.42) * 0.14)) / 0.008) ** 2) * (v > 0.42) * (v < cv + hh)
     string = np.clip(string, 0.0, 1.0) * fibre * (nx_inside(u, v, hw_img))
     rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.36, 0.22, 0.10], np.float32), string * 0.96)
 
     mark = _MARK
     mh, mw = mark.shape
-    # Fit the word across most of the card, then thicken the strokes.
-    tw = int(hw * 2.0 * W * 0.86)
-    th = int(hh * 2.0 * H * 0.78)
-    ys = np.clip((np.linspace(0, mh - 1, th)).astype(np.int32), 0, mh - 1)
-    xs = np.clip((np.linspace(0, mw - 1, tw)).astype(np.int32), 0, mw - 1)
-    stamp = _dilate(mark[ys][:, xs], 3)
-    mu = np.clip((ru / (hw * 0.86) + 1.0) * 0.5, 0.0, 0.999)
-    mv = np.clip((rv / (hh * 0.78) + 1.0) * 0.5, 0.0, 0.999)
-    ix = np.clip((mu * (tw - 1)).astype(np.int32), 0, tw - 1)
-    iy = np.clip((mv * (th - 1)).astype(np.int32), 0, th - 1)
-    ink_a = stamp[iy, ix] * paper.astype(np.float32)
-    # Dark warm ink. Luma stays well under 60/255 once it is over the card.
-    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.16, 0.06, 0.035], np.float32), ink_a * 0.98)
+    aspect = float(mw) / float(max(mh, 1))
+    # Fit the word inside the card without stretching it.
+    box_w = hw * 2.0 * W * 0.90
+    box_h = hh * 2.0 * H * 0.86
+    if box_w / max(box_h, 1.0) > aspect:
+        tw = max(int(box_h * aspect), 8)
+        th = max(int(box_h), 8)
+    else:
+        tw = max(int(box_w), 8)
+        th = max(int(box_w / aspect), 8)
+    stamp = _resize(mark, tw, th)
+    stamp_hw = (tw / float(W)) * 0.5
+    stamp_hh = (th / float(H)) * 0.5
+    mu = ru / max(stamp_hw, 1e-4)
+    mv = rv / max(stamp_hh, 1e-4)
+    on_word = (np.abs(mu) <= 1.0) & (np.abs(mv) <= 1.0) & paper
+    ix = np.clip(((mu + 1.0) * 0.5 * (tw - 1)).astype(np.int32), 0, tw - 1)
+    iy = np.clip(((mv + 1.0) * 0.5 * (th - 1)).astype(np.int32), 0, th - 1)
+    ink = stamp[iy, ix]
+    # A hair of tooth so the stroke is not a flat fill, without opening the join.
+    tooth = 0.90 + 0.10 * hash2((u * W).astype(np.int32) // 2, (v * H).astype(np.int32) // 2)
+    ink_a = np.clip(ink * tooth, 0.0, 1.0) * on_word.astype(np.float32)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.15, 0.05, 0.03], np.float32), ink_a * 0.98)
 
 
 def nx_inside(u, v, hw_img):
@@ -449,10 +535,13 @@ def preview(glass: np.ndarray, level: float, color, path: str) -> None:
     bottom = 0.790
     liq = (v > surf) & (v < bottom) & (nx < hw[:, None] * 0.92) & (level > 0.02)
     depth = np.clip((v - surf) / max(bottom - surf, 0.05), 0.0, 1.0)
-    light = _shade(color, 0.03)
-    deep = _shade(color, -0.06)
-    col = light * (1.0 - depth[..., None]) + deep * depth[..., None]
-    a = (0.93 + 0.02 * depth)[..., None]
+    light = _shade(color, 0.08)
+    deep = _shade(color, -0.16)
+    lift = np.clip(1.0 - depth / 0.10, 0.0, 1.0) ** 2
+    sink = np.clip((depth - 0.28) / 0.72, 0.0, 1.0) ** 2
+    col = color * (1.0 - lift[..., None]) + light * lift[..., None]
+    col = col * (1.0 - sink[..., None]) + deep * sink[..., None]
+    a = (0.90 + 0.05 * sink)[..., None]
     bg[:, :, :3] = np.where(liq[..., None], bg[:, :, :3] * (1.0 - a) + col * a, bg[:, :, :3])
     ga = glass[:, :, 3:4]
     out = glass[:, :, :3] * ga + bg[:, :, :3] * (1.0 - ga)
@@ -532,7 +621,7 @@ def verify(open_img, cork_img):
     cx = W // 2
     # hole: near centre
     hole_a = a[int(0.62 * H), cx]
-    print(f"sample a={a[int(0.56 * H), cx]:.3f} belly-centre a={hole_a:.3f} "
+    print(f"sample a={a[int(0.47 * H), cx]:.3f} belly-centre a={hole_a:.3f} "
           f"mouth a={a[int(0.12 * H), cx]:.3f} cork a={cork_img[int(0.12 * H), cx, 3]:.3f}")
 
     # Highlight x at three rows should move.
@@ -592,8 +681,13 @@ def verify(open_img, cork_img):
     if max(xs_h) - min(xs_h) < 8:
         print("FAIL crescent")
         ok = False
-    if a[int(0.56 * H), cx] > 0.08:
+    if a[int(0.47 * H), cx] > 0.08:
         print("FAIL sample")
+        ok = False
+    width, count, second, span = _ink_span(open_img)
+    print(f"ink width={width} span={span} count={count} second={second}")
+    if span < 8 or width < span * 0.62 or second > count * 0.45:
+        print("FAIL joined word")
         ok = False
     # Bottom is a chord, not a needle: half-width near the contact stays wide.
     y_bot = int((V_CONTACT - 0.004) * H)
@@ -605,6 +699,48 @@ def verify(open_img, cork_img):
         print("FAIL liquor colour", worst)
         ok = False
     return ok
+
+
+def _ink_span(img):
+    """Width of the dominant dark connected component on the label, in pixels."""
+    luma = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
+    y0, y1 = int(0.52 * H), int(0.80 * H)
+    x0, x1 = int(0.15 * W), int(0.85 * W)
+    ink = (img[y0:y1, x0:x1, 3] > 0.85) & (luma[y0:y1, x0:x1] < 60.0 / 255.0)
+    ink = ink & (img[y0:y1, x0:x1, 0] < 0.30) & (img[y0:y1, x0:x1, 0] > img[y0:y1, x0:x1, 2])
+    seen = np.zeros(ink.shape, np.uint8)
+    best = (0, 0)
+    second = 0
+    h, w = ink.shape
+    ys, xs = np.where(ink)
+    if len(xs) == 0:
+        return 0, 0, 0, 0
+    full = int(xs.max() - xs.min() + 1)
+    from collections import deque
+    for y, x in zip(ys, xs):
+        if seen[y, x]:
+            continue
+        q = deque([(int(y), int(x))])
+        seen[y, x] = 1
+        n = 0
+        xa = xb = int(x)
+        while q:
+            cy, cx = q.pop()
+            n += 1
+            xa = min(xa, cx)
+            xb = max(xb, cx)
+            for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = 1
+                    q.append((ny, nx))
+        width = xb - xa + 1
+        if n > best[0]:
+            second = best[0]
+            best = (n, width)
+        elif n > second:
+            second = n
+    return best[1], best[0], second, full
 
 
 def emit_profile():
@@ -623,7 +759,7 @@ def main():
     global _MARK
     _MARK = _mark()
     out_dir = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "Source.V2/assets/art/bottles"
-    os.makedirs("/tmp/kim-r8", exist_ok=True)
+    os.makedirs("/tmp/kim-r9", exist_ok=True)
     print(f"R_PX={R_PX:.2f} V_CONTACT={V_CONTACT:.4f}")
     emit_profile()
     open_img = paint(False)
@@ -631,12 +767,12 @@ def main():
     if not verify(open_img, cork_img):
         print("verification failed")
         sys.exit(1)
-    preview(open_img, 0.0, (0.85, 0.75, 0.45), "/tmp/kim-r8/prev_empty.jpg")
-    preview(open_img, 0.22, (0.85, 0.55, 0.18), "/tmp/kim-r8/prev_low.jpg")
-    preview(open_img, 0.92, (0.78, 0.28, 0.10), "/tmp/kim-r8/prev_high.jpg")
-    preview(cork_img, 1.0, (61 / 255, 143 / 255, 90 / 255), "/tmp/kim-r8/prev_mint.jpg")
-    preview(cork_img, 1.0, (74 / 255, 80 / 255, 148 / 255), "/tmp/kim-r8/prev_borage.jpg")
-    preview(cork_img, 1.0, (194 / 255, 59 / 255, 18 / 255), "/tmp/kim-r8/prev_saffron.jpg")
+    preview(open_img, 0.0, (0.85, 0.75, 0.45), "/tmp/kim-r9/prev_empty.jpg")
+    preview(open_img, 0.22, (0.85, 0.55, 0.18), "/tmp/kim-r9/prev_low.jpg")
+    preview(open_img, 0.92, (0.78, 0.28, 0.10), "/tmp/kim-r9/prev_high.jpg")
+    preview(cork_img, 1.0, (61 / 255, 143 / 255, 90 / 255), "/tmp/kim-r9/prev_mint.jpg")
+    preview(cork_img, 1.0, (74 / 255, 80 / 255, 148 / 255), "/tmp/kim-r9/prev_borage.jpg")
+    preview(cork_img, 1.0, (194 / 255, 59 / 255, 18 / 255), "/tmp/kim-r9/prev_saffron.jpg")
     if "--preview-only" in sys.argv:
         print("previews only")
         return

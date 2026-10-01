@@ -79,6 +79,7 @@ func _run() -> void:
 	_round6()
 	_round7()
 	_round8()
+	_round9()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -1518,6 +1519,82 @@ func _round8() -> void:
 		wall += img.get_pixel(x, wy).a
 		wall_n += 1
 	check(wall_n > 0 and wall / float(wall_n) > 0.35, "the glass wall reads at desk size %s" % (wall / float(maxi(wall_n, 1))))
+
+
+func _round9() -> void:
+	var open_tex: Texture2D = load("res://assets/art/bottles/glass_open.webp")
+	var img: Image = open_tex.get_image()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var y0 := int(0.52 * float(h))
+	var y1 := int(0.80 * float(h))
+	var x0 := int(0.15 * float(w))
+	var x1 := int(0.82 * float(w))
+	var bw := x1 - x0
+	var bh := y1 - y0
+	var mask := PackedByteArray()
+	mask.resize(bw * bh)
+	var ink_l := x1
+	var ink_r := x0
+	var ink_n := 0
+	for y in range(y0, y1):
+		for x in range(x0, x1):
+			var px: Color = img.get_pixel(x, y)
+			var luma := 0.299 * px.r + 0.587 * px.g + 0.114 * px.b
+			if px.a > 0.85 and luma < 60.0 / 255.0 and px.r < 0.30 and px.r > px.b:
+				mask[(y - y0) * bw + (x - x0)] = 1
+				ink_n += 1
+				ink_l = mini(ink_l, x)
+				ink_r = maxi(ink_r, x)
+	check(ink_n > 400, "the word has a body of ink, %s px" % ink_n)
+	var seen := PackedByteArray()
+	seen.resize(bw * bh)
+	var best_n := 0
+	var best_w := 0
+	var second_n := 0
+	var stack: Array[int] = []
+	for y in bh:
+		for x in bw:
+			var start := y * bw + x
+			if mask[start] == 0 or seen[start] != 0:
+				continue
+			stack.clear()
+			stack.append(start)
+			seen[start] = 1
+			var n := 0
+			var xa := x
+			var xb := x
+			var sp := 0
+			while sp < stack.size():
+				var cur: int = stack[sp]
+				sp += 1
+				n += 1
+				var cx := cur % bw
+				var cy := int(cur / bw)
+				xa = mini(xa, cx)
+				xb = maxi(xb, cx)
+				for nb in [cur - 1, cur + 1, cur - bw, cur + bw]:
+					if nb < 0 or nb >= bw * bh:
+						continue
+					if cur % bw == 0 and nb == cur - 1:
+						continue
+					if cur % bw == bw - 1 and nb == cur + 1:
+						continue
+					if mask[nb] == 1 and seen[nb] == 0:
+						seen[nb] = 1
+						stack.append(nb)
+			var width := xb - xa + 1
+			if n > best_n:
+				second_n = best_n
+				best_n = n
+				best_w = width
+			elif n > second_n:
+				second_n = n
+	var span := ink_r - ink_l + 1
+	check(best_w > int(float(span) * 0.62), "the ink is one word across the label, width %s of %s" % [best_w, span])
+	check(second_n * 2 < best_n, "the word is not three separate boxes, %s vs %s" % [best_n, second_n])
 
 
 func _far_pixel(a: Image, b: Image, y0: float, y1: float) -> Vector2i:
