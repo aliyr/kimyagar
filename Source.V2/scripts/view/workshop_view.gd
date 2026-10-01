@@ -67,6 +67,10 @@ var _bottle: TextureRect
 var _pour_bottle: TextureRect
 var _bottle_fill: Control
 var _bottle_draw_key := ""
+var _water_draw_key := ""
+## "" shelf, "desk" intact bottle on the counter, "hand" the customer is carrying it.
+var _carry := ""
+var _carry_t := 0.0
 var _stream: Control
 var _pestle: TextureRect
 var _mortar_fx: Control
@@ -500,8 +504,9 @@ func _build() -> void:
 	var note := Control.new()
 	note.position = ZONE_NOTE.position
 	note.size = ZONE_NOTE.size
+	note.name = "CustomerNote"
 	note.mouse_filter = MOUSE_FILTER_IGNORE
-	note.clip_contents = false
+	note.clip_contents = true
 	# drop-shadow(0 10px 18px rgba(0,0,0,0.6))
 	for shade_i in 3:
 		var dy := 6.0 + float(shade_i) * 6.0
@@ -509,13 +514,23 @@ func _build() -> void:
 		note_shade.modulate = Color(0, 0, 0, 0.22 - float(shade_i) * 0.04)
 		note.add_child(note_shade)
 	note.add_child(UiKit.sprite("goal/goal_note.png", Rect2(Vector2.ZERO, ZONE_NOTE.size), "cover"))
-	# .note__content inset 16px 42px 14px. who is 20px, summary is 25px bold.
-	_note_who = UiKit.label("", Rect2(42, 16, 346, 28), 20, Color(0.231, 0.173, 0.075, 0.7), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT)
-	_note_sum = UiKit.label("", Rect2(42, 46, 346, 78), 25, Color("3b2c13"), UiKit.bold, HORIZONTAL_ALIGNMENT_RIGHT)
-	_note_who.clip_text = false
-	_note_sum.clip_text = false
+	# Same Vazirmatn scale as the overlays. Both lines stay inside the card.
+	_note_who = UiKit.label("", Rect2(28, 14, 374, 26), 16, Color("5c4310"), UiKit.medium, HORIZONTAL_ALIGNMENT_RIGHT)
+	_note_sum = UiKit.label("", Rect2(28, 42, 374, 92), 15, Color("2b1d12"), UiKit.regular, HORIZONTAL_ALIGNMENT_RIGHT)
+	_note_who.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_note_sum.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_note_who.add_theme_constant_override("line_spacing", 4)
+	_note_sum.add_theme_constant_override("line_spacing", 4)
+	_note_who.clip_text = true
+	_note_sum.clip_text = true
 	note.add_child(_note_who)
+	_note_who.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_note_who.position = Vector2(28, 14)
+	_note_who.size = Vector2(374, 26)
 	note.add_child(_note_sum)
+	_note_sum.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_note_sum.position = Vector2(28, 42)
+	_note_sum.size = Vector2(374, 92)
 	var pin := _note_pin()
 	pin.position = Vector2(ZONE_NOTE.size.x - 42.0 - 26.0, -8.0)
 	pin.size = Vector2(26, 26)
@@ -850,16 +865,28 @@ func _sync_liquid() -> void:
 		_stream.queue_redraw()
 	if _bottle_fill:
 		var bottle_key := _bottle_paint_key()
-		if pour != "" or bottle_key != _bottle_draw_key:
+		var bottle_moving := pour != "" or _carry == "hand"
+		if bottle_moving or bottle_key != _bottle_draw_key:
 			_bottle_draw_key = bottle_key
 			_bottle_fill.queue_redraw()
+		var fade := 1.0
+		if _carry != "" and pour == "" and _pour_bottle:
+			fade = _pour_bottle.modulate.a
+		_bottle_fill.modulate.a = fade
 	_sync_bottle_glass()
+	_release_orphaned_bottle()
 	if _smoke and _haze > 0.01:
 		_smoke.queue_redraw()
 	var entries: Array = Game.brew["entries"]
 	var brewing := (not entries.is_empty()) or pour != "" or _stirring or discard_t >= 0.0
 	if _brew_painter:
 		_brew_painter.draw_steam = Settings.effects_enabled
+	# The throw hides the water discs. Once the pot is back, a settled key
+	# redraws them even though the brew is empty. Idle frames do not.
+	var water_key := _water_paint_key()
+	if water_key != _water_draw_key:
+		_water_draw_key = water_key
+		brewing = true
 	if brewing:
 		if _fx:
 			_fx.queue_redraw()
@@ -1229,9 +1256,25 @@ func _fallback_chips(id: String, qty: float, work: float, color: Color) -> Array
 	return out
 
 
+func _water_paint_key() -> String:
+	if _brew == null or not _brew_drawable():
+		return "hidden"
+	var col: Color = _brew.mix_liquid()
+	# Coarse buckets so a settled pot does not redraw every idle frame.
+	var fb := floorf(float(_brew.fill) * 20.0) / 20.0
+	var cr := floorf(col.r * 50.0) / 50.0
+	var cg := floorf(col.g * 50.0) / 50.0
+	var cb := floorf(col.b * 50.0) / 50.0
+	return "show:%.2f:%.2f:%.2f:%.2f" % [fb, cr, cg, cb]
+
+
 func _bottle_paint_key() -> String:
 	if pour != "":
 		return "pour"
+	if _carry != "":
+		var carried: Array = Game.brew["entries"]
+		var ink := GlassLib.blend_color(carried, Callable(self, "_ingredient_color"), 1.0)
+		return "carry:%s:%.3f:%.3f:%.3f" % [_carry, ink.r, ink.g, ink.b]
 	if bool(Game.brew.get("bottled", false)):
 		var entries: Array = Game.brew["entries"]
 		var body := GlassLib.blend_color(entries, Callable(self, "_ingredient_color"), 1.0)
@@ -1242,13 +1285,14 @@ func _bottle_paint_key() -> String:
 func _sync_bottle_glass() -> void:
 	if _bottle == null:
 		return
-	var corked_rest := bool(Game.brew.get("bottled", false)) and pour != "tilt" and pour != "stream"
+	var corked_rest := bool(Game.brew.get("bottled", false)) and _carry == "" and pour != "tilt" and pour != "stream"
 	var rest_tex := UiKit.tex(GLASS_CORK if corked_rest else GLASS_OPEN)
 	if rest_tex != null and _bottle.texture != rest_tex:
 		_bottle.texture = rest_tex
 	if _pour_bottle == null:
 		return
-	var pour_tex := UiKit.tex(GLASS_CORK if pour == "deliver" else GLASS_OPEN)
+	var pour_cork := pour == "deliver" or _carry == "desk" or _carry == "hand"
+	var pour_tex := UiKit.tex(GLASS_CORK if pour_cork else GLASS_OPEN)
 	if pour_tex != null and _pour_bottle.texture != pour_tex:
 		_pour_bottle.texture = pour_tex
 
@@ -1257,10 +1301,14 @@ func _draw_bottle_fill(c: Control) -> void:
 	var phase := pour
 	var node: TextureRect = _pour_bottle
 	if pour == "":
-		if not bool(Game.brew.get("bottled", false)):
+		if _carry != "":
+			phase = "rest"
+			node = _pour_bottle
+		elif not bool(Game.brew.get("bottled", false)):
 			return
-		phase = "rest"
-		node = _bottle
+		else:
+			phase = "rest"
+			node = _bottle
 	if node == null or not node.visible:
 		return
 	var rect := Rect2(node.position, node.size)
@@ -1516,8 +1564,9 @@ func _try_bottle() -> void:
 func _tick_pour(dt: float) -> void:
 	if pour == "":
 		_cauldron_angle = 0.0
-		if _pour_bottle:
+		if _pour_bottle and _carry == "":
 			_pour_bottle.visible = false
+			_lift_bottle(false)
 		return
 	if hold_pour:
 		_place_pour_bottle()
@@ -1544,11 +1593,14 @@ func _tick_pour(dt: float) -> void:
 		_cauldron_angle = 0.0
 		if _pot_pivot:
 			_pot_pivot.rotation = 0
+		_park_bottle()
 		if Game.result != null:
 			Sfx.deliver_sfx()
 			Haptics.pulse("heavy")
 			Game.open_overlay_action("result")
 			Game.deliver()
+		_sync_pour_camera()
+		return
 	_place_pour_bottle()
 	_sync_pour_camera()
 
@@ -1560,16 +1612,97 @@ func _tilted_rim() -> Vector2:
 	return Vector2(_pot_base.x + rx * cos(a) - ry * sin(a), _pot_base.y + rx * sin(a) + ry * cos(a))
 
 
+func _release_orphaned_bottle() -> void:
+	if _carry == "" or pour != "":
+		return
+	if bool(Game.brew.get("bottled", false)):
+		return
+	if _cust_phase == "leave" or _cust_phase == "react":
+		return
+	_clear_carry()
+
+
+func _counter_spot() -> Vector2:
+	var counter_y := ZONE_COUNTER.position.y + (ZONE_COUNTER.size.y * 72.0 / 620.0)
+	return Vector2(1560, counter_y - 196)
+
+
+func _park_bottle() -> void:
+	_carry = "desk"
+	_carry_t = 0.0
+	if _pour_bottle == null:
+		return
+	_pour_bottle.visible = true
+	_pour_bottle.modulate.a = 1.0
+	_pour_bottle.position = _counter_spot()
+	_lift_bottle(true)
+	if _bottle:
+		_bottle.visible = discard_t < 0.0
+	_sync_bottle_glass()
+
+
+func _clear_carry() -> void:
+	_carry = ""
+	_carry_t = 0.0
+	_lift_bottle(false)
+	if _pour_bottle:
+		_pour_bottle.modulate.a = 1.0
+		if pour == "":
+			_pour_bottle.visible = false
+	if _bottle_fill:
+		_bottle_fill.modulate.a = 1.0
+
+
+func _pickup_bottle(along: float) -> void:
+	if _carry != "desk" and _carry != "hand":
+		return
+	if _carry == "desk":
+		_carry = "hand"
+		_carry_t = along
+	_lift_bottle(true)
+
+
+func _lift_bottle(on: bool) -> void:
+	if _pour_bottle:
+		_pour_bottle.z_as_relative = not on
+		_pour_bottle.z_index = 30 if on else 7
+	if _bottle_fill:
+		_bottle_fill.z_as_relative = not on
+		_bottle_fill.z_index = 29 if on else 6
+
+
+func _tick_carry(dt: float) -> void:
+	_release_orphaned_bottle()
+	if _carry == "" or _pour_bottle == null or pour != "":
+		return
+	_pour_bottle.visible = true
+	_lift_bottle(true)
+	if _carry == "desk":
+		_pour_bottle.position = _counter_spot()
+		_pour_bottle.modulate.a = 1.0
+		return
+	_carry_t += dt
+	var u := clampf(_carry_t / 0.45, 0.0, 1.0)
+	var hand := _counter_spot()
+	if _customer:
+		hand = _customer.position + Vector2(ZONE_CUSTOMER.size.x * 0.22, ZONE_CUSTOMER.size.y * 0.42)
+	_pour_bottle.position = _counter_spot().lerp(hand, u)
+	var alpha := 1.0
+	if _cust_phase == "leave" and _customer:
+		alpha = _customer.modulate.a
+	_pour_bottle.modulate.a = alpha
+	_pour_bottle.visible = alpha > 0.03
+
+
 func _place_pour_bottle() -> void:
 	if _pour_bottle == null:
 		return
 	_pour_bottle.visible = pour == "tilt" or pour == "stream" or pour == "deliver"
 	if _bottle:
-		_bottle.visible = not _pour_bottle.visible
+		_bottle.visible = not _pour_bottle.visible and discard_t < 0.0
 	var rim := _tilted_rim()
 	var fill_pos := Vector2(rim.x + 28 - ZONE_BOTTLE.size.x * 0.5, rim.y + 30)
-	var counter_y := ZONE_COUNTER.position.y + (ZONE_COUNTER.size.y * 72.0 / 620.0)
-	var spot := Vector2(1560, counter_y - 196)
+	var spot := _counter_spot()
 	if pour == "tilt":
 		var u := clampf(pour_t / 0.5, 0.0, 1.0)
 		_pour_bottle.position = ZONE_BOTTLE.position.lerp(fill_pos, u)
@@ -1842,6 +1975,7 @@ func begin_discard() -> void:
 		_brew.hide_pot()
 		_brew.reset()
 	pour = ""
+	_clear_carry()
 	transfer_t = -1.0
 	discard_t = 0.0
 	_stain = false
@@ -2272,6 +2406,7 @@ func _tick_customer(dt: float) -> void:
 		_cust_t = 0.0
 		_cust_steps = 0
 		_cust_paper = false
+		_pickup_bottle(0.35)
 	elif Game.evaluation != null and _cust_phase != "leave":
 		if _cust_phase != "react":
 			_cust_phase = "react"
@@ -2280,6 +2415,7 @@ func _tick_customer(dt: float) -> void:
 			_cust_steps = 0
 			var band := str(Game.evaluation.get("band", ""))
 			_cust_emo = "_happy" if band == "excellent" or band == "good" else "_sad"
+			_pickup_bottle(0.0)
 	elif _cust_phase == "react":
 		_cust_phase = "idle"
 		_cust_t = 0.0
@@ -2299,6 +2435,7 @@ func _tick_customer(dt: float) -> void:
 		_cust_t = 0.0
 		_cust_steps = 0
 		_cust_paper = false
+		_clear_carry()
 		Sfx.paper()
 		if _tilt_mode != "off" and pour == "":
 			_set_camera(_customer_focus(), 1.16, 1.0, true, "enter")
@@ -2308,6 +2445,7 @@ func _tick_customer(dt: float) -> void:
 		_cust_paper = true
 		Sfx.paper()
 	_apply_customer_visual()
+	_tick_carry(0.0 if _cust_hold else dt)
 
 
 func _step_sound() -> void:

@@ -75,6 +75,7 @@ func _run() -> void:
 	_round2()
 	_round3()
 	_round4()
+	_round5()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -943,10 +944,276 @@ func _round4() -> void:
 	var overlays: Node = main.get_node("ChromeLayer/Overlays")
 	game.open_overlay = "notebook"
 	overlays.advance(0.0)
-	check(overlays.get_node_or_null("WaxSeal") != null, "the notebook page has a wax seal")
+	check(overlays.find_child("WaxSeal", true, false) != null, "the notebook page has a wax seal")
 	game.open_overlay = null
 	root.remove_child(main)
 	main.free()
+
+
+func _round5() -> void:
+	var glass: GDScript = load("res://scripts/fx/bottle_glass.gd")
+	var cork_tex: Texture2D = load("res://assets/art/bottles/glass_cork.webp")
+	var cork_img := cork_tex.get_image()
+	if cork_img.get_format() != Image.FORMAT_RGBA8:
+		cork_img.convert(Image.FORMAT_RGBA8)
+	var warm := 0
+	var opaque := 0
+	for y in range(0, cork_img.get_height(), 3):
+		for x in range(0, cork_img.get_width(), 3):
+			var px: Color = cork_img.get_pixel(x, y)
+			if px.a < 0.75:
+				continue
+			opaque += 1
+			if px.r > px.b + 0.12 and px.r > 0.35:
+				warm += 1
+	check(opaque > 40, "the corked bottle has a solid rim")
+	check(warm * 2 > opaque, "the bottle is brass, copper and wood, warm %s of %s" % [warm, opaque])
+	check(not FileAccess.file_exists("res://assets/art/bottles/bottle_open.png"), "old bottle art is gone")
+	check(not FileAccess.file_exists("res://assets/art/bottles/bottle_full.png"), "old full bottle art is gone")
+	var packed: PackedScene = load("res://scenes/main.tscn")
+	var main: Node = packed.instantiate()
+	root.add_child(main)
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	var overlays: Node = main.get_node("ChromeLayer/Overlays")
+	var settings: Node = root.get_node("Settings")
+	var sfx: Node = root.get_node("Sfx")
+	check(sfx.has_method("page_turn") and sfx.has_method("pen_scratch"), "paper sounds are synthesized")
+	sfx.page_turn()
+	sfx.pen_scratch()
+	var water := Color("#3f6f8f")
+	var paint := func(tag: String, want_blue: bool) -> void:
+		workshop._sync_liquid()
+		var key := str(workshop._water_draw_key)
+		check(key.begins_with("show"), "%s refreshes the water (%s)" % [tag, key])
+		check(float(workshop._brew.fill) > 0.5, "%s fill %s" % [tag, workshop._brew.fill])
+		workshop._brew_painter.present_water(workshop._brew, workshop._mouth, workshop._mouth_r.x, workshop._mouth_r.y)
+		var disc: ColorRect = workshop._brew_painter.disc_liquid
+		check(disc != null and disc.visible, "%s water is visible" % tag)
+		if disc == null:
+			return
+		var mat := disc.material as ShaderMaterial
+		var stop0: Color = mat.get_shader_parameter("stop0")
+		check(stop0.a > 0.4, "%s water alpha %s" % [tag, stop0.a])
+		check(float(mat.get_shader_parameter("grad_radius")) > 1.0, "%s grad radius" % tag)
+		var rect: Vector2 = mat.get_shader_parameter("rect_size")
+		check(rect.x > 1.0 and rect.y > 1.0, "%s rect %s" % [tag, rect])
+		var mouth: Vector2 = mat.get_shader_parameter("mouth_radii")
+		check(mouth.x > 1.0 and mouth.y > 1.0, "%s mouth %s" % [tag, mouth])
+		if want_blue:
+			var col: Color = workshop._brew.mix_liquid()
+			check(absf(col.r - water.r) < 0.08 and absf(col.g - water.g) < 0.08 and absf(col.b - water.b) < 0.08, "%s is clean blue %s" % [tag, col])
+	game.start_fresh()
+	paint.call("new cauldron", true)
+	game.next_customer()
+	workshop._sync_brew(0.2)
+	paint.call("new customer", true)
+	game.reset_brew()
+	workshop._sync_brew(0.2)
+	paint.call("reset", true)
+	var brew: Dictionary = Alchemy.create_brew()
+	brew = Alchemy.add_ingredient(brew, "chamomile", 1.0, "fine", game.defs)
+	brew = Alchemy.add_ingredient(brew, "saffron", 1.0, "fine", game.defs)
+	brew = Alchemy.advance_time(brew, 16.0, game.defs)
+	brew = Alchemy.stir(brew, game.defs)
+	game.brew = brew
+	for _i in 8:
+		workshop._sync_brew(0.05)
+	workshop._sync_liquid()
+	workshop._brew_painter.present_water(workshop._brew, workshop._mouth, workshop._mouth_r.x, workshop._mouth_r.y)
+	check(workshop._brew_painter.disc_liquid.visible, "brew keeps the water visible")
+	check(float(mat_stop_a(workshop)) > 0.4, "brew water alpha")
+	game.bottle_brew()
+	workshop.jump_pour("stream", 1.1)
+	workshop._sync_liquid()
+	workshop._brew_painter.present_water(workshop._brew, workshop._mouth, workshop._mouth_r.x, workshop._mouth_r.y)
+	check(workshop._brew_painter.disc_liquid.visible, "pour keeps the water visible")
+	workshop.pour = "deliver"
+	workshop.pour_t = 2.65
+	workshop._cust_phase = "idle"
+	workshop._cust_hold = false
+	workshop._tick_pour(0.2)
+	check(workshop._carry == "desk", "delivery parks an intact bottle, carry %s" % workshop._carry)
+	check(workshop._pour_bottle.visible and workshop._pour_bottle.modulate.a > 0.9, "the desk bottle is intact")
+	check(str(workshop._pour_bottle.texture.resource_path).find("glass_cork") >= 0, "the desk bottle is corked")
+	check(workshop._bottle.visible, "an empty bottle returns to the shelf")
+	check(str(workshop._bottle.texture.resource_path).find("glass_open") >= 0, "the shelf bottle is open")
+	workshop._sync_liquid()
+	check(not str(workshop._bottle_draw_key).begins_with("rest:"), "the shelf bottle is not drawn full, key %s" % workshop._bottle_draw_key)
+	workshop._brew_painter.present_water(workshop._brew, workshop._mouth, workshop._mouth_r.x, workshop._mouth_r.y)
+	check(workshop._brew_painter.disc_liquid.visible, "delivery leaves water in the cauldron")
+	var spot: Vector2 = workshop._counter_spot()
+	check(workshop._pour_bottle.position.distance_to(spot) < 3.0, "the bottle sits on the desk")
+	workshop._cust_index = game.customer_index
+	workshop._cust_phase = "idle"
+	workshop._cust_hold = false
+	workshop._tick_customer(0.25)
+	check(workshop._carry == "hand", "the customer picks the bottle up")
+	var happy := str(game.evaluation.get("band", "")) == "excellent" or str(game.evaluation.get("band", "")) == "good"
+	check(workshop._cust_emo == ("_happy" if happy else "_sad"), "delivery mood matches the result")
+	workshop._tick_customer(0.35)
+	check(workshop._pour_bottle.position.distance_to(spot) > 12.0, "the bottle leaves the desk in their hands")
+	workshop._carry = "desk"
+	workshop._carry_t = 0.0
+	workshop._pour_bottle.position = spot
+	workshop._pour_bottle.visible = true
+	workshop._pour_bottle.modulate.a = 1.0
+	workshop._cust_phase = "idle"
+	game.evaluation["band"] = "poor"
+	workshop._tick_customer(0.16)
+	check(workshop._carry == "hand" and workshop._cust_emo == "_sad", "a disappointed customer still takes the bottle")
+	workshop._carry = "desk"
+	workshop._pour_bottle.visible = true
+	workshop._pour_bottle.modulate.a = 1.0
+	workshop._pour_bottle.position = spot
+	workshop._cust_phase = "idle"
+	game.customer_index += 1
+	workshop._tick_customer(0.5)
+	check(workshop._carry == "hand", "a new customer takes the bottle off the desk")
+	check(workshop._pour_bottle.modulate.a < 0.95, "the bottle starts to fade as they leave")
+	workshop._tick_customer(0.6)
+	check(workshop._carry == "" and not workshop._pour_bottle.visible, "the bottle is gone when the customer has left")
+	workshop._carry = "desk"
+	workshop._pour_bottle.visible = true
+	workshop._pour_bottle.modulate.a = 1.0
+	workshop._cust_phase = "idle"
+	game.customer_index = workshop._cust_index
+	game.reset_brew()
+	workshop._sync_liquid()
+	check(workshop._carry == "" and not workshop._pour_bottle.visible, "reset removes a leftover bottle")
+	workshop._sync_brew(0.2)
+	paint.call("reset after delivery", true)
+	var again: Dictionary = Alchemy.create_brew()
+	again = Alchemy.add_ingredient(again, "ginger", 1.0, "crushed", game.defs)
+	game.brew = again
+	for _j in 4:
+		workshop._sync_brew(0.05)
+	workshop.begin_discard()
+	workshop._sync_liquid()
+	check(workshop._carry == "", "a throw clears a carried bottle")
+	check(str(workshop._water_draw_key) == "hidden", "water hides while the cauldron is in the air")
+	workshop._tick_discard(5.0)
+	for _k in 45:
+		workshop._sync_brew(0.1)
+	paint.call("respawn", true)
+	var customers: Array = game.defs["customers"]
+	var best_i := 0
+	var best_n := 0
+	for i in customers.size():
+		var n := str(customers[i].get("requestFa", "")).length()
+		if n > best_n:
+			best_n = n
+			best_i = i
+	game.start_fresh()
+	game.customer_index = best_i
+	var used: Array = []
+	for ing in game.defs["ingredients"]:
+		used.append(ing["id"])
+	game.used_ingredient_ids = used
+	overlays.force_reveal = true
+	settings.effects_enabled = true
+	game.open_overlay = "customer_request"
+	overlays._built = ""
+	overlays.advance(0.0)
+	_assert_text_inside(overlays.get_node("Paper"), "request")
+	game.open_overlay = "notebook"
+	overlays._built = ""
+	overlays.advance(0.0)
+	_assert_text_inside(overlays.get_node("Paper"), "notebook")
+	check(overlays.find_child("WaxSeal", true, false) != null, "notebook seal still stamps")
+	var long_text := str(customers[best_i].get("requestFa", "")) + " " + str(customers[best_i].get("requestFa", ""))
+	game.result = {"effectProfile": {}, "stabilityLabel": "stable"}
+	game.evaluation = {"band": "good", "reactionFa": long_text, "score": 1}
+	game.open_overlay = "result"
+	overlays._built = ""
+	overlays.advance(0.0)
+	_assert_text_inside(overlays.get_node("Paper"), "result")
+	overlays.force_reveal = false
+	overlays._reveal = 0.4
+	overlays._built = ""
+	overlays.advance(0.0)
+	var bubble := overlays.get_node("ReactionBubble")
+	_assert_text_inside(bubble, "dialogue")
+	var note := workshop.find_child("CustomerNote", true, false) as Control
+	workshop._sync_note()
+	_assert_text_inside(note, "customer card")
+	settings.effects_enabled = false
+	overlays.force_reveal = false
+	game.open_overlay = "notebook"
+	overlays._built = ""
+	overlays.advance(0.0)
+	var paper: Control = overlays.get_node("Paper")
+	near(paper.scale.y, 1.0, "effects off opens the notebook at once", 0.02)
+	var ink: Array = overlays._ink_labels(paper)
+	check(ink.size() > 2, "notebook lines are revealed as ink")
+	check(float(ink[0].visible_ratio) > 0.99, "effects off shows the writing immediately")
+	settings.effects_enabled = true
+	overlays._built = ""
+	overlays.advance(0.0)
+	paper = overlays.get_node("Paper")
+	check(paper.scale.y < 0.92, "the notebook opens with a page turn")
+	overlays.advance(0.12)
+	ink = overlays._ink_labels(paper)
+	check(float(ink[ink.size() - 1].visible_ratio) < 0.99, "the pen is still writing")
+	overlays._seal_t = 0.32
+	overlays._seal_hit = true
+	overlays._tick_seal(0.0)
+	var seal := overlays.find_child("WaxSeal", true, false) as Control
+	check(seal.scale.y < seal.scale.x - 0.04, "the seal squishes as it stamps")
+	overlays.advance(1.6)
+	paper = overlays.get_node("Paper")
+	near(paper.scale.y, 1.0, "the notebook settles open", 0.05)
+	ink = overlays._ink_labels(paper)
+	check(float(ink[0].visible_ratio) > 0.99, "the writing finishes")
+	settings.effects_enabled = true
+	overlays.force_reveal = false
+	game.open_overlay = null
+	overlays.advance(0.0)
+	root.remove_child(main)
+	main.free()
+
+
+func mat_stop_a(workshop: Node) -> float:
+	var disc: ColorRect = workshop._brew_painter.disc_liquid
+	var mat := disc.material as ShaderMaterial
+	var stop0: Color = mat.get_shader_parameter("stop0")
+	return stop0.a
+
+
+func _assert_text_inside(host: Control, tag: String) -> void:
+	check(host != null, tag + " container")
+	if host == null:
+		return
+	var bounds := Rect2(Vector2(-1, -1), host.size + Vector2(2, 2))
+	var labels := _collect_labels(host)
+	check(not labels.is_empty(), tag + " has text")
+	for node in labels:
+		var l: Label = node
+		if not l.visible:
+			continue
+		var local := _rect_in(host, l)
+		check(bounds.encloses(local), "%s stays on the page (%s) %s" % [tag, l.text.substr(0, 24), local])
+		var font: Font = l.get_theme_font("font")
+		var path := ""
+		if font != null:
+			path = str(font.resource_path)
+		check(path.find("Vazirmatn") >= 0, "%s uses Vazirmatn (%s)" % [tag, path])
+		var sz := int(l.get_theme_font_size("font_size"))
+		check(sz >= 11 and sz <= 20, "%s size %s" % [tag, sz])
+		check(l.text_direction == Control.TEXT_DIRECTION_RTL, tag + " is RTL")
+		check(l.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT, tag + " is right aligned")
+		if font != null and l.text != "":
+			var need := font.get_multiline_string_size(l.text, HORIZONTAL_ALIGNMENT_RIGHT, l.size.x, sz, -1, 3, 3, TextServer.DIRECTION_RTL).y
+			check(need <= l.size.y + 3.0, "%s text fits in its line (%s in %s)" % [tag, need, l.size.y])
+
+
+func _rect_in(host: Control, node: Control) -> Rect2:
+	var inv := host.get_global_transform().affine_inverse()
+	var gr := node.get_global_rect()
+	var rect := Rect2(inv * gr.position, Vector2.ZERO)
+	rect = rect.expand(inv * (gr.position + Vector2(gr.size.x, 0)))
+	rect = rect.expand(inv * (gr.position + gr.size))
+	rect = rect.expand(inv * (gr.position + Vector2(0, gr.size.y)))
+	return rect
 
 
 func _rgb_dist(a: Color, b: Color) -> float:

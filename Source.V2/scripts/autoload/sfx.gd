@@ -700,6 +700,17 @@ func paper() -> void:
 	noise_burst(0.14, "bandpass", 3800.0, 0.08, 0.8)
 
 
+func page_turn() -> void:
+	noise_burst(0.16, "highpass", 1600.0, 0.13, 0.7, 700.0)
+	noise_burst(0.11, "bandpass", 380.0, 0.09, 1.1, 160.0)
+	tone(170.0, 0.07, 0.035, "triangle", 90.0)
+
+
+func pen_scratch() -> void:
+	noise_burst(0.07, "highpass", 3400.0, 0.06, 1.8, 5200.0)
+	noise_burst(0.05, "bandpass", 2200.0, 0.045, 2.6)
+
+
 func jar_drop() -> void:
 	noise_burst(0.12, "bandpass", 1800.0, 0.25, 1.2)
 

@@ -194,6 +194,9 @@ func reset(seed: Variant = null) -> void:
 	_steam_timer = 0.0
 	_sparkle_timer = 0.0
 	_foam_timer = 0.0
+	# A settled pot is full of clean water. A throw owns `fill` until it lands.
+	if spawn_phase == "none":
+		fill = 1.0
 
 
 func drop_chips(ingredient: Dictionary, chip_list: Array) -> void:

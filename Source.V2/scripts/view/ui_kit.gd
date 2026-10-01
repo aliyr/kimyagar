@@ -118,6 +118,13 @@ static func label(text: String, rect: Rect2, size: int, color: Color, font: Font
 	l.clip_text = true
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(l, rect)
+	var locked_pos := rect.position
+	var locked_size := rect.size
+	l.tree_entered.connect(func() -> void:
+		l.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		l.position = locked_pos
+		l.size = locked_size
+	)
 	return l
 
 

@@ -50,6 +50,30 @@ func _init() -> void:
 	_spoon = ClassicSpoon.new()
 
 
+func present_water(sim, mouth: Vector2, rx: float, ry: float) -> void:
+	# Disc state only. Safe to call outside `_draw` (tests, and the idle key).
+	_c = null
+	_sim = null
+	if sim == null or rx < 1.0 or ry < 1.0:
+		hide_discs()
+		return
+	_sim = sim
+	_mouth = mouth
+	_rx = rx
+	_ry = ry
+	_px = rx / SCENE_MOUTH_RX
+	var liquid: Color = sim.liquid_color()
+	_base = Color(liquid.r, liquid.g, liquid.b, 1.0)
+	_deep = _scale(_base, 0.62)
+	_light = _whiten(_base, 0.38)
+	_glint = _whiten(_base, 0.7)
+	_edge = _whiten(_base, -0.01)
+	_interior()
+	_liquid_body()
+	_c = null
+	_sim = null
+
+
 func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	draw_back(c, sim, mouth, rx, ry)
 	draw_front(c, sim, mouth, rx, ry)

@@ -432,6 +432,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _prepare_shot() -> void:
 	Settings.mark_intro_seen()
+	overlays.force_reveal = true
 	# Candle flicker is a live sine. Shots stay on the t = 0 pose so hour-17
 	# colour samples do not drift.
 	workshop.pin_flicker = true
@@ -570,6 +571,24 @@ func _prepare_shot() -> void:
 			workshop.pour = ""
 			_seed_brush_residue()
 			_warm_workshop(0.2)
+		"bottle-desk":
+			phase = "workshop"
+			gate.visible = false
+			var bd: Dictionary = Alchemy.create_brew()
+			bd = Alchemy.add_ingredient(bd, "chamomile", 1.0, "fine", Game.defs)
+			bd = Alchemy.add_ingredient(bd, "saffron", 1.0, "fine", Game.defs)
+			bd = Alchemy.advance_time(bd, 16.0, Game.defs)
+			bd = Alchemy.stir(bd, Game.defs)
+			Game.brew = bd
+			Game.bottle_brew()
+			Game.result = null
+			Game.evaluation = null
+			workshop.pour = ""
+			workshop.jump_customer("idle", 0.4)
+			workshop._park_bottle()
+			workshop._sync_liquid()
+			_seed_brush_residue()
+			_warm_workshop(0.15)
 		"receive", "receive-reject":
 			_receive_shot("chamomile")
 		"receive-accept":
