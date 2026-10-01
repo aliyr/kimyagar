@@ -41,9 +41,18 @@ var _scoops_taken := 0
 var _dip_sent: Array[bool] = [false, false]
 var _drag_sent: Array[bool] = [false, false]
 var _kind := "powder"
+var _kind_set := false
+var _had_material := false
 var _base_color := Color("#8a7a52")
 var _base_set := false
 var _mote_wait := 0.0
+var _ang := -28.0
+var _ang_vel := 0.0
+var _hollow_sent: Array[bool] = [false, false]
+## Wrist speed stays under the 250 deg/s cap, with a finite acceleration so
+## phase seams do not snap.
+const MAX_ANG_VEL := 240.0
+const MAX_ANG_ACC := 1400.0
 
 
 func begin(mouth_center: Vector2, radii: Vector2) -> void:
@@ -81,8 +90,13 @@ func begin(mouth_center: Vector2, radii: Vector2) -> void:
 	_dip_sent = [false, false]
 	_drag_sent = [false, false]
 	_kind = "powder"
+	_kind_set = false
+	_had_material = false
 	_base_set = false
 	_mote_wait = 0.0
+	_ang = -28.0
+	_ang_vel = 0.0
+	_hollow_sent = [false, false]
 
 
 func active() -> bool:
@@ -104,11 +118,18 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	var phase := "approach"
 	var depth := 0.0
 	var shedding := false
-	if pile != null:
-		_kind = pile.material_kind()
-		if not _base_set:
-			_base_color = pile.mean_color()
-			_base_set = true
+	if not _kind_set:
+		# The kind is the pile at the tap. Later scoops must not re-read an
+		# emptied bowl (that reported leaf for every powder).
+		_kind_set = true
+		if pile == null:
+			_had_material = true
+		else:
+			_had_material = pile.surface_level() > 0.04
+			if _had_material:
+				_kind = pile.material_kind()
+				_base_color = pile.mean_color()
+				_base_set = true
 	if t < T_IN:
 		# Rise from rest beside the mortar, arc over, and settle into the dip.
 		phase = "approach"
@@ -155,15 +176,25 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 		if sunk > _removed:
 			_removed = sunk
 		if pile != null:
-			_take(pile.scoop_under(pos.x, pos.y))
-			if depth > 0.9 and _scoops_taken == which:
-				_scoops_taken += 1
-				_take(pile.take_share(0.5))
+			if _had_material:
+				_take(pile.scoop_under(pos.x, pos.y))
+			if local >= 0.40 and which < _hollow_sent.size() and not _hollow_sent[which]:
+				_hollow_sent[which] = true
 				pile.note_hollow(pos.x, pos.y)
 			if k2 > 0.93 and not _swept:
 				_swept = true
-				_take(pile.scoop_rest())
-		blob = 0.0 if chips.is_empty() else minf(1.0, 0.45 + float(chips.size()) / 10.0)
+				if _had_material:
+					_take(pile.scoop_rest())
+		# The mound stays empty until the bowl is in the material, then grows
+		# through the drag and is carried out on the lift.
+		if not _had_material:
+			blob = 0.0
+		elif local < 0.34:
+			blob = 0.0
+		elif local < 0.62:
+			blob = _ease_in_out((local - 0.34) / 0.28)
+		else:
+			blob = 1.0
 	elif t < T_SCOOP + T_CARRY:
 		phase = "carry"
 		var k3 := _dwell((t - T_SCOOP) / T_CARRY)
@@ -180,7 +211,7 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 		var want := clampf(-(ahead.x - pos.x) * 0.025, -4.0, 4.0)
 		_carry_rot = lerpf(_carry_rot, want, 0.22)
 		rot = _carry_rot + sin(k3 * TAU) * 1.6
-		blob = 1.0
+		blob = 1.0 if _had_material else 0.0
 		var fine := 0
 		for chip in chips:
 			if str(chip.get("kind", "")) == "dust":
@@ -203,7 +234,8 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			if pour >= 0.92:
 				_landed = true
 				landed_now = true
-		blob = 1.0 if not _released else 0.32 * (1.0 - clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0))
+		var residue := 0.32 * (1.0 - clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0))
+		blob = (1.0 if not _released else residue) if _had_material else 0.0
 	elif t < TOTAL:
 		phase = "exit"
 		if _released and not _landed:
@@ -211,7 +243,10 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			landed_now = true
 		var k5 := _ease_in_out((t - T_SCOOP - T_CARRY - T_DROP) / T_EXIT)
 		pos = Vector2(end.x + 18.0 - 28.0 * k5, end.y - 170.0 * k5)
-		rot = 76.0 * (1.0 - _ease_out(k5))
+		# The web exit settles at 15 deg. k5 is already eased, and the
+		# turn finishes early so the limited wrist can arrive and hold.
+		var rot_k := clampf(k5 / 0.78, 0.0, 1.0)
+		rot = lerpf(76.0, 15.0, rot_k)
 		opacity = 1.0 - k5
 		blob = 0.0
 	else:
@@ -224,8 +259,11 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	if t >= T_SCOOP and t < T_SCOOP + T_CARRY:
 		trail_n = int(floor(_trail))
 		_trail -= float(trail_n)
-	mortar_level = 1.0 - 0.92 * _removed
-	_tick_motes(dt, pos, shedding, _chip_color())
+	mortar_level = _level_at(t)
+	if pile != null:
+		pile.set_visual_level(mortar_level)
+	rot = _slew_rot(rot, dt)
+	_tick_motes(dt, pos, shedding and _had_material, _chip_color())
 	return {
 		"alive": true,
 		"landed": landed_now,
@@ -436,6 +474,38 @@ func _chip_color() -> Color:
 	if n == 0:
 		return _base_color
 	return Color(r / float(n), g / float(n), b / float(n), 1.0)
+
+
+func _level_at(now: float) -> float:
+	# Each scoop drops 0.46, and only while the bowl is in the material.
+	# The ease starts and ends flat, so the two scoops meet without a step.
+	if now < T_IN:
+		return 1.0
+	if now >= T_SCOOP:
+		return 0.08
+	var k2 := (now - T_IN) / T_STIR
+	var cycle := clampf(k2, 0.0, 0.999) * 2.0
+	var which := int(floor(cycle))
+	var local := cycle - float(which)
+	var u := 0.0
+	if local >= 0.34:
+		u = _ease_in_out((local - 0.34) / 0.66)
+	return 1.0 - 0.46 * (float(which) + u)
+
+
+func _slew_rot(target: float, dt: float) -> float:
+	var step_dt := maxf(dt, 0.0001)
+	var err := target - _ang
+	var want := clampf(err / step_dt, -MAX_ANG_VEL, MAX_ANG_VEL)
+	_ang_vel = move_toward(_ang_vel, want, MAX_ANG_ACC * step_dt)
+	_ang_vel = clampf(_ang_vel, -MAX_ANG_VEL, MAX_ANG_VEL)
+	var step := _ang_vel * step_dt
+	if absf(step) >= absf(err):
+		_ang = target
+		_ang_vel = clampf(err / step_dt, -MAX_ANG_VEL, MAX_ANG_VEL)
+	else:
+		_ang += step
+	return _ang
 
 
 func _ease_out(k: float) -> float:

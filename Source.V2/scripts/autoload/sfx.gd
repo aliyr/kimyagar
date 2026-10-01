@@ -498,7 +498,7 @@ func _design(v: Dictionary) -> void:
 
 
 func _voice(opts: Dictionary) -> void:
-	if not _unlocked or not Settings.sfx_enabled or _play == null:
+	if not _capture and (not _unlocked or not Settings.sfx_enabled or _play == null):
 		return
 	var dur := float(opts.get("dur", 0.1))
 	var freq := float(opts.get("freq", 440.0))
@@ -538,7 +538,7 @@ func noise_burst(dur: float, type: String, freq: float, gain: float, q: float = 
 
 
 func tone(freq: float, dur: float, gain: float, osc: String = "sine", freq_end = null, at: float = 0.0) -> void:
-	if not _unlocked or not Settings.sfx_enabled or _play == null:
+	if not _capture and (not _unlocked or not Settings.sfx_enabled or _play == null):
 		return
 	_voice({
 		"kind": "tone", "osc": osc, "dur": dur, "freq": freq,
@@ -724,30 +724,67 @@ func scoop() -> void:
 	noise_burst(0.18, "highpass", 1400.0, 0.18)
 
 
+var _capture := false
+
+
 ## Dip and drag change with the material. Leaf rustles, powder hisses, grain clicks.
+## Gains are set so the mixed peak, after the master, sits near 0.25.
 func spoon_dip(kind: String) -> void:
 	if kind == "grain":
-		noise_burst(0.04, "bandpass", 1800.0, 0.16, 2.4)
-		noise_burst(0.03, "highpass", 3200.0, 0.08, 1.6)
-		tone(420.0, 0.04, 0.04, "triangle", 180.0)
+		noise_burst(0.045, "bandpass", 2800.0, 0.46, 5.5)
+		noise_burst(0.03, "bandpass", 4200.0, 0.34, 6.0)
+		tone(680.0, 0.04, 0.08, "triangle", 240.0)
 	elif kind == "leaf":
-		noise_burst(0.12, "highpass", 2400.0, 0.14, 0.7, 900.0)
-		noise_burst(0.06, "bandpass", 1600.0, 0.08, 1.4)
+		noise_burst(0.14, "highpass", 2600.0, 0.95, 0.7, 1100.0)
+		noise_burst(0.07, "bandpass", 1800.0, 0.7, 1.5)
 	else:
-		noise_burst(0.1, "lowpass", 900.0, 0.12, 0.6, 400.0)
-		noise_burst(0.05, "bandpass", 1400.0, 0.06, 1.2)
+		noise_burst(0.12, "lowpass", 320.0, 1.35, 0.55, 140.0)
+		noise_burst(0.06, "lowpass", 180.0, 0.9, 0.5)
 
 
 func spoon_drag(kind: String) -> void:
 	if kind == "grain":
-		noise_burst(0.16, "bandpass", 2200.0, 0.1, 3.2, 900.0)
-		noise_burst(0.08, "highpass", 3600.0, 0.05, 1.8)
+		noise_burst(0.04, "bandpass", 3400.0, 0.48, 7.0)
+		noise_burst(0.035, "bandpass", 5100.0, 0.38, 8.0, 2600.0)
+		noise_burst(0.03, "highpass", 4800.0, 0.28, 1.2)
+		tone(920.0, 0.03, 0.06, "triangle", 400.0)
 	elif kind == "leaf":
-		noise_burst(0.2, "highpass", 1800.0, 0.11, 0.8, 600.0)
-		noise_burst(0.1, "bandpass", 900.0, 0.06, 1.1)
+		noise_burst(0.22, "highpass", 1900.0, 0.9, 0.75, 700.0)
+		noise_burst(0.1, "bandpass", 980.0, 0.55, 1.2)
 	else:
-		noise_burst(0.18, "lowpass", 700.0, 0.1, 0.5, 280.0)
-		noise_burst(0.08, "bandpass", 1100.0, 0.05)
+		noise_burst(0.22, "lowpass", 240.0, 1.00, 0.5, 90.0)
+		noise_burst(0.1, "lowpass", 140.0, 0.55, 0.45)
+
+
+## Offline mix of one cue, master included, for the headless sound check.
+func render_spoon(which: String, kind: String) -> PackedFloat32Array:
+	if _noise.is_empty():
+		_build_noise()
+	var saved: Array = _voices
+	_voices = []
+	_capture = true
+	if which == "dip":
+		spoon_dip(kind)
+	else:
+		spoon_drag(kind)
+	_capture = false
+	var n := int(0.32 * float(RATE))
+	_acc = PackedFloat32Array()
+	_acc.resize(n)
+	for i in n:
+		_acc[i] = 0.0
+	var offset := 0
+	while offset < n:
+		var chunk := QUANTUM if offset + QUANTUM <= n else n - offset
+		for v in _voices:
+			_mix_voice(v, offset, chunk)
+		offset += chunk
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		out[i] = clampf(_acc[i] * MASTER, -1.0, 1.0)
+	_voices = saved
+	return out
 
 
 func sparkle() -> void:

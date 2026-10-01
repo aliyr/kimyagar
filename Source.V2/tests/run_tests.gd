@@ -648,7 +648,8 @@ func _spoon_motion() -> void:
 			dev = maxf(dev, _dist_to_segment(p, a, b))
 	check(dev > 40.0, "carry follows a curve, deviation %s" % dev)
 	check(pour_rot > 60.0, "spoon tilts over the cauldron got %s" % pour_rot)
-	check(exit_rot < 12.0, "spoon returns upright got %s" % exit_rot)
+	check(exit_rot > 12.0 and exit_rot < 18.0, "spoon exit settles near 15 deg got %s" % exit_rot)
+	check(max_ang <= 250.0, "angular speed capped got %s" % max_ang)
 	var lip0: Vector2 = s.lip_offset(0.0)
 	var lip1: Vector2 = s.lip_offset(76.0)
 	check(lip0.y > 12.0, "material sits in the bowl")
@@ -680,7 +681,46 @@ func _spoon_motion() -> void:
 	check(level < 0.15, "mortar is nearly empty after the scoops, level %s" % level)
 	check(dip_cues == 2 and drag_cues == 2, "two dips and two drags, %s %s" % [dip_cues, drag_cues])
 	check(saw_mote, "lift sheds material")
-	print("ROUND13 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f" % [curve, max_step, max_accel, max_ang, carry_ang, carry_abs, level, drop_sum])
+	var early_blob := 0.0
+	var drag_blob := 0.0
+	var lift_blob := 0.0
+	var level_step := 0.0
+	var prev_level := 1.0
+	var at_first := 1.0
+	var at_second := 1.0
+	var ang30 := _spoon_ang_at(1.0 / 30.0)
+	var s2 = spoon.new()
+	s2.begin(Vector2(900, 640), Vector2(180, 70))
+	var have_l := false
+	while s2.active():
+		var pose2: Dictionary = s2.update(1.0 / 60.0, null)
+		if not bool(pose2.get("alive", false)):
+			break
+		var tt2: float = s2.t
+		var blob := float(pose2.get("blob", 0.0))
+		var lv := float(pose2.get("level", 1.0))
+		if have_l:
+			level_step = maxf(level_step, absf(lv - prev_level))
+		have_l = true
+		prev_level = lv
+		if tt2 < 0.58:
+			early_blob = maxf(early_blob, blob)
+		if tt2 > 0.70 and tt2 < 0.82:
+			drag_blob = maxf(drag_blob, blob)
+		if tt2 > 1.00 and tt2 < 1.10:
+			lift_blob = maxf(lift_blob, blob)
+		if tt2 >= 1.12 and at_first > 0.9:
+			at_first = lv
+		if tt2 >= 1.93:
+			at_second = lv
+	check(early_blob < 0.05, "mound stays empty until the bowl is in the material, blob %s" % early_blob)
+	check(drag_blob > 0.25, "mound grows while the spoon drags, blob %s" % drag_blob)
+	check(lift_blob > 0.8, "mound is loaded as the spoon rises, blob %s" % lift_blob)
+	check(level_step < 0.03, "level moves continuously, step %s" % level_step)
+	check(absf(at_first - 0.54) < 0.04, "first scoop drops 0.46, level %s" % at_first)
+	check(absf(at_second - 0.08) < 0.04, "second scoop drops 0.46, level %s" % at_second)
+	check(ang30 <= 250.0, "angular speed at 30 Hz got %s" % ang30)
+	print("ROUND14 curve=%.3f max_step=%.2f max_accel=%.2f max_ang=%.1f ang30=%.1f carry_ang=%.1f carry_rot=%.2f level=%.3f drop=%.3f exit=%.2f" % [curve, max_step, max_accel, max_ang, ang30, carry_ang, carry_abs, level, drop_sum, exit_rot])
 
 
 func _spoon_pile() -> void:
@@ -693,6 +733,7 @@ func _spoon_pile() -> void:
 	var matched := false
 	var bottom := 1.0
 	var saw_hollow := false
+	var saw_spill := false
 	while s.active():
 		var pose: Dictionary = s.update(1.0 / 60.0, pile)
 		if not bool(pose.get("alive", false)):
@@ -705,16 +746,234 @@ func _spoon_pile() -> void:
 		var hollows: Array = pile.decor()["hollows"]
 		if hollows.size() > 0:
 			saw_hollow = true
+		if (pile.decor()["spills"] as Array).size() > 0:
+			saw_spill = true
 	check(matched, "spoon mound matches the mortar colour %s" % before)
 	check(bottom < 0.12, "mortar bottom shows when empty, fill %s" % bottom)
 	check(saw_hollow, "the spoon leaves a hollow")
+	check(saw_spill, "material spills beside the hollow")
 	var spills: Array = pile.decor()["spills"]
-	check(spills.size() > 0, "material spills beside the hollow")
+	check(spills.is_empty(), "empty mortar hides leftover spills")
 	var sfx_script: GDScript = load("res://scripts/autoload/sfx.gd")
 	var names := ""
 	for method_v in sfx_script.get_script_method_list():
 		names += str(method_v.get("name", "")) + ","
 	check(names.contains("spoon_dip") and names.contains("spoon_drag"), "dip and drag sounds")
+	_spoon_kind_holds()
+	_spoon_empty_carry()
+	_spoon_sounds()
+	_spoon_art_scale()
+
+
+func _spoon_ang_at(dt: float) -> float:
+	var spoon: GDScript = load("res://scripts/fx/spoon_transfer.gd")
+	var s = spoon.new()
+	s.begin(Vector2(900, 640), Vector2(180, 70))
+	var prev := 0.0
+	var have := false
+	var peak := 0.0
+	while s.active():
+		var pose: Dictionary = s.update(dt, null)
+		if not bool(pose.get("alive", false)):
+			break
+		if have:
+			peak = maxf(peak, absf(float(pose["rot"]) - prev) / dt)
+		have = true
+		prev = float(pose["rot"])
+	return peak
+
+
+func _spoon_kind_holds() -> void:
+	var pile: MortarPile = MortarPile.new()
+	pile.sync({"ingredientId": "ginger", "quantity": 1.0, "grindWork": 1.2, "grinding": false})
+	var spoon: GDScript = load("res://scripts/fx/spoon_transfer.gd")
+	var s = spoon.new()
+	s.begin(Vector2(900, 640), Vector2(180, 70))
+	s.update(0.02, pile)
+	pile.scoop_rest()
+	var bad := false
+	var seen := 0
+	while s.active():
+		var pose: Dictionary = s.update(1.0 / 60.0, pile)
+		if not bool(pose.get("alive", false)):
+			break
+		var cue := str(pose.get("cue", ""))
+		if cue == "dip" or cue == "drag":
+			seen += 1
+			if str(pose.get("kind", "")) != "powder":
+				bad = true
+	check(seen >= 2 and not bad, "powder cues stay powder after the bowl is empty, seen %s" % seen)
+	var grain: MortarPile = MortarPile.new()
+	grain.sync({"ingredientId": "poppy", "quantity": 1.0, "grindWork": 1.2, "grinding": false})
+	var g = spoon.new()
+	g.begin(Vector2(900, 640), Vector2(180, 70))
+	g.update(0.02, grain)
+	grain.scoop_rest()
+	var gbad := false
+	var gseen := 0
+	while g.active():
+		var pose2: Dictionary = g.update(1.0 / 60.0, grain)
+		if not bool(pose2.get("alive", false)):
+			break
+		var cue2 := str(pose2.get("cue", ""))
+		if cue2 == "dip" or cue2 == "drag":
+			gseen += 1
+			if str(pose2.get("kind", "")) != "grain":
+				gbad = true
+	check(gseen >= 2 and not gbad, "grain cues stay grain after the bowl is empty, seen %s" % gseen)
+
+
+func _spoon_empty_carry() -> void:
+	var pile: MortarPile = MortarPile.new()
+	var spoon: GDScript = load("res://scripts/fx/spoon_transfer.gd")
+	var s = spoon.new()
+	s.begin(Vector2(900, 640), Vector2(180, 70))
+	var carry_blob := 0.0
+	while s.active():
+		var pose: Dictionary = s.update(1.0 / 60.0, pile)
+		if not bool(pose.get("alive", false)):
+			break
+		if str(pose.get("phase", "")) == "carry":
+			carry_blob = maxf(carry_blob, float(pose.get("blob", 0.0)))
+	check(carry_blob < 0.05, "empty pile does not load the spoon, blob %s" % carry_blob)
+	pile.note_hollow(400.0, 600.0)
+	pile.set_visual_level(0.05)
+	var marks: Array = pile.decor()["spills"]
+	check(marks.is_empty(), "empty mortar hides spills")
+	pile.set_visual_level(0.8)
+	pile.update(3.4, false)
+	check((pile.decor()["spills"] as Array).is_empty(), "spills fade out")
+
+
+func _spoon_sounds() -> void:
+	var sfx_script: GDScript = load("res://scripts/autoload/sfx.gd")
+	var sfx = sfx_script.new()
+	var powder: PackedFloat32Array = sfx.render_spoon("drag", "powder")
+	var grain: PackedFloat32Array = sfx.render_spoon("drag", "grain")
+	var peak_p := 0.0
+	var peak_g := 0.0
+	for i in powder.size():
+		peak_p = maxf(peak_p, absf(powder[i]))
+	for i in grain.size():
+		peak_g = maxf(peak_g, absf(grain[i]))
+	check(peak_p >= 0.18 and peak_p <= 0.85, "powder drag peak %s" % peak_p)
+	check(peak_g >= 0.18 and peak_g <= 0.85, "grain drag peak %s" % peak_g)
+	var corr := _spectrum_corr(powder, grain)
+	check(corr < 0.4, "powder and grain drags differ, correlation %s" % corr)
+	print("ROUND14 sound powder=%.3f grain=%.3f corr=%.3f" % [peak_p, peak_g, corr])
+	sfx.free()
+
+
+func _spectrum_corr(a: PackedFloat32Array, b: PackedFloat32Array) -> float:
+	# Magnitude at a few bands from the rumble up to the grain click.
+	var bands: Array[float] = [90.0, 180.0, 360.0, 700.0, 1400.0, 2400.0, 3600.0, 5200.0, 7400.0]
+	var rate := 44100.0
+	var n := mini(a.size(), mini(b.size(), 4096))
+	var ma: Array = []
+	var mb: Array = []
+	ma.resize(bands.size())
+	mb.resize(bands.size())
+	for k in bands.size():
+		var re_a := 0.0
+		var im_a := 0.0
+		var re_b := 0.0
+		var im_b := 0.0
+		var freq: float = bands[k]
+		for i in n:
+			var win := 0.5 - 0.5 * cos(TAU * float(i) / float(maxi(n - 1, 1)))
+			var ang := TAU * freq * float(i) / rate
+			var c := cos(ang)
+			var s := sin(ang)
+			re_a += a[i] * win * c
+			im_a += a[i] * win * s
+			re_b += b[i] * win * c
+			im_b += b[i] * win * s
+		ma[k] = sqrt(re_a * re_a + im_a * im_a)
+		mb[k] = sqrt(re_b * re_b + im_b * im_b)
+	var bins := bands.size()
+	var mean_a := 0.0
+	var mean_b := 0.0
+	for k in bins:
+		mean_a += float(ma[k])
+		mean_b += float(mb[k])
+	mean_a /= float(bins)
+	mean_b /= float(bins)
+	var num := 0.0
+	var da := 0.0
+	var db := 0.0
+	for k in bins:
+		var xa := float(ma[k]) - mean_a
+		var xb := float(mb[k]) - mean_b
+		num += xa * xb
+		da += xa * xa
+		db += xb * xb
+	if da < 1e-8 or db < 1e-8:
+		return 1.0
+	return num / sqrt(da * db)
+
+
+func _spoon_art_scale() -> void:
+	var img: Image = Image.load_from_file(ProjectSettings.globalize_path("res://assets/art/workshop/wooden_spoon.png"))
+	if img == null or img.is_empty():
+		var tex: Texture2D = load("res://assets/art/workshop/wooden_spoon.png")
+		check(tex != null, "spoon texture loads")
+		img = tex.get_image()
+	check(img != null and img.get_width() == 512, "spoon sheet is 512 wide")
+	img.resize(102, 255, Image.INTERPOLATE_LANCZOS)
+	var luma := PackedFloat32Array()
+	luma.resize(102 * 255)
+	var mask := PackedByteArray()
+	mask.resize(102 * 255)
+	var count := 0
+	var sum := 0.0
+	for y in 255:
+		for x in 102:
+			var col := img.get_pixel(x, y)
+			var i := y * 102 + x
+			var yv := 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b
+			luma[i] = yv
+			mask[i] = 1 if col.a > 0.4 else 0
+			if mask[i] == 1:
+				count += 1
+				sum += yv
+	var mean := sum / float(maxi(count, 1))
+	var local := 0.0
+	var hp := 0.0
+	var nwin := 0
+	for y in range(4, 251):
+		for x in range(4, 98):
+			if mask[y * 102 + x] == 0:
+				continue
+			var acc := 0.0
+			var acc2 := 0.0
+			for dy in range(-4, 5):
+				for dx in range(-4, 5):
+					var v: float = luma[(y + dy) * 102 + (x + dx)]
+					acc += v
+					acc2 += v * v
+			var mu := acc / 81.0
+			local += maxf(0.0, acc2 / 81.0 - mu * mu)
+			hp += (luma[y * 102 + x] - mu) * (luma[y * 102 + x] - mu)
+			nwin += 1
+	local /= float(maxi(nwin, 1))
+	hp /= float(maxi(nwin, 1))
+	var grip := 0
+	for y2 in range(40, 90):
+		var span := 0
+		var on := false
+		var left := 0
+		for x2 in 102:
+			if mask[y2 * 102 + x2] == 1:
+				if not on:
+					left = x2
+					on = true
+				span = x2 - left + 1
+		grip = maxi(grip, span)
+	check(mean >= 0.34, "spoon luma at game scale %s" % mean)
+	check(local >= 0.029, "spoon local variance at game scale %s" % local)
+	check(hp >= 0.0135, "spoon high-pass energy at game scale %s" % hp)
+	check(grip >= 13, "handle width at game scale %s" % grip)
+	print("ROUND14 art luma=%.3f var=%.4f hp=%.4f grip=%s" % [mean, local, hp, grip])
 
 
 func _bottle_glass() -> void:

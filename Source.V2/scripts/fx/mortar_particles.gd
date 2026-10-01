@@ -167,13 +167,15 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 	_draw_flash(c, origin, scale, now)
 
 
-func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary) -> void:
+func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary, skip_mound: bool = false) -> void:
 	_remember_residue(residue)
 	var scale := Vector2(zone.x / ZONE_W, zone.y / ZONE_H)
 	var wipe_u: float = _wipe_u()
 	if not residue.is_empty() and chips.is_empty() and wipe_u < 1.0:
 		_draw_residue(c, origin, scale, residue, wipe_u)
-	if not chips.is_empty():
+	# While the spoon transfer owns the pile, the bed ellipse is the surface.
+	# The dust mound is dozens of ellipses and would paint over that bed.
+	if not skip_mound and not chips.is_empty():
 		_draw_mound(c, origin, scale, chips)
 	_draw_pestle_shadow(c, origin, scale, chips, aim)
 

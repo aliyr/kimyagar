@@ -107,6 +107,9 @@ func draw_front(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> voi
 		return
 	_liquid_marks()
 	_stir_wake()
+	if _sim != null and bool(_sim.is_stirring()) and _lrx > 2.0:
+		var wet := _ellipse_pts(_liq_center, _lrx, _lry, 28, 0.0)
+		_spoon.draw_through(_c, _sim, _mouth, _rx, _ry, wet)
 	_blooms()
 	_chips()
 	_bubbles()
@@ -225,12 +228,11 @@ func _stir_wake() -> void:
 	if not draw_steam or _sim == null or not bool(_sim.is_stirring()):
 		return
 	var ang := float(_sim.spoon_angle)
-	var behind := ang - 0.6
-	var px := _mouth.x + cos(behind) * _rx * 0.34
-	var py := _mouth.y + sin(behind) * _ry * 0.16 + _ry * 0.06
-	var wash := Color(_light.r, _light.g, _light.b, 0.22)
-	_stroke(_arc(Vector2(px, py), _rx * 0.15, _ry * 0.09, ang, 0.35, PI, 8), wash, 1.5)
-	_stroke(_arc(Vector2(px, py), _rx * 0.26, _ry * 0.14, ang, 0.15, PI * 0.85, 8), Color(wash.r, wash.g, wash.b, 0.12), 1.2)
+	var px := _mouth.x + cos(ang) * _rx * 0.55
+	var py := _mouth.y + sin(ang) * _ry * 0.35
+	var wash := Color(_light.r, _light.g, _light.b, 0.38)
+	_stroke(_arc(Vector2(px, py), _rx * 0.30, _ry * 0.18, ang, 0.85, PI * 1.45, 14), wash, 2.6)
+	_stroke(_arc(Vector2(px, py), _rx * 0.46, _ry * 0.24, ang, 1.15, PI * 1.2, 14), Color(wash.r, wash.g, wash.b, 0.30), 2.1)
 
 
 func _wall_shadow(ly: float, lry: float, depth: float) -> void:

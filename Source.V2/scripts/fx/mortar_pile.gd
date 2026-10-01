@@ -99,6 +99,12 @@ var _applied_work: float = 0.0
 var _born := 1
 var _hollows: Array = []
 var _spills: Array = []
+var _visual_level := -1.0
+## Full pile surface, then the floor, in scene pixels. Both the bed and the
+## spoon clip read this so the powder and the buried bowl share one line.
+const PILE_HIGH_Y := 586.0
+const PILE_LOW_Y := 628.0
+const MARK_LIFE := 3.2
 var _pile_crush: float = 0.0
 var _pile_work: float = 0.0
 var _pile_area: float = 0.0
@@ -194,7 +200,24 @@ func sync(state: Dictionary) -> void:
 	_adopt_mode(bool(state.get("grinding", false)))
 
 
+static func pile_surface_y(level: float) -> float:
+	return lerpf(PILE_LOW_Y, PILE_HIGH_Y, clampf(level, 0.0, 1.0))
+
+
+func set_visual_level(level: float) -> void:
+	_visual_level = clampf(level, 0.0, 1.0)
+
+
+func bed_active() -> bool:
+	return _visual_level >= 0.0
+
+
+func clear_visual_level() -> void:
+	_visual_level = -1.0
+
+
 func update(dt: float, grinding: bool, impact: Variant = null) -> void:
+	_fade_marks(dt)
 	var next: String = _mode_for(grinding)
 	if next != _mode:
 		_set_mode(next)
@@ -352,17 +375,24 @@ func material_kind() -> String:
 
 
 func decor() -> Dictionary:
+	var level := _visual_level if _visual_level >= 0.0 else surface_level()
+	# An empty bowl shows the mortar floor. Marks fade, and they do not sit on
+	# the bare floor.
+	var show := level >= 0.12
 	return {
-		"level": surface_level(),
+		"level": level,
 		"color": mean_color(),
-		"hollows": _hollows,
-		"spills": _spills,
+		"hollows": _hollows if show else [],
+		"spills": _spills if show else [],
 	}
 
 
 func force_refill() -> void:
 	_snapshot_key = ""
 	_mix_key = ""
+	_hollows = []
+	_spills = []
+	_visual_level = -1.0
 
 
 func take_share(frac: float) -> Array[Dictionary]:
@@ -390,14 +420,31 @@ func take_share(frac: float) -> Array[Dictionary]:
 func note_hollow(scene_x: float, scene_y: float) -> void:
 	var z: Vector2 = scene_to_zone(scene_x, scene_y)
 	var at: Vector2 = zone_to_bowl(z.x, z.y)
-	_hollows.append({"x": at.x, "y": at.y})
+	_hollows.append({"x": at.x, "y": at.y, "life": MARK_LIFE})
 	if _hollows.size() > 6:
 		_hollows.pop_front()
 	var col := mean_color()
-	_spills.append({"x": at.x + 16.0, "y": at.y + 5.0, "color": col})
-	_spills.append({"x": at.x - 18.0, "y": at.y + 3.0, "color": col})
+	_spills.append({"x": at.x + 16.0, "y": at.y + 5.0, "color": col, "life": MARK_LIFE})
+	_spills.append({"x": at.x - 18.0, "y": at.y + 3.0, "color": col, "life": MARK_LIFE})
 	while _spills.size() > 6:
 		_spills.pop_front()
+
+
+func _fade_marks(dt: float) -> void:
+	var next_h: Array = []
+	for item_v in _hollows:
+		var item: Dictionary = item_v
+		item["life"] = float(item.get("life", MARK_LIFE)) - dt
+		if float(item["life"]) > 0.0:
+			next_h.append(item)
+	_hollows = next_h
+	var next_s: Array = []
+	for item_v in _spills:
+		var item: Dictionary = item_v
+		item["life"] = float(item.get("life", MARK_LIFE)) - dt
+		if float(item["life"]) > 0.0:
+			next_s.append(item)
+	_spills = next_s
 
 
 func _as_color(raw: Variant) -> Color:

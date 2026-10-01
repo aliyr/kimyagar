@@ -1417,7 +1417,7 @@ func _draw_pieces(c: Control) -> void:
 	var shown: Array = _pile.chips()
 	_draw_mortar_bed(c)
 	if _mortar_parts:
-		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue())
+		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue(), _pile.bed_active())
 	var box: Dictionary = _pile.bowl()
 	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * ZONE_MORTAR.size
 	var bw := float(box["width"]) / 100.0 * ZONE_MORTAR.size.x
@@ -1475,28 +1475,32 @@ func _draw_mortar_bed(c: Control) -> void:
 	var bw := float(box["width"]) / 100.0 * ZONE_MORTAR.size.x
 	var bh := float(box["height"]) / 100.0 * ZONE_MORTAR.size.y
 	var col: Color = info.get("color", Color("#8a7a52"))
-	if level > 0.1:
+	if level >= 0.12:
 		var cx := origin.x + bw * 0.5
-		var cy := origin.y + bh * (0.8 - 0.14 * level)
-		var rx := bw * 0.32 * (0.5 + 0.5 * level)
-		var ry := bh * 0.18 * (0.4 + 0.6 * level)
-		c.draw_set_transform(Vector2(cx, cy), 0.0, Vector2.ONE)
-		c.draw_colored_polygon(_oval(rx, ry), Color(col.r, col.g, col.b, 0.94))
-		c.draw_colored_polygon(_oval(rx * 0.72, ry * 0.62), Color(col.r * 0.82, col.g * 0.82, col.b * 0.78, 0.55))
+		var surface := MortarPile.pile_surface_y(level) - ZONE_MORTAR.position.y
+		var rx := bw * 0.46
+		var ry := 16.0 + 6.0 * level
+		c.draw_set_transform(Vector2(cx, surface + ry * 0.35), 0.0, Vector2.ONE)
+		c.draw_colored_polygon(_oval(rx * 0.92, ry * 1.15), Color(col.r * 0.72, col.g * 0.68, col.b * 0.55, 0.96))
+		c.draw_set_transform(Vector2(cx, surface), 0.0, Vector2.ONE)
+		c.draw_colored_polygon(_oval(rx, ry), Color(col.r, col.g, col.b, 0.96))
+		c.draw_colored_polygon(_oval(rx * 0.62, ry * 0.55), Color(col.r * 0.78, col.g * 0.74, col.b * 0.6, 0.55))
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		for hollow_v in info.get("hollows", []):
 			var hollow: Dictionary = hollow_v
 			var hx := origin.x + float(hollow.get("x", 50.0)) / 100.0 * bw
 			var hy := origin.y + float(hollow.get("y", 60.0)) / 100.0 * bh
+			var ha := clampf(float(hollow.get("life", MortarPile.MARK_LIFE)) / MortarPile.MARK_LIFE, 0.0, 1.0)
 			c.draw_set_transform(Vector2(hx, hy), 0.0, Vector2.ONE)
-			c.draw_colored_polygon(_oval(rx * 0.28, ry * 0.55), Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.85))
+			c.draw_colored_polygon(_oval(rx * 0.22, ry * 0.7), Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.8 * ha))
 			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	for spill_v in info.get("spills", []):
-		var spill: Dictionary = spill_v
-		var sc: Color = spill.get("color", col)
-		var sx := origin.x + float(spill.get("x", 50.0)) / 100.0 * bw
-		var sy := origin.y + float(spill.get("y", 70.0)) / 100.0 * bh
-		c.draw_circle(Vector2(sx, sy), 3.4, Color(sc.r, sc.g, sc.b, 0.9))
+		for spill_v in info.get("spills", []):
+			var spill: Dictionary = spill_v
+			var sc: Color = spill.get("color", col)
+			var sx := origin.x + float(spill.get("x", 50.0)) / 100.0 * bw
+			var sy := origin.y + float(spill.get("y", 70.0)) / 100.0 * bh
+			var sa := clampf(float(spill.get("life", MortarPile.MARK_LIFE)) / MortarPile.MARK_LIFE, 0.0, 1.0)
+			c.draw_circle(Vector2(sx, sy), 3.4, Color(sc.r, sc.g, sc.b, 0.85 * sa))
 
 
 func _draw_mortar_fx(c: Control) -> void:
@@ -1876,6 +1880,8 @@ func _tick_transfer(dt: float) -> void:
 				_mortar_parts.burst("ripple", Vector2(_transfer.land.x + float(i - 1) * 16.0, _transfer.land.y), {"color": "#" + col2.to_html(false)})
 	if not bool(pose.get("alive", false)):
 		transfer_t = -1.0
+		if _pile:
+			_pile.clear_visual_level()
 	if _transfer_draw:
 		_transfer_draw.queue_redraw()
 
@@ -2357,23 +2363,33 @@ func _draw_transfer(c: Control) -> void:
 	var fade := float(pose["opacity"])
 	var lip: Vector2 = pose.get("lip", Vector2(0, 24))
 	var phase := str(pose.get("phase", ""))
-	if phase == "dip" or phase == "scoop":
-		c.draw_circle(at + Vector2(8.0, 22.0), 18.0, Color(0.08, 0.04, 0.02, 0.22 * fade))
-	_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade)
+	var bury := 100000.0
+	if phase == "approach" or phase == "dip" or phase == "scoop":
+		if at.x > MortarPile.ZONE_X + 24.0 and at.x < MortarPile.ZONE_X + MortarPile.ZONE_W - 16.0:
+			var surface := MortarPile.pile_surface_y(float(pose.get("level", 1.0)))
+			if at.y + 34.0 > surface:
+				bury = surface
+	_spoon_art.draw_free(c, at, rot, SpoonTransfer.SPOON_BOX, fade, bury)
 	if float(pose["blob"]) > 0.05:
 		var col: Color = pose.get("color", Color("#8a7a52"))
 		var heap := at + lip * 0.42
 		var heap_k := clampf(float(pose["blob"]), 0.15, 1.0)
-		c.draw_set_transform(heap, rot, Vector2.ONE)
-		c.draw_colored_polygon(_oval(24.0 * heap_k, 13.0 * heap_k), Color(col.r, col.g, col.b, 0.96 * fade))
-		c.draw_colored_polygon(_oval(14.0 * heap_k, 7.0 * heap_k), Color(col.r * 0.78, col.g * 0.78, col.b * 0.7, 0.45 * fade))
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var mound := _shift_poly(_oval(24.0 * heap_k, 13.0 * heap_k), heap, rot)
+		var core := _shift_poly(_oval(14.0 * heap_k, 7.0 * heap_k), heap, rot)
+		if bury < 50000.0:
+			mound = _clip_above(mound, bury)
+			core = _clip_above(core, bury)
+		if mound.size() >= 3:
+			c.draw_colored_polygon(mound, Color(col.r, col.g, col.b, 0.96 * fade))
+		if core.size() >= 3:
+			c.draw_colored_polygon(core, Color(col.r * 0.78, col.g * 0.78, col.b * 0.7, 0.45 * fade))
 		var cs := cos(rot)
 		var sn := sin(rot)
 		for chip in pose.get("chips", []):
 			var local := Vector2(float(chip.get("sx", 0.0)), float(chip.get("sy", 0.0))) * 0.45 + lip * 0.5
 			var p := at + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y)
-			_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
+			if p.y <= bury:
+				_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
 	var from := at + lip
 	for item in pose.get("falling", []):
 		var eased := float(item.get("eased", 0.0))
@@ -2399,6 +2415,30 @@ func _draw_transfer(c: Control) -> void:
 			c.draw_circle(drop, lerpf(4.2, 2.2, s), Color(col2.r, col2.g, col2.b, 0.85 * fade * (1.0 - s * 0.35)))
 
 
+func _shift_poly(local: PackedVector2Array, at: Vector2, rot: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(local.size())
+	var cs := cos(rot)
+	var sn := sin(rot)
+	for i in local.size():
+		var p: Vector2 = local[i]
+		out[i] = at + Vector2(cs * p.x - sn * p.y, sn * p.x + cs * p.y)
+	return out
+
+
+func _clip_above(poly: PackedVector2Array, limit_y: float) -> PackedVector2Array:
+	var rect := PackedVector2Array([
+		Vector2(-4000.0, -4000.0),
+		Vector2(8000.0, -4000.0),
+		Vector2(8000.0, limit_y),
+		Vector2(-4000.0, limit_y),
+	])
+	var clipped: Array = Geometry2D.clip_polygons(poly, rect)
+	if clipped.is_empty():
+		return PackedVector2Array()
+	return clipped[0]
+
+
 func _oval(rx: float, ry: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	pts.resize(14)
@@ -2422,6 +2462,7 @@ func _transfer_pose() -> Dictionary:
 		"color": _transfer_last.get("color", Color("#8a7a52")),
 		"phase": _transfer_last.get("phase", ""),
 		"motes": _transfer_last.get("motes", []),
+		"level": _transfer_last.get("level", 1.0),
 	}
 
 

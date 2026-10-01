@@ -23,10 +23,8 @@ var _tilt_pose: Variant = null
 var _start_workshop := false
 var _shot_frames := 0
 var _shot_done := false
-var _film: Array = []
-var _film_i := 0
-var _film_arm := false
-var _film_kind := ""
+const _FilmHarness := preload("res://tools/film_harness.gd")
+var _harness = null
 var _keys := ""
 var _booted := false
 var _probe_t := 0.0
@@ -199,6 +197,9 @@ func _parse_args() -> void:
 	# Engine args first, then user args after `--`, so `-- --hour=N` wins.
 	_scan_args(OS.get_cmdline_args())
 	_scan_args(OS.get_cmdline_user_args())
+	if _shot.begins_with("spoon-film") or _shot.begins_with("stir-film"):
+		_harness = _FilmHarness.new()
+		_harness.setup(_shot)
 
 
 func _scan_args(args: PackedStringArray) -> void:
@@ -343,8 +344,8 @@ func _process(dt: float) -> void:
 	if not _booted:
 		return
 	var at_gate := phase != "workshop"
-	if _film_kind == "stir" and _shot_frames >= 6:
-		dt = 1.2 / 24.0
+	if _harness != null:
+		dt = _harness.adjust_dt(dt, _shot_frames)
 	if not at_gate and not Game.is_paused():
 		Game.tick(dt)
 	if at_gate:
@@ -500,26 +501,9 @@ func _prepare_shot() -> void:
 			Game.apply_grind_work(2.0)
 			_warm_workshop(0.35)
 			workshop.jump_transfer(1.49 if _shot == "scoop" else 3.20)
-		"spoon-film", "spoon-film-wide":
-			phase = "workshop"
-			gate.visible = false
-			Game.add_classic_unit("chamomile")
-			Game.start_grinding()
-			Game.apply_grind_work(2.0)
-			_warm_workshop(0.35)
-			workshop.jump_transfer(0.02)
-		"stir-film", "stir-film-wide":
-			phase = "workshop"
-			gate.visible = false
-			var film_brew: Dictionary = Alchemy.create_brew()
-			film_brew = Alchemy.add_ingredient(film_brew, "chamomile", 1.0, "fine", Game.defs)
-			film_brew = Alchemy.advance_time(film_brew, 16.0, Game.defs)
-			film_brew = Alchemy.stir(film_brew, Game.defs)
-			Game.brew = film_brew
-			workshop._spoon_angle = -0.2
-			workshop._stirring = false
-			_seed_brush_residue()
-			_warm_workshop(0.35)
+		"spoon-film", "spoon-film-wide", "stir-film", "stir-film-wide":
+			if _harness != null:
+				_harness.prepare(self)
 		"gate-stages":
 			phase = "gate"
 			gate.panel = "stages"
@@ -735,8 +719,8 @@ func _prepare_shot() -> void:
 	# The screenshot is a few real frames later. On software GL those frames are
 	# long enough to carry the spoon, raise the fire, and turn the pestle.
 	workshop.hold_sim = true
-	if _shot.begins_with("spoon-film") or _shot.begins_with("stir-film"):
-		_arm_film()
+	if _harness != null:
+		_harness.arm(self)
 
 
 func _boil_shot(heat_name: String) -> void:
@@ -940,79 +924,16 @@ func _profile_tick(dt: float) -> void:
 			get_tree().quit(0)
 
 
-func _arm_film() -> void:
-	if _shot.ends_with("-wide"):
-		get_window().size = Vector2i(2400, 1080)
-	if _shot.begins_with("stir"):
-		_film_kind = "stir"
-		workshop._stirring = false
-		workshop._brew.stir()
-		for _i in 36:
-			workshop._brew.update(1.0 / 60.0)
-		workshop.hold_sim = false
-		for i in 24:
-			_film.append({"name": "stir", "i": i, "t": 0.0})
-		return
-	_film_kind = "spoon"
-	_film.append_array(_film_span("approach", 0.02, 0.30, 24))
-	_film.append_array(_film_span("dip", 0.36, 0.72, 24))
-	_film.append_array(_film_span("scoop", 0.74, 1.90, 24))
-	_film.append_array(_film_span("carry", 1.94, 2.60, 24))
-	_film.append_array(_film_span("pour", 2.64, 3.48, 24))
-
-
-func _film_span(phase_name: String, a: float, b: float, n: int) -> Array:
-	var out: Array = []
-	for i in n:
-		var u := float(i) / float(n - 1)
-		out.append({"name": phase_name, "i": i, "t": lerpf(a, b, u)})
-	return out
-
-
 func _capture_shot() -> void:
 	if _shot == "" or _shot_done:
 		return
-	if not _film.is_empty():
-		_capture_film()
+	if _harness != null and _harness.capturing():
+		_harness.on_frame(self)
 		return
 	_shot_frames += 1
 	if _shot_frames == 4:
 		_shot_done = true
 		call_deferred("_save_shot")
-
-
-func _capture_film() -> void:
-	_shot_frames += 1
-	if _shot_frames < 6:
-		return
-	if _film_arm:
-		_save_film_frame()
-		_film_i += 1
-		_film_arm = false
-		if _film_i >= _film.size():
-			print("FILM done ", _film.size())
-			get_tree().quit(0)
-			return
-	if _film_i < _film.size():
-		var spec: Dictionary = _film[_film_i]
-		if _film_kind == "spoon":
-			workshop.jump_transfer(float(spec["t"]))
-		_film_arm = true
-
-
-func _save_film_frame() -> void:
-	var spec: Dictionary = _film[_film_i]
-	var dir := _shot_out
-	if dir == "":
-		dir = "user://film"
-	if not DirAccess.dir_exists_absolute(dir):
-		DirAccess.make_dir_recursive_absolute(dir)
-	var path := "%s/%s-%02d.jpg" % [dir, str(spec["name"]), int(spec["i"])]
-	var img := get_viewport().get_texture().get_image()
-	var err := img.save_jpg(path, 0.8)
-	var pose: Dictionary = workshop._transfer_last
-	var draws := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
-	print("FILM ", path, " ", img.get_width(), "x", img.get_height(), " spoon ", pose.get("x", 0), ",", pose.get("y", 0), " draws ", draws, " err ", err)
 
 
 func _save_shot() -> void:

@@ -30,6 +30,10 @@ var extras := true
 var _exiting := false
 var _prev_drop := 0.0
 var _drip := Color(0.55, 0.32, 0.12, 0.7)
+var _bury_y := 100000.0
+var _tint := Color(1, 1, 1, 1)
+var _through: PackedVector2Array = PackedVector2Array()
+var _skip_mouth := false
 
 
 func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
@@ -47,16 +51,17 @@ func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	_rx = rx
 	_ry = ry
 	_sc = draw_w / 256.0
-	# Handle leans as the bowl travels the ellipse, so the grip stays out of the water.
-	_rot = -cos(ang) * 26.0 * PI / 180.0 - sin(ang) * 8.0 * PI / 180.0
-	var fig := sin(ang * 2.0) * 0.16
+	# Web stir: offset 0.55 rx by 0.35 ry, handle tilt -cos(angle)*16 deg.
+	_rot = -cos(ang) * 16.0 * PI / 180.0
 	var bowl_ry: float = draw_w * (38.0 / 256.0)
 	_origin = Vector2(
-		mouth.x + cos(ang) * rx * (0.46 + fig),
-		mouth.y + sin(ang) * ry * 0.22 + ry * 0.50 * dip - (1.0 - dip) * ry * 7.0 + bowl_ry * 0.05 * dip
+		mouth.x + cos(ang) * rx * 0.55,
+		mouth.y + sin(ang) * ry * 0.35 + bowl_ry * 0.1 * dip - (1.0 - dip) * ry * 8.0
 	)
 	_exiting = drop + 0.015 < _prev_drop and not stirring
 	_prev_drop = drop
+	# The liquid covers this pass. The front pass draws the bowl through the water.
+	_skip_mouth = stirring
 	var ink: Color = sim.liquid_color()
 	_drip = Color(ink.r, ink.g, ink.b, 0.75)
 	_free = false
@@ -66,7 +71,7 @@ func draw(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float) -> void:
 	_c = null
 
 
-func draw_free(c: CanvasItem, bowl_at: Vector2, rot: float, box: float, fade: float) -> void:
+func draw_free(c: CanvasItem, bowl_at: Vector2, rot: float, box: float, fade: float, bury_y: float = 100000.0) -> void:
 	if c == null or fade <= 0.01 or box < 1.0:
 		return
 	_c = c
@@ -75,9 +80,45 @@ func draw_free(c: CanvasItem, bowl_at: Vector2, rot: float, box: float, fade: fl
 	_sc = box / 256.0
 	_rot = rot
 	_origin = bowl_at
+	_bury_y = bury_y
+	_tint = Color(1, 1, 1, _fade)
 	_draw_sprite()
 	_free = false
 	_fade = 1.0
+	_bury_y = 100000.0
+	_c = null
+
+
+## The bowl under the water, drawn after the liquid so the wood still reads.
+func draw_through(c: CanvasItem, sim, mouth: Vector2, rx: float, ry: float, liquid: PackedVector2Array) -> void:
+	if c == null or liquid.size() < 3 or rx < 1.0:
+		return
+	var drop: float = float(sim.spoon_drop())
+	if not bool(sim.is_stirring()) or drop <= 0.01:
+		return
+	var ang: float = float(sim.spoon_angle)
+	var draw_w: float = rx * 2.15
+	_c = c
+	_mouth = mouth
+	_rx = rx
+	_ry = ry
+	_sc = draw_w / 256.0
+	_rot = -cos(ang) * 16.0 * PI / 180.0
+	var bowl_ry: float = draw_w * (38.0 / 256.0)
+	_origin = Vector2(
+		mouth.x + cos(ang) * rx * 0.55,
+		mouth.y + sin(ang) * ry * 0.35 + bowl_ry * 0.1
+	)
+	_free = true
+	_fade = 1.0
+	_bury_y = 100000.0
+	var ink: Color = sim.liquid_color()
+	_tint = Color(0.62 + ink.r * 0.38, 0.62 + ink.g * 0.38, 0.62 + ink.b * 0.38, 0.42)
+	_through = liquid
+	_draw_sprite()
+	_through = PackedVector2Array()
+	_tint = Color(1, 1, 1, 1)
+	_free = false
 	_c = null
 
 
@@ -105,17 +146,34 @@ func _draw_sprite() -> void:
 	var screen := PackedVector2Array()
 	for p in local:
 		screen.append(_map(p))
-	var tint := Color(1, 1, 1, _fade)
+	var tint := _tint
+	if _free and _bury_y < 50000.0:
+		var above := PackedVector2Array([
+			Vector2(-4000.0, -4000.0), Vector2(8000.0, -4000.0),
+			Vector2(8000.0, _bury_y), Vector2(-4000.0, _bury_y),
+		])
+		var kept: Array = _clip_uv(screen, uvs, above)
+		if (kept[0] as PackedVector2Array).size() >= 3:
+			_paint(kept[0], kept[1], tex, tint)
+		return
+	if _free and _through.size() >= 3:
+		var wet: Array = _clip_uv(screen, uvs, _through)
+		if (wet[0] as PackedVector2Array).size() >= 3:
+			_paint(wet[0], wet[1], tex, tint)
+		return
 	if _free:
 		_paint(screen, uvs, tex, tint)
 		return
 	if _exiting and extras:
-		for i in 3:
-			var drop_at := _origin + Vector2(float(i - 1) * 5.0, 16.0 + float(i) * 9.0)
-			_c.draw_circle(drop_at, 2.4 - float(i) * 0.3, Color(_drip.r, _drip.g, _drip.b, 0.55 - float(i) * 0.12))
+		for i in 4:
+			var drop_at := _origin + Vector2((float(i) - 1.5) * 6.0, 12.0 + float(i) * 7.0)
+			var rad := 4.8 - float(i) * 0.7
+			_c.draw_circle(drop_at, rad, Color(_drip.r, _drip.g, _drip.b, 0.72 - float(i) * 0.12))
 	var up: Array = _clip_uv(screen, uvs, _upper)
 	if (up[0] as PackedVector2Array).size() >= 3:
 		_paint(up[0], up[1], tex, tint)
+	if _skip_mouth:
+		return
 	var low: Array = _clip_uv(screen, uvs, _lower)
 	var mouth: Array = _clip_uv(low[0], low[1], _mouth_clip)
 	if (mouth[0] as PackedVector2Array).size() >= 3:
