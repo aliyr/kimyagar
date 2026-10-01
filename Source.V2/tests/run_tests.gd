@@ -81,6 +81,7 @@ func _run() -> void:
 	_round8()
 	_round9()
 	_round11()
+	_round12()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -1634,10 +1635,69 @@ func _round11() -> void:
 		if n >= 12:
 			big += 1
 	check(best_n >= int(float(ink_n) * 0.85), "the ink is one 8-connected stroke, %s of %s" % [best_n, ink_n])
-	check(second_n < 40 and big == 1, "the label has no stray ink, %s px second, %s pieces" % [second_n, big])
+	check(second_n == 0 and big == 1, "the label has no stray ink, %s px second, %s pieces" % [second_n, big])
 	var iou_d := _mask_iou(mask, bw, bh, "res://tests/ref/dawa_ref.png")
 	var iou_w := _mask_iou(mask, bw, bh, "res://tests/ref/wa_ref.png")
-	check(iou_d > iou_w + 0.15 and iou_d > 0.45, "the label reads دوا, IoU %.3f vs وا %.3f" % [iou_d, iou_w])
+	check(iou_d >= 0.65 and iou_w < 0.15, "the label reads دوا, IoU %.3f vs وا %.3f" % [iou_d, iou_w])
+
+
+func _round12() -> void:
+	var names := ["amber", "mint", "borage", "saffron"]
+	var bodies: Array[Color] = [
+		_liquor_body(["chamomile", "saffron"]),
+		_liquor_body(["mint"]),
+		_liquor_body(["borage"]),
+		_liquor_body(["saffron"]),
+	]
+	for i in bodies.size():
+		var body: Color = bodies[i]
+		var img := BottleGlass.gradient_image(body)
+		var w := img.get_width()
+		var h := img.get_height()
+		var x0 := int(float(w) * 0.30)
+		var x1 := int(float(w) * 0.70)
+		var max_step := 0.0
+		var prev := _row_luma(img, 0, x0, x1)
+		for y in range(1, h):
+			var cur := _row_luma(img, y, x0, x1)
+			max_step = maxf(max_step, absf(cur - prev))
+			prev = cur
+		check(max_step < 3.0, "%s adjacent-row luma step %.2f" % [names[i], max_step])
+		var top := _row_luma(img, 1, x0, x1)
+		var bot := _row_luma(img, h - 2, x0, x1)
+		check(top > bot + 30.0, "%s keeps a top-to-base gradient %.1f -> %.1f" % [names[i], top, bot])
+		var mid_y := int(round(0.24 * float(h - 1)))
+		var mid := Color(0, 0, 0)
+		var n := 0
+		for x in range(x0, x1):
+			mid += img.get_pixel(x, mid_y)
+			n += 1
+		mid /= float(maxi(n, 1))
+		var worst := maxf(absf(mid.r - body.r), maxf(absf(mid.g - body.g), absf(mid.b - body.b))) * 255.0
+		check(worst < 15.0, "%s plateau stays on the snapshot, %.1f RGB" % [names[i], worst])
+		if names[i] == "amber":
+			check(top > 120.0 and top < 175.0 and bot > 60.0 and bot < 95.0, "amber luma %.1f -> %.1f" % [top, bot])
+
+
+func _liquor_body(ids: Array) -> Color:
+	var entries: Array = []
+	for id in ids:
+		entries.append({"ingredientId": id, "quantity": 1.0})
+	return BottleGlass.blend_color(entries, Callable(self, "_flat_tint"), 1.0)
+
+
+func _flat_tint(id: String) -> Color:
+	return Color(ClassicBrewSim.flat_tint(id))
+
+
+func _row_luma(img: Image, y: int, x0: int, x1: int) -> float:
+	var acc := 0.0
+	var n := 0
+	for x in range(x0, x1):
+		var px := img.get_pixel(x, y)
+		acc += (0.299 * px.r + 0.587 * px.g + 0.114 * px.b) * 255.0
+		n += 1
+	return acc / float(maxi(n, 1))
 
 
 func _eight_sizes(mask: PackedByteArray, bw: int, bh: int) -> Array:

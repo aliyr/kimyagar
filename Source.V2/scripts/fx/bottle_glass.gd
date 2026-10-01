@@ -115,22 +115,87 @@ static func _saturate(c: Color, amount: float) -> Color:
 	)
 
 
-static func _liquor_band(body: Color, light: Color, deep: Color, depth: float) -> Color:
-	## Plateau around depth 0.2 is the snapshot. Lift is only the surface;
-	## the darkening is already strong by the top of the label.
-	var lift := clampf(1.0 - depth / 0.11, 0.0, 1.0)
-	lift *= lift
-	var sink := clampf((depth - 0.36) / 0.24, 0.0, 1.0)
-	var col := body.lerp(light, lift)
+## One smooth fill. Flat bands left 2–3 row stripes of about 10 luma.
+const GRAD_W := 64
+const GRAD_H := 180
+static var _grad_cache: Dictionary = {}
+
+
+static func _smooth01(t: float) -> float:
+	t = clampf(t, 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
+static func liquor_color(body: Color, depth: float) -> Color:
+	## Continuous vertical gradient. The plateau near depth 0.24 is the
+	## snapshot. The surface is a little lighter and more saturated; the
+	## base is darker. No periodic wobble.
+	var d := clampf(depth, 0.0, 1.0)
+	var lift := _smooth01(1.0 - d / 0.18)
+	var sink := _smooth01((d - 0.32) / 0.68)
+	var light := _saturate(shade(body, 0.14), 0.18)
+	var deep := shade(body, -0.46)
+	var col := body.lerp(light, lift * 0.92)
 	col = col.lerp(deep, sink)
-	if depth < 0.14 or depth > 0.40:
-		var grit := sin(depth * 47.0) * 0.035
-		var grit_col := deep
-		if grit > 0.0:
-			grit_col = light
-		col = col.lerp(grit_col, absf(grit))
 	col.a = lerpf(0.90, 0.96, sink)
 	return col
+
+
+static func _hash01(x: int, y: int) -> float:
+	var n := (x * 374761393 + y * 668265263) & 2147483647
+	n = (n ^ (n >> 13)) * 1274126177
+	return float(n & 65535) / 65535.0
+
+
+static func _value_noise(x: float, y: float) -> float:
+	var x0 := int(floor(x))
+	var y0 := int(floor(y))
+	var fx := _smooth01(x - float(x0))
+	var fy := _smooth01(y - float(y0))
+	var v00 := _hash01(x0, y0) * 2.0 - 1.0
+	var v10 := _hash01(x0 + 1, y0) * 2.0 - 1.0
+	var v01 := _hash01(x0, y0 + 1) * 2.0 - 1.0
+	var v11 := _hash01(x0 + 1, y0 + 1) * 2.0 - 1.0
+	return lerpf(lerpf(v00, v10, fx), lerpf(v01, v11, fx), fy)
+
+
+static func _brush_noise(x: int, y: int) -> float:
+	## Low frequency, so a neighbouring row moves by well under 3 luma.
+	var broad := _value_noise(float(x) / 11.0, float(y) / 16.0)
+	var fine := _value_noise(float(x) / 5.0 + 2.3, float(y) / 7.0 + 1.1)
+	return broad * 0.78 + fine * 0.22
+
+
+static func gradient_image(body: Color) -> Image:
+	var img := Image.create(GRAD_W, GRAD_H, false, Image.FORMAT_RGBA8)
+	for y in GRAD_H:
+		var depth := (float(y) + 0.5) / float(GRAD_H)
+		var base := liquor_color(body, depth)
+		var light := _saturate(shade(body, 0.14), 0.18)
+		var deep := shade(body, -0.46)
+		for x in GRAD_W:
+			var n := _brush_noise(x, y)
+			var col := base
+			if n >= 0.0:
+				col = col.lerp(light, n * 0.05)
+			else:
+				col = col.lerp(deep, -n * 0.05)
+			col.r = clampf(col.r + n * 0.010, 0.0, 1.0)
+			col.g = clampf(col.g + n * 0.008, 0.0, 1.0)
+			col.b = clampf(col.b + n * 0.006, 0.0, 1.0)
+			img.set_pixel(x, y, col)
+	return img
+
+
+static func _gradient_texture(body: Color) -> Texture2D:
+	var key := "%d,%d,%d" % [int(round(body.r * 64.0)), int(round(body.g * 64.0)), int(round(body.b * 64.0))]
+	if _grad_cache.has(key):
+		return _grad_cache[key]
+	var tex := ImageTexture.create_from_image(gradient_image(body))
+	_grad_cache[key] = tex
+	if _grad_cache.size() > 8:
+		_grad_cache.erase(_grad_cache.keys()[0])
+	return tex
 
 
 static func shade(c: Color, amount: float) -> Color:
@@ -286,64 +351,17 @@ static func draw(c: CanvasItem, rect: Rect2, phase: String, pour_t: float, entri
 	var surf := surface_u(level)
 	var cx := rect.position.x + rect.size.x * 0.5
 	if poly.size() >= 3:
-		# Stacked bands, not one smooth polygon. The mid-belly band stays on
-		# the snapshot. Above it the paint is lighter; below it, down to the
-		# label, the paint is clearly darker. More bands, plus a small per-segment
-		# wobble, so the horizontal steps do not read as stripes.
-		var deep := shade(body, -0.38)
-		var light := _saturate(shade(body, 0.18), 0.28)
-		var n_bands := 18
-		for i in n_bands:
-			var d0 := float(i) / float(n_bands)
-			var d1 := float(i + 1) / float(n_bands)
-			var depth := (d0 + d1) * 0.5
-			var nse := sin(float(i) * 6.5) * 0.010
-			if depth > 0.16 and depth < 0.30:
-				nse *= 0.25
-			depth = clampf(depth + nse, 0.0, 1.0)
-			var u0 := lerpf(surf, LIQUID_BOTTOM, d0)
-			var u1 := lerpf(surf, LIQUID_BOTTOM, d1)
-			var col := _liquor_band(body, light, deep, depth)
-			var y0 := rect.position.y + u0 * rect.size.y + sin(u0 * 22.0 + wave) * 1.3
-			var y1 := rect.position.y + u1 * rect.size.y + sin(u1 * 22.0 + wave + 0.6) * 1.3 + 1.6
-			for s in 3:
-				var a0 := -1.0 + float(s) * (2.0 / 3.0)
-				var a1 := a0 + 2.0 / 3.0
-				var edge := 0.0
-				if s != 1:
-					edge = 0.12
-				var wob := 0.0
-				if s != 1 or depth < 0.16 or depth > 0.32:
-					wob = sin(float(i) * 4.1 + float(s) * 2.7) * 0.030
-				var bc := col.lerp(deep, edge)
-				if wob >= 0.0:
-					bc = bc.lerp(light, wob)
-				else:
-					bc = bc.lerp(deep, -wob)
-				var hw0 := half_width(clampf(u0, 0.0, 1.0)) * rect.size.x * 0.90
-				var hw1 := half_width(clampf(u1, 0.0, 1.0)) * rect.size.x * 0.90
-				var band := PackedVector2Array()
-				band.append(Vector2(cx + a0 * hw0, y0))
-				band.append(Vector2(cx + a1 * hw0, y0 + sin(float(s) + float(i)) * 0.6))
-				band.append(Vector2(cx + a1 * hw1, y1))
-				band.append(Vector2(cx + a0 * hw1, y1))
-				Poly.draw_colored(c, band, bc)
-		for b in 6:
-			var bd := 0.02 + float(b) * 0.03
-			var use_light := true
-			if b >= 3:
-				bd = 0.52 + float(b - 3) * 0.12
-				use_light = false
-			var bu := lerpf(surf, LIQUID_BOTTOM, bd)
-			var bhw := half_width(bu) * rect.size.x * (0.42 + 0.08 * sin(float(b) * 1.7))
-			var by := rect.position.y + bu * rect.size.y
-			var bx := cx + sin(float(b) * 2.1) * rect.size.x * 0.06
-			var brush := _ellipse(Vector2(bx, by), bhw, maxf(1.6, rect.size.y * 0.018), 10)
-			var paint := light
-			if not use_light:
-				paint = deep
-			paint.a = 0.12
-			Poly.draw_colored(c, brush, paint)
+		# One textured polygon. The gradient is continuous; the old 18 bands
+		# were the stripes. Brush noise lives in the texture, not in the mesh.
+		var uvs := PackedVector2Array()
+		var top_y := rect.position.y + surf * rect.size.y
+		var bot_y := rect.position.y + LIQUID_BOTTOM * rect.size.y
+		var span_y := maxf(bot_y - top_y, 1.0)
+		for p in poly:
+			var depth := clampf((p.y - top_y) / span_y, 0.0, 1.0)
+			var nx := clampf((p.x - rect.position.x) / maxf(rect.size.x, 1.0), 0.0, 1.0)
+			uvs.append(Vector2(nx, depth))
+		Poly.draw_textured(c, poly, uvs, _gradient_texture(body))
 		var men := PackedVector2Array()
 		var men_n := 12
 		for i in men_n + 1:

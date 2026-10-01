@@ -460,6 +460,7 @@ func _build() -> void:
 	_work.add_child(_pour_bottle)
 	_bottle_fill = _painter(_draw_bottle_fill)
 	UiKit.fill(_bottle_fill)
+	_bottle_fill.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_bottle_fill.z_index = 6
 	_work.add_child(_bottle_fill)
 	_stream = _painter(_draw_stream)

@@ -228,6 +228,10 @@ def _ink_components(ink, min_n=1):
     return out
 
 
+def _erode_mask(mask, rad):
+    return ~_dilate_mask(~np.asarray(mask, bool), rad)
+
+
 def _dilate_mask(ink, rad):
     out = ink.copy()
     h, w = ink.shape
@@ -338,11 +342,13 @@ def _thin_calligraphy(src):
         top = y0 + int(0.50 * (y1 - y0))
         sel = pts[:, 0] <= top
         yy, xx = pts[sel, 0], pts[sel, 1]
-        core = D[yy, xx] > 0.62 * np.maximum(R[yy, xx], 1.0)
+        # A smaller punch than 0.62 keeps the waw ring closed, like the Ruqaa head.
+        core = D[yy, xx] > 0.74 * np.maximum(R[yy, xx], 1.0)
         punched[yy[core], xx[core]] = False
     D2 = _dist_bg(punched)
     R2 = _maxfilt(D2.astype(np.float32), 8)
-    cut = 0.46 * R2
+    # 0.46 kept a hairline (~1.1 px at game size). 0.34 is about 1.5× that stroke.
+    cut = 0.34 * R2
     thin = punched & ((D2 >= cut) | (D2 + 1.0 >= R2))
     parts = _ink_components(thin, 80)
     if len(parts) < 3:
@@ -504,6 +510,12 @@ def paint(corked: bool) -> np.ndarray:
     rim_a = rim * 0.58 * cover
     thick_rgb = np.clip(np.array([0.74, 0.84, 0.66], np.float32) * (0.96 + 0.06 * grain[..., None]), 0.0, 1.0)
     thick_a = band * np.where(hole, 0.04, 0.50) * cover
+    # Lower bulb only: a pale wall inside the rim, so the base reads as glass.
+    # It stays out of the bore, and it starts below the upper-belly veil.
+    lower = np.clip((v - 0.735) / 0.030, 0.0, 1.0) * np.clip((0.838 - v) / 0.018, 0.0, 1.0)
+    wall_reach = np.clip((12.5 - dist) / 12.5, 0.0, 1.0)
+    wall_reach = wall_reach * ((~hole) & (cover > 0.25) & (dist < 13.0) & (dist > 0.4)).astype(np.float32)
+    thick_a = np.maximum(thick_a, wall_reach * 0.58 * lower)
     line_rgb = np.array([0.90, 0.96, 0.84], np.float32)
     line_a = inner_band * 0.08 * cover
 
@@ -615,7 +627,26 @@ def paint(corked: bool) -> np.ndarray:
     out = np.zeros((H, W, 4), np.float32)
     out[:, :, :3] = premul / safe
     out[:, :, 3] = out_a
-    return np.clip(out, 0.0, 1.0)
+    out = np.clip(out, 0.0, 1.0)
+    _clear_ink_specks(out)
+    return out
+
+
+def _clear_ink_specks(img):
+    """Drop isolated ink pixels, including a diagonal-only touch."""
+    ink = _label_ink(img)
+    parts = _components(ink, 1, False)
+    if len(parts) <= 1:
+        return
+    y0, x0 = int(0.55 * H), int(0.18 * W)
+    paper = np.array([0.86, 0.75, 0.56], np.float32)
+    for pts in parts:
+        if len(pts) > 2:
+            continue
+        for y, x in pts:
+            yy, xx = int(y) + y0, int(x) + x0
+            img[yy, xx, :3] = paper
+            img[yy, xx, 3] = 0.98
 
 
 def _cork(rgb, alpha, u, v, nx, hw_img, over_fn):
@@ -698,13 +729,20 @@ def _label(rgb, alpha, u, v, hw_img, over_fn):
     stain = hash2((u * W).astype(np.int32) // 11, (v * H).astype(np.int32) // 13)
     paper_rgb = np.array([0.86, 0.75, 0.56]) * (0.95 + 0.07 * n)[..., None]
     paper_rgb = np.where((stain > 0.82)[..., None], paper_rgb * 0.92 + np.array([0.45, 0.28, 0.12]) * 0.10, paper_rgb)
-    # A neat thin border on the outer edge, not a scorched fringe.
-    hem = np.clip((edge - 0.962) / 0.038, 0.0, 1.0)
+    # Soft inner shade, then a solid thin border on the visible outline.
+    # The geometric ramp used to miss the top and the clipped bottom.
+    hem = np.clip((edge - 0.94) / 0.06, 0.0, 1.0)
+    # Dark enough to read as a border, red enough that lossy WebP does not
+    # push it under the ink test (r < 0.28 and luma < 70).
+    hem_rgb = np.array([0.48, 0.26, 0.12], np.float32)
     paper_rgb = np.clip(
-        paper_rgb * (1.0 - 0.62 * hem[..., None]) + np.array([0.34, 0.16, 0.07]) * (0.85 * hem[..., None]),
+        paper_rgb * (1.0 - 0.55 * hem[..., None]) + hem_rgb * (0.80 * hem[..., None]),
         0.0,
         1.0,
     )
+    # Solid band on every side, plus the visible outline where the bottle clips a corner.
+    border = paper & ((edge > 0.948) | ~_erode_mask(paper, 3))
+    paper_rgb = np.where(border[..., None], hem_rgb, paper_rgb)
     rgb[:], alpha[:] = over_fn(rgb, alpha, paper_rgb, paper.astype(np.float32) * 0.98)
 
     fibre = 0.62 + 0.38 * (0.5 + 0.5 * np.sin(ru * W * 0.55))
@@ -737,10 +775,10 @@ def _label(rgb, alpha, u, v, hw_img, over_fn):
     ix = np.clip(((mu + 1.0) * 0.5 * (tw - 1)).astype(np.int32), 0, tw - 1)
     iy = np.clip(((mv + 1.0) * 0.5 * (th - 1)).astype(np.int32), 0, th - 1)
     ink = stamp[iy, ix]
-    # Opaque core, soft edge. The previous fade washed the word out at 125 px.
-    tooth = 0.98 + 0.02 * hash2((u * W).astype(np.int32), (v * H).astype(np.int32))
-    ink_a = np.clip((ink - 0.30) / 0.42, 0.0, 1.0) * tooth * on_word.astype(np.float32)
-    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.20, 0.072, 0.034], np.float32), ink_a)
+    # Opaque core. Darker than the round-11 hairline so the word reads at 125 px.
+    tooth = 0.99 + 0.01 * hash2((u * W).astype(np.int32), (v * H).astype(np.int32))
+    ink_a = np.clip((ink - 0.22) / 0.40, 0.0, 1.0) * tooth * on_word.astype(np.float32)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.11, 0.038, 0.016], np.float32), ink_a)
 
 
 def nx_inside(u, v, hw_img):
@@ -878,6 +916,47 @@ def _height_iou(baked, ref, rad):
     return inter / float(union)
 
 
+def _hem_coverage(img):
+    """Fraction of the card's top and bottom rows that read as the dark hem."""
+    luma = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
+    y0, y1 = int(0.60 * H), int(0.84 * H)
+    x0, x1 = int(0.24 * W), int(0.76 * W)
+    card = img[y0:y1, x0:x1, 3] > 0.90
+    sl = luma[y0:y1, x0:x1]
+    ys = np.where(card.any(axis=1))[0]
+    if len(ys) == 0:
+        return 0.0, 0.0
+
+    def row_cov(y):
+        cols = np.where(card[y])[0]
+        if len(cols) < 8:
+            return 0.0
+        return float((sl[y, cols] < 0.42).mean())
+
+    # The outermost rows can be a single antialiased pixel. Use the first
+    # row that spans most of the card.
+    wide = [int(y) for y in ys if int(card[y].sum()) > 40]
+    if not wide:
+        wide = [int(ys[0]), int(ys[-1])]
+    return row_cov(wide[0]), row_cov(wide[-1])
+
+
+def _opaque_run(alpha, vf):
+    """Consecutive pixels with alpha > 0.40, from the outer edge inward."""
+    y = int(vf * H)
+    row = alpha[y]
+    xs = np.where(row > 0.15)[0]
+    if len(xs) == 0:
+        return 0.0
+    run = 0
+    for x in range(int(xs[0]), int(xs[-1])):
+        if row[x] >= 0.40:
+            run += 1
+        elif run > 0:
+            break
+    return float(run)
+
+
 def verify(open_img, cork_img):
     """Print the measurements the round cares about. Exit 1 on a miss."""
     a = open_img[:, :, 3]
@@ -1008,8 +1087,18 @@ def verify(open_img, cork_img):
     if aspect < 1.12 or iou_d + 1e-6 < iou_w + 0.15 or iou_d < 0.45:
         print("FAIL dal")
         ok = False
-    if not sizes or (len(sizes) > 1 and sizes[1] >= 40):
+    if not sizes or (len(sizes) > 1 and sizes[1] >= 1):
         print("FAIL ink components")
+        ok = False
+    top_cov, bot_cov = _hem_coverage(open_img)
+    print(f"hem coverage top={top_cov:.2f} bottom={bot_cov:.2f}")
+    if top_cov < 0.90 or bot_cov < 0.90:
+        print("FAIL hem")
+        ok = False
+    runs = [_opaque_run(a, vf) for vf in (0.76, 0.79, 0.81)]
+    print(f"lower wall opaque run={runs}")
+    if min(runs) < 3.5:
+        print("FAIL lower wall")
         ok = False
     # Bottom is a chord, not a needle: half-width near the contact stays wide.
     y_bot = int((V_CONTACT - 0.004) * H)
