@@ -86,6 +86,7 @@ func _run() -> void:
 	_round16()
 	_round17()
 	_round18()
+	_round19()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2928,13 +2929,13 @@ func _round18() -> void:
 		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
 			still += 1
 	check(still > 0, "the last chunks are still visible on the next frame, %s" % still)
-	for _i in 16:
+	for _i in 26:
 		scoop.update(1.0 / 60.0, false)
 	var left := 0
 	for chip_v2 in scoop.presentation():
 		if float(chip_v2.get("vis_alpha", 0.0)) > 0.12:
 			left += 1
-	check(left == 0, "the last chunks fade out within 0.25s, left %s" % left)
+	check(left == 0, "the last chunks fade out within 0.4s, left %s" % left)
 	var born_alpha := 1.0
 	var born_dust := 1.0
 	var saw_born := false
@@ -3016,3 +3017,141 @@ func _round18() -> void:
 	print("ROUND18 born_a=%.3f dust=%.3f long_pos=%.3f long_size=%.4f long_rot=%.2f pour0=%.3f" % [
 		born_alpha, born_dust, worst_pos, worst_size, worst_rot, pours[0] if not pours.is_empty() else -1.0,
 	])
+
+
+func _round19() -> void:
+	var view := FileAccess.get_file_as_string("res://scripts/view/workshop_view.gd")
+	check(view.find("_mortar_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS") >= 0, "piece canvas uses mips, so a small move does not pop")
+	var piece_dir := DirAccess.open("res://assets/art/mortar/v3/pieces")
+	check(piece_dir != null, "piece directory opens")
+	if piece_dir != null:
+		var piece_names := piece_dir.get_files()
+		piece_names.sort()
+		for piece_name in piece_names:
+			if not str(piece_name).ends_with(".png") or str(piece_name).ends_with(".import"):
+				continue
+			var tex := load("res://assets/art/mortar/v3/pieces/%s" % str(piece_name)) as Texture2D
+			check(tex != null, "%s loads" % str(piece_name))
+			if tex == null:
+				continue
+			var img := tex.get_image()
+			var w := img.get_width() - 1
+			var h := img.get_height() - 1
+			var clear := true
+			var worst := 0.0
+			for corner in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(w, 0), Vector2i(w, h), Vector2i(0, h), Vector2i(w - 1, h - 1)]:
+				var px: Color = img.get_pixelv(corner)
+				worst = maxf(worst, maxf(px.r, maxf(px.g, maxf(px.b, px.a))))
+				if px.a > 0.004 or px.r > 0.004 or px.g > 0.004 or px.b > 0.004:
+					clear = false
+			check(clear, "%s padded border is empty, max %.3f" % [str(piece_name), worst])
+			check(img.has_mipmaps(), "%s keeps mipmaps" % str(piece_name))
+			if img.has_mipmaps() and img.get_format() == Image.FORMAT_RGBA8:
+				var data := img.get_data()
+				var mip_w := img.get_width()
+				var mip_h := img.get_height()
+				var mip_clear := true
+				var mip_worst := 0
+				for mip in range(1, mini(4, img.get_mipmap_count())):
+					mip_w = maxi(1, mip_w >> 1)
+					mip_h = maxi(1, mip_h >> 1)
+					var off := img.get_mipmap_offset(mip)
+					for corner2 in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(mip_w - 1, 0), Vector2i(0, mip_h - 1), Vector2i(mip_w - 1, mip_h - 1)]:
+						if corner2.x >= mip_w or corner2.y >= mip_h:
+							continue
+						var idx: int = off + (corner2.y * mip_w + corner2.x) * 4
+						if idx < 0 or idx + 3 >= data.size():
+							mip_clear = false
+							continue
+						for channel in 4:
+							mip_worst = maxi(mip_worst, int(data[idx + channel]))
+							if int(data[idx + channel]) > 1:
+								mip_clear = false
+				check(mip_clear, "%s mip corners stay empty, max %s" % [str(piece_name), mip_worst])
+	var scoop := MortarPile.new()
+	scoop.motion_reset()
+	scoop.sync(_portion_state("chamomile", 2.0, false))
+	scoop.update(1.0 / 60.0, false)
+	var guard := 0
+	var emptied := false
+	while not scoop.chips().is_empty() and guard < 80:
+		var chip: Dictionary = scoop.chips()[0]
+		var zone: Vector2 = scoop.bowl_to_zone(float(chip["x"]), float(chip["y"]))
+		var scene: Vector2 = scoop.zone_to_scene(zone.x, zone.y)
+		scoop.scoop_under(scene.x, scene.y)
+		guard += 1
+		if scoop.chips().is_empty():
+			emptied = true
+			break
+	check(emptied, "scoop_under empties the bowl, steps %s" % guard)
+	scoop.set_visual_level(0.12)
+	scoop.update(1.0 / 60.0, false)
+	var still := 0
+	for chip_v in scoop.presentation():
+		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
+			still += 1
+	check(still > 0, "last scooped chunks stay up on the next frame, %s" % still)
+	for _i in 26:
+		scoop.update(1.0 / 60.0, false)
+	var left := 0
+	for chip_v2 in scoop.presentation():
+		if float(chip_v2.get("vis_alpha", 0.0)) > 0.12:
+			left += 1
+	check(left == 0, "last scooped chunks are gone after 0.3s, left %s" % left)
+	var reset := MortarPile.new()
+	reset.motion_reset()
+	reset.sync(_portion_state("ginger", 2.2, false))
+	reset.update(1.0 / 60.0, false)
+	var before_n := reset.presentation().size()
+	var before_bed: Dictionary = reset.drawn_bed_fan()
+	check(before_n >= 8 and not before_bed.is_empty(), "reset starts from a drawn pile, n %s" % before_n)
+	reset.sync({})
+	reset.update(1.0 / 60.0, false)
+	var mid_n := 0
+	for chip_v3 in reset.presentation():
+		if float(chip_v3.get("vis_alpha", 0.0)) > 0.45:
+			mid_n += 1
+	var mid_bed: Dictionary = reset.drawn_bed_fan()
+	check(mid_n > 0, "reset does not wipe the chunks in one frame, %s" % mid_n)
+	check(not mid_bed.is_empty(), "reset does not wipe the bed in one frame")
+	check(reset.chips().is_empty(), "reset still clears the logical pile")
+	for _j in 24:
+		reset.update(1.0 / 60.0, false)
+	var end_n := 0
+	for chip_v4 in reset.presentation():
+		if float(chip_v4.get("vis_alpha", 0.0)) > 0.12:
+			end_n += 1
+	check(end_n == 0 and reset.drawn_bed_fan().is_empty(), "reset fade finishes, chunks %s" % end_n)
+	var saffron := MortarPile.new()
+	saffron.motion_reset()
+	var work := 0.0
+	var seen: Dictionary = {}
+	var saw_wave := false
+	var wave_now := 0
+	var wave_held := 0
+	saffron.sync(_portion_state("saffron", work, true))
+	saffron.update(1.0 / 60.0, true)
+	for chip_v5 in saffron.presentation():
+		seen[int(chip_v5["id"])] = true
+	var dw := (3.6 / 3.5) / 60.0
+	for _frame in 230:
+		work = minf(3.6, work + dw)
+		saffron.sync(_portion_state("saffron", work, work < 3.59))
+		saffron.update(1.0 / 60.0, work < 3.59)
+		var born_now := 0
+		var held_now := 0
+		for chip_v6 in saffron.presentation():
+			var cid := int(chip_v6["id"])
+			if bool(chip_v6.get("ghost", false)) or seen.has(cid):
+				seen[cid] = true
+				continue
+			seen[cid] = true
+			born_now += 1
+			if float(chip_v6.get("born_wait", 0.0)) > 0.04:
+				held_now += 1
+		if born_now >= 8:
+			saw_wave = true
+			wave_now = born_now
+			wave_held = held_now
+	check(saw_wave and wave_held >= 4 and wave_now - wave_held <= 4, "saffron wave %s holds %s back" % [wave_now, wave_held])
+	print("ROUND19 scoop_left=%s reset_mid=%s wave=%s held=%s" % [left, mid_n, wave_now, wave_held])

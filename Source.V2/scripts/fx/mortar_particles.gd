@@ -38,6 +38,9 @@ var _shadow_alpha := 0.0
 var _shadow_rx := 0.0
 var _shadow_ry := 0.0
 var _shadow_at := Vector2.ZERO
+## Leftover heap grows in after the bowl empties. It does not pop on.
+var _heap_k := 0.0
+var _heap_dt := 0.0
 var _sweeps: Array[Dictionary] = []
 var _aroma_i: float = 0.0
 var _aroma_hex: String = FALLBACK
@@ -71,6 +74,7 @@ func set_budget(scale: float, reduced_motion: bool = false, specular: bool = tru
 func update(dt: float) -> void:
 	_emit_aroma_stream(dt)
 	_step(dt)
+	_heap_dt += maxf(dt, 0.0)
 
 
 func busy() -> bool:
@@ -204,8 +208,12 @@ func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim
 	_remember_residue(residue)
 	var scale := Vector2(zone.x / ZONE_W, zone.y / ZONE_H)
 	var wipe_u: float = _wipe_u()
+	var heap_want := 0.0
 	if not residue.is_empty() and chips.is_empty() and wipe_u < 1.0:
-		_draw_residue(c, origin, scale, residue, wipe_u)
+		heap_want = 1.0
+	var heap_k := _advance_heap(heap_want)
+	if heap_k > 0.004 and not residue.is_empty() and wipe_u < 1.0:
+		_draw_residue(c, origin, scale, residue, wipe_u, heap_k)
 	# While the spoon transfer owns the pile, the bed ellipse is the surface.
 	# The dust mound is dozens of ellipses and would paint over that bed.
 	if not skip_mound and not chips.is_empty():
@@ -231,7 +239,9 @@ static func particle_alpha(p: Dictionary) -> float:
 		if t < 0.6:
 			return 1.0
 		return 1.0 - (t - 0.6) / 0.4
-	var fade_in: float = minf(1.0, t * 6.0)
+	# Dust eases in. A steep fade rewrites the whole disc between frames.
+	var u := clampf(t / 0.55, 0.0, 1.0)
+	var fade_in := u * u * (3.0 - 2.0 * u)
 	return fade_in * (1.0 - t)
 
 
@@ -570,12 +580,26 @@ func _draw_flash(_c: CanvasItem, _origin: Vector2, _scale: Vector2, now: float) 
 		_flash_t0 = -1.0
 
 
-func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dictionary, wipe_u: float) -> void:
-	var amount: float = float(residue.get("amount", 0.0))
+func _advance_heap(want: float) -> float:
+	# Sim time, not the wall clock. A slow frame must not dump the whole heap.
+	var dt := minf(_heap_dt, 0.05)
+	_heap_dt = 0.0
+	var step := dt / 0.50
+	if want >= _heap_k:
+		_heap_k = minf(want, _heap_k + step)
+	else:
+		_heap_k = maxf(want, _heap_k - step)
+	return _heap_k
+
+
+func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dictionary, wipe_u: float, heap_k: float = 1.0) -> void:
+	var grow := heap_k * heap_k * (3.0 - 2.0 * heap_k)
+	var amount: float = float(residue.get("amount", 0.0)) * grow
 	var hex: String = _residue_color_hex(residue)
 	var scene: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY)
-	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * 0.92
-	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * 1.5
+	var span := lerpf(0.42, 1.0, grow)
+	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * 0.92 * span
+	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * 1.5 * span
 	var eased := 0.0
 	var use_clip := false
 	if wipe_u > 0.0:
@@ -702,10 +726,14 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 		_shadow_ry = ry
 		_shadow_at = center
 		_shadow_ready = true
-	_shadow_alpha = lerpf(_shadow_alpha, alpha, 0.08)
-	_shadow_rx = lerpf(_shadow_rx, rx, 0.08)
-	_shadow_ry = lerpf(_shadow_ry, ry, 0.08)
-	_shadow_at = _shadow_at.lerp(center, 0.08)
+	# A slower follow keeps the contact shadow from rewriting a ring each beat.
+	_shadow_alpha = lerpf(_shadow_alpha, alpha, 0.012)
+	_shadow_rx = lerpf(_shadow_rx, rx, 0.012)
+	_shadow_ry = lerpf(_shadow_ry, ry, 0.012)
+	var gap := center - _shadow_at
+	if gap.length() > 1.4:
+		gap = gap.normalized() * 1.4
+	_shadow_at += gap
 	alpha = _shadow_alpha
 	rx = _shadow_rx
 	ry = _shadow_ry
@@ -771,6 +799,8 @@ func quiet_fresh() -> void:
 	_wipe_t0 = -1.0
 	_shadow_ready = false
 	_shadow_alpha = 0.0
+	_heap_k = 0.0
+	_heap_dt = 0.0
 
 
 func _particle_visible(local: Vector2, p: Dictionary, alpha: float, origin: Vector2, scale: Vector2) -> bool:

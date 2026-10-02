@@ -622,6 +622,11 @@ func _build_mortar() -> void:
 	back.z_index = 0
 	_work.add_child(back)
 	_mortar_fx = _painter(_draw_pieces)
+	# Linear filtering was mixing opaque texels into the clear corners.
+	# Display size is a fraction of the piece texture. Nearest minification
+	# rewrites the whole sprite when it moves half a pixel. Mips keep the
+	# padded corner empty, so the filter does not tint it.
+	_mortar_fx.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_mortar_fx.position = ZONE_MORTAR.position
 	_mortar_fx.size = ZONE_MORTAR.size
 	_mortar_fx.z_index = 3

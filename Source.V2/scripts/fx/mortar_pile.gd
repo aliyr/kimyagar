@@ -126,10 +126,13 @@ const PRESENT_MAX_ROT := 6.0
 const PRESENT_SPLIT_TIME := 0.55
 const PRESENT_GRAIN_TIME := 0.45
 const PRESENT_REDROP_TIME := 0.30
+## Outgoing sprites fade slowly enough that one frame does not repaint them.
+const PRESENT_OUT_TIME := 0.90
 const PRESENT_CLAMP_TIME := 0.25
 ## New split children fade in. The last scooped chips fade out. Neither pops off.
-const PRESENT_BORN_TIME := 0.12
-const PRESENT_SCOOP_TIME := 0.25
+## Big splits stagger births; 0.20 s keeps a single child from popping in.
+const PRESENT_BORN_TIME := 0.22
+const PRESENT_SCOOP_TIME := 0.46
 ## Bed alpha eases across this level span (~0.25 s of the scoop) instead of vanishing at 0.12.
 const BED_FADE_HIGH := 0.30
 const BED_FADE_LOW := 0.08
@@ -165,6 +168,10 @@ var _ghost_seen: float = 0.0
 var _last_pose: Dictionary = {}
 var _drawn_pose: Dictionary = {}
 var _bed_color: Color = Color("#8a7a52")
+## Leftover heap height while the logical pile is already gone. -1 snaps.
+var _drawn_level: float = -1.0
+## The first fill snaps. A later refill onto a cleared bowl fades in.
+var _filled_once: bool = false
 static var _bed_shade: Texture2D
 
 
@@ -208,6 +215,7 @@ func setup(state: Dictionary, seed: int = 1) -> void:
 	_ghost_seen = 0.0
 	_last_pose = {}
 	_drawn_pose = {}
+	_drawn_level = -1.0
 	_bed_color = Color("#8a7a52")
 	_aim = _lean_aim()
 	sync(state)
@@ -215,6 +223,7 @@ func setup(state: Dictionary, seed: int = 1) -> void:
 
 func sync(state: Dictionary) -> void:
 	if state.is_empty() or str(state.get("ingredientId", "")) == "":
+		_hold_drawn_level()
 		_has_mortar = false
 		_sync_clear()
 		_present_sync()
@@ -223,6 +232,7 @@ func sync(state: Dictionary) -> void:
 	if portions_v is Array:
 		var raw: Array = portions_v
 		if raw.is_empty():
+			_hold_drawn_level()
 			_has_mortar = false
 			_sync_clear()
 			_present_sync()
@@ -245,6 +255,7 @@ func sync(state: Dictionary) -> void:
 				"color": col,
 			})
 		if portions.is_empty():
+			_hold_drawn_level()
 			_has_mortar = false
 			_sync_clear()
 			_present_sync()
@@ -428,7 +439,10 @@ func scoop_under(scene_x: float, scene_y: float) -> Array[Dictionary]:
 	if taken.is_empty():
 		return []
 	_chips = stay
-	_release_shown(taken)
+	# The last of the pile stays on screen and fades on the clock. A partial
+	# scoop still hands its chips to the spoon at once.
+	if not stay.is_empty():
+		_release_shown(taken)
 	_add_residue(taken)
 	return _publish_all(taken)
 
@@ -679,7 +693,7 @@ func _push_bed(out: Array, role: String, center: Vector2, rx: float, ry: float, 
 
 ## One soft mound. The logical bed_specs() ellipse stays for coverage tests.
 func drawn_bed_fan() -> Dictionary:
-	var level := _visual_level if _visual_level >= 0.0 else surface_level()
+	var level := _bed_draw_level()
 	var progress := _vis_progress
 	var fade := bed_level_fade(level)
 	if fade <= 0.001 or progress < BED_EPS:
@@ -711,6 +725,39 @@ func drawn_bed_fan() -> Dictionary:
 	var col := _bed_color
 	col.a = 0.92 * clampf(grow, 0.0, 1.0) * fade
 	return {"points": pts, "uvs": uvs, "color": col}
+
+
+## Spoon level is already eased. A reset has no spoon level, so the last
+## heap keeps the height it had and falls over the fade instead of popping off.
+func _bed_draw_level() -> float:
+	if _visual_level >= 0.0:
+		return _visual_level
+	if _drawn_level >= 0.0:
+		return _drawn_level
+	return surface_level()
+
+
+func _hold_drawn_level() -> void:
+	var keep := _visual_level if _visual_level >= 0.0 else surface_level()
+	if _drawn_level < 0.0 or keep > _drawn_level:
+		_drawn_level = keep
+
+
+func _ease_drawn_level(dt: float) -> void:
+	if dt <= 0.0:
+		return
+	if _visual_level >= 0.0:
+		_drawn_level = _visual_level
+		return
+	var target := surface_level()
+	if _drawn_level < 0.0:
+		_drawn_level = target
+		return
+	var rate := maxf(absf(target - _drawn_level), BED_FADE_LOW) / PRESENT_REDROP_TIME
+	if _drawn_level > target:
+		_drawn_level = maxf(target, _drawn_level - rate * dt)
+	else:
+		_drawn_level = minf(target, _drawn_level + rate * dt)
 
 
 static func bed_level_fade(level: float) -> float:
@@ -2217,7 +2264,13 @@ func _tick_present(dt: float) -> void:
 			s["w"] = lerpf(float(s["sw"]), float(s["tw"]), e)
 			s["h"] = lerpf(float(s["sh"]), float(s["th"]), e)
 			s["rot"] = lerpf(float(s["srot"]), float(s["trot"]), e)
-		if float(s["alpha_left"]) > 0.0 and dt > 0.0:
+		if float(s.get("born_wait", 0.0)) > 0.0 and dt > 0.0:
+			s["born_wait"] = maxf(0.0, float(s["born_wait"]) - dt)
+			s["alpha"] = 0.0
+			s["alpha_from"] = 0.0
+			s["alpha_to"] = 1.0
+			s["alpha_left"] = float(s.get("alpha_dur", PRESENT_BORN_TIME))
+		elif float(s["alpha_left"]) > 0.0 and dt > 0.0:
 			s["alpha_left"] = float(s["alpha_left"]) - dt
 			var ua := 1.0
 			if float(s["alpha_left"]) > 0.0 and float(s["alpha_dur"]) > 0.0:
@@ -2259,6 +2312,7 @@ func _tick_present(dt: float) -> void:
 		_vis_progress = lerpf(_bed_from, _bed_to, eb)
 	if dt > 0.0:
 		_motion_bed = maxf(_motion_bed, absf(_vis_progress - prev_bed))
+	_ease_drawn_level(dt)
 	_record_motion()
 
 
@@ -2271,7 +2325,11 @@ func _clamp_step(s: Dictionary, px: float, py: float, pw: float, ph: float, prot
 	# A detailed sprite shifted more than about two pixels over three frames
 	# rewrites almost every texel. Stay under that.
 	var cap_p := 0.12 * paced
-	var cap_s := 0.012 * paced
+	# Outgoing ghosts may shrink a little faster than a live piece. Still under
+	# the 6% frame limit, so a reset or re-drop does not finish in one frame.
+	var cap_s := 0.008 * paced
+	if bool(s.get("ghost", false)) and float(s.get("alpha_to", 1.0)) <= 0.02:
+		cap_s = 0.01 * paced
 	var cap_r := 1.1 * paced
 	var dx := float(s["x"]) - px
 	var dy := float(s["y"]) - py
@@ -2334,12 +2392,36 @@ func _present_sync() -> void:
 		_bed_left = 0.0
 		_bed_color = mean_color()
 		_present_snap = false
+		_filled_once = true
 		_last_pose = {}
 		_drawn_pose = {}
 		return
 	if _shown.is_empty():
 		if logical.is_empty():
 			return
+		if _filled_once:
+			# A refill onto a cleared bowl used to stamp the new pieces on in one frame.
+			var drop_i := 0
+			for chip_v in logical:
+				var born := _vis_new(chip_v, 0.0)
+				var bk := 0.32
+				born["w"] = float(born["w"]) * bk
+				born["h"] = float(born["h"]) * bk
+				born["sw"] = float(born["w"])
+				born["sh"] = float(born["h"])
+				born["tw"] = float(born["w"])
+				born["th"] = float(born["h"])
+				born["alpha"] = 0.0
+				born["alpha_from"] = 0.0
+				born["alpha_to"] = 1.0
+				born["alpha_left"] = PRESENT_OUT_TIME
+				born["alpha_dur"] = PRESENT_OUT_TIME
+				born["born_wait"] = float(int(drop_i / 4)) * 0.067
+				drop_i += 1
+				_shown.append(born)
+			_ease_bed(progress)
+			return
+		_filled_once = true
 		for chip_v in logical:
 			_shown.append(_vis_new(chip_v, 1.0))
 		_vis_progress = progress
@@ -2355,37 +2437,33 @@ func _present_sync() -> void:
 			continue
 		live[int(s["id"])] = s
 	if logical.is_empty():
+		var dur := PRESENT_REDROP_TIME if not _has_mortar else PRESENT_SCOOP_TIME
 		for item_v in _shown:
-			_begin_fade(item_v, PRESENT_SCOOP_TIME, true)
+			var fading: Dictionary = item_v
+			var already := bool(fading.get("ghost", false)) and float(fading.get("alpha_to", 1.0)) <= 0.0 and float(fading.get("alpha_left", 0.0)) > 0.0
+			if already:
+				continue
+			_begin_fade(fading, dur, true)
+			var sk := 0.42
+			fading["tw"] = float(fading["sw"]) * sk
+			fading["th"] = float(fading["sh"]) * sk
 		_ease_bed(0.0)
 		return
 	var overlap := 0
 	for chip_v in logical:
 		if live.has(int(chip_v["id"])):
 			overlap += 1
-	# A new drop shares no ids with the previous bowl. Keep the crossfade, but
-	# the outgoing sprites drop to a speck immediately. A full-size fade still
-	# running at the first strikes rewrote more than a thousand pixels.
+	# A new drop shares no ids with the previous bowl. The old sprites fade
+	# and shrink. Snapping them small in one frame rewrote the whole bowl.
 	if overlap == 0:
 		for item_v in _shown:
 			var s2: Dictionary = item_v
 			if bool(s2.get("ghost", false)):
 				continue
-			_begin_fade(s2, PRESENT_REDROP_TIME, false)
-			var kw := float(s2["w"]) * 0.28
-			var kh := float(s2["h"]) * 0.28
-			s2["w"] = kw
-			s2["h"] = kh
-			s2["sw"] = kw
-			s2["sh"] = kh
-			s2["tw"] = kw
-			s2["th"] = kh
-			s2["sx"] = float(s2["x"])
-			s2["sy"] = float(s2["y"])
-			s2["tx"] = float(s2["x"])
-			s2["ty"] = float(s2["y"])
-			s2["left"] = 0.0
-			s2["dur"] = 0.0
+			_begin_fade(s2, PRESENT_OUT_TIME, true)
+			s2["tw"] = float(s2["sw"]) * 0.42
+			s2["th"] = float(s2["sh"]) * 0.42
+		var drop_i := 0
 		for chip_v2 in logical:
 			var born := _vis_new(chip_v2, 0.0)
 			var bk := 0.28
@@ -2397,14 +2475,17 @@ func _present_sync() -> void:
 			born["th"] = float(born["h"])
 			born["alpha_from"] = 0.0
 			born["alpha_to"] = 1.0
-			born["alpha_left"] = PRESENT_REDROP_TIME
-			born["alpha_dur"] = PRESENT_REDROP_TIME
+			born["alpha_left"] = PRESENT_OUT_TIME
+			born["alpha_dur"] = PRESENT_OUT_TIME
+			born["born_wait"] = float(int(drop_i / 4)) * 0.067
+			drop_i += 1
 			_shown.append(born)
 		_ease_bed(progress)
 		return
 	var next: Array = []
 	var extras: Array = []
 	var used: Dictionary = {}
+	var pending: Array[Dictionary] = []
 	for chip_v in logical:
 		var id := int(chip_v["id"])
 		if live.has(id):
@@ -2412,36 +2493,44 @@ func _present_sync() -> void:
 			next.append(live[id])
 			used[id] = true
 		else:
-			var born2 := _vis_new(chip_v, 0.0)
-			var parent: Dictionary = _nearest_live(live, float(chip_v["x"]), float(chip_v["y"]))
-			if not parent.is_empty():
-				born2["x"] = float(parent["x"])
-				born2["y"] = float(parent["y"])
-				born2["w"] = float(parent["w"])
-				born2["h"] = float(parent["h"])
-				born2["rot"] = float(parent["rot"])
-				born2["sx"] = float(parent["x"])
-				born2["sy"] = float(parent["y"])
-				born2["sw"] = float(parent["w"])
-				born2["sh"] = float(parent["h"])
-				born2["srot"] = float(parent["rot"])
-				born2["tx"] = float(parent["x"])
-				born2["ty"] = float(parent["y"])
-				born2["tw"] = float(parent["w"])
-				born2["th"] = float(parent["h"])
-				born2["trot"] = float(parent["rot"])
-			# Start under the target and grow. A child born at the parent's full size
-			# pops thousands of pixels even while its alpha is fading in.
-			var born_k := 0.28
-			born2["w"] = float(chip_v["w"]) * float(chip_v.get("draw_k", 1.0)) * born_k
-			born2["h"] = float(chip_v["h"]) * float(chip_v.get("draw_k", 1.0)) * born_k
-			born2["alpha"] = 0.0
-			born2["alpha_from"] = 0.0
-			born2["alpha_to"] = 1.0
-			born2["alpha_left"] = PRESENT_BORN_TIME
-			born2["alpha_dur"] = PRESENT_BORN_TIME
-			_aim_visual(born2, chip_v, extras)
-			next.append(born2)
+			pending.append(chip_v)
+	# A big crush (saffron's 18 children) used to birth every child on one frame.
+	# Groups of four start 4 frames apart, so the whole wave is about 0.27 s.
+	var birth_i := 0
+	for chip_v in pending:
+		var born2 := _vis_new(chip_v, 0.0)
+		var parent: Dictionary = _nearest_live(live, float(chip_v["x"]), float(chip_v["y"]))
+		if not parent.is_empty():
+			born2["x"] = float(parent["x"])
+			born2["y"] = float(parent["y"])
+			born2["w"] = float(parent["w"])
+			born2["h"] = float(parent["h"])
+			born2["rot"] = float(parent["rot"])
+			born2["sx"] = float(parent["x"])
+			born2["sy"] = float(parent["y"])
+			born2["sw"] = float(parent["w"])
+			born2["sh"] = float(parent["h"])
+			born2["srot"] = float(parent["rot"])
+			born2["tx"] = float(parent["x"])
+			born2["ty"] = float(parent["y"])
+			born2["tw"] = float(parent["w"])
+			born2["th"] = float(parent["h"])
+			born2["trot"] = float(parent["rot"])
+		# Start under the target and grow. A child born at the parent's full size
+		# pops thousands of pixels even while its alpha is fading in.
+		var born_k := 0.16
+		born2["w"] = float(chip_v["w"]) * float(chip_v.get("draw_k", 1.0)) * born_k
+		born2["h"] = float(chip_v["h"]) * float(chip_v.get("draw_k", 1.0)) * born_k
+		born2["alpha"] = 0.0
+		born2["alpha_from"] = 0.0
+		born2["alpha_to"] = 1.0
+		born2["alpha_left"] = PRESENT_BORN_TIME
+		born2["alpha_dur"] = PRESENT_BORN_TIME
+		if pending.size() >= 4:
+			born2["born_wait"] = 0.06 + float(int(birth_i / 2)) * 0.08
+		birth_i += 1
+		_aim_visual(born2, chip_v, extras)
+		next.append(born2)
 	for id_v in live.keys():
 		if used.has(id_v):
 			continue
@@ -2513,6 +2602,7 @@ func _vis_new(chip: Dictionary, alpha: float) -> Dictionary:
 		"delay": float(chip.get("delay", 0.0)),
 		"vx": 0.0,
 		"vy": 0.0,
+		"born_wait": 0.0,
 	}
 
 
