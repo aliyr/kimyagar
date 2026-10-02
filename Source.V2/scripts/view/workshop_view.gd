@@ -1433,7 +1433,7 @@ func _draw_pieces(c: Control) -> void:
 	_draw_mortar_bed(c)
 	if _mortar_parts:
 		var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS or _pile.visual_progress() >= MortarPile.BED_EPS
-		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, logical, aim, _pile.residue(), hide_mound)
+		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, logical, aim, _pile.residue(), hide_mound, _pile.heap_ready())
 	for chip in shown:
 		var vis_a := float(chip.get("vis_alpha", 1.0))
 		if vis_a <= 0.02:
@@ -1494,11 +1494,13 @@ func _draw_mortar_bed(c: Control) -> void:
 			for i in n:
 				var speckle := 0.06 * sin(float(i) * 2.7 + 0.4)
 				points.append(pts[i])
+				# Alpha 0 must carry no RGB. A premultiplied blend would stamp this rim.
+				var rim_a := col.a * 0.0
 				colors.append(Color(
-					clampf(col.r * 0.55 + speckle, 0.0, 1.0),
-					clampf(col.g * 0.48 + speckle * 0.8, 0.0, 1.0),
-					clampf(col.b * 0.40 + speckle * 0.5, 0.0, 1.0),
-					0.0
+					clampf(col.r * 0.55 + speckle, 0.0, 1.0) * rim_a,
+					clampf(col.g * 0.48 + speckle * 0.8, 0.0, 1.0) * rim_a,
+					clampf(col.b * 0.40 + speckle * 0.5, 0.0, 1.0) * rim_a,
+					rim_a
 				))
 			var indices := PackedInt32Array()
 			for i in n:

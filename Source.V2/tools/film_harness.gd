@@ -44,10 +44,30 @@ var _flow_rs_max := 0
 var _flow_dropxor: Array[int] = []
 var _flow_drop_max := 0
 var _flow_drop_left := 0
+var _flow_rgb_prev := PackedByteArray()
+var _flow_tail := -1
+var _flow_tail_max := 0
+var _flow_tail_vals: Array[int] = []
+var _flow_surf := -1.0
+var _flow_rd_d: Array[int] = []
+var _flow_rs_d: Array[int] = []
+var _flow_drop_d: Array[int] = []
+var _flow_chip_rgb := Vector3.ZERO
+var _flow_box_rgb := Vector3.ZERO
+var _flow_cornered := false
 var _span_lum: Array = []
 var _span_pose: Array = []
+var _span_rgb: Array = []
 var _fps_sum := 0.0
 var _fps_n := 0
+var _grind_draw_sum := 0.0
+var _grind_draw_n := 0
+var _spoon_draw_sum := 0.0
+var _spoon_draw_n := 0
+var _piece_nz := 0
+var _piece_samples := 0
+var _piece_worst := 0
+var _piece_ring := 0
 var _draw_sum := 0.0
 var _draw_n := 0
 var _flow_haze := 0
@@ -424,8 +444,15 @@ func _flow_frame(host) -> void:
 	var ox := 240 if img.get_width() >= 2300 else 0
 	_fps_sum += Engine.get_frames_per_second()
 	_fps_n += 1
-	_draw_sum += float(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	var draws := float(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	_draw_sum += draws
 	_draw_n += 1
+	if _flow_phase == "grind":
+		_grind_draw_sum += draws
+		_grind_draw_n += 1
+	elif _flow_phase == "scoop":
+		_spoon_draw_sum += draws
+		_spoon_draw_n += 1
 	if _flow_phase == "boot":
 		_flow_load_tex()
 		_flow_empty = img.duplicate()
@@ -441,7 +468,7 @@ func _flow_frame(host) -> void:
 		_flow_snap(host)
 		return
 	if _flow_drop_left > 0 and (_flow_phase == "drop" or _flow_phase == "grind"):
-		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_dropxor, 2)
+		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_dropxor, 2, _flow_drop_d)
 		_flow_drop_left -= 1
 		if _flow_drop_left == 0:
 			_flow_drop_max = _max_of(_flow_dropxor)
@@ -449,9 +476,30 @@ func _flow_frame(host) -> void:
 			_span_pose = []
 	if _flow_phase == "drop":
 		_flow_wait += 1
+		if not _flow_cornered and _flow_wait >= 2 and _flow_pieces_opaque(host):
+			_flow_box_rgb = _chip_box(img, ox)
+			_flow_chip_rgb = _flow_box_rgb
+			_piece_probe(host, img, ox)
+			_flow_write(host, img, "drop-%s" % _live_ings[_live_mat])
+			_flow_cornered = true
 		if _flow_wait >= 2:
 			_flow_haze = _flow_gap(img, ox, host)
-			_flow_write(host, img, "drop-%s" % _live_ings[_live_mat])
+			if host.workshop._pile != null:
+				var vis_n := 0
+				for chip_v in host.workshop._pile.presentation():
+					if float(chip_v.get("vis_alpha", 0.0)) >= 0.8:
+						vis_n += 1
+				var surf := -1.0
+				if host.workshop._pile.has_method("surface_k"):
+					surf = float(host.workshop._pile.surface_k())
+				print("DROP %s haze %s opaque %s surf %.3f" % [_live_ings[_live_mat], _flow_haze, vis_n, surf])
+			if OS.get_environment("KIM_FLOW_STOP") == "drop":
+				print("R20B %s corners %s/%s worst %s ring %s" % [
+					_live_ings[_live_mat], _piece_nz, _piece_samples, _piece_worst, _piece_ring,
+				])
+				print("FILM done flow")
+				host.get_tree().quit(0)
+				return
 			_flow_phase = "grind"
 			_flow_wait = 0
 			_flow_hist = []
@@ -468,6 +516,12 @@ func _flow_frame(host) -> void:
 		_flow_snap(host)
 		return
 	if _flow_phase == "grind":
+		if not _flow_cornered and _flow_pieces_opaque(host):
+			_flow_box_rgb = _chip_box(img, ox)
+			_flow_chip_rgb = _flow_box_rgb
+			_piece_probe(host, img, ox)
+			_flow_write(host, img, "drop-%s" % _live_ings[_live_mat])
+			_flow_cornered = true
 		_note_motion(host)
 		var grind_before := _flow_grind_max
 		_flow_count_grind(_bowl_crop(img, ox), _crop_origin(ox))
@@ -517,6 +571,8 @@ func _flow_frame(host) -> void:
 		_flow_wait += 1
 		var level := float(_snap.get("level", 1.0))
 		var phase := str(_snap.get("phase", ""))
+		if _flow_surf < 0.0 and phase == "scoop" and level <= 0.14 and level >= 0.09 and host.workshop._pile != null and host.workshop._pile.has_method("surface_k"):
+			_flow_surf = float(host.workshop._pile.surface_k())
 		var at := Vector2(float(_snap.get("x", 0.0)), float(_snap.get("y", 0.0)))
 		var moved := at.distance_to(_flow_spoon_at)
 		_flow_spoon_at = at
@@ -558,7 +614,7 @@ func _flow_frame(host) -> void:
 		return
 	if _flow_phase == "redrop":
 		_flow_wait += 1
-		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_rd, 2)
+		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_rd, 2, _flow_rd_d)
 		if _flow_wait < 2:
 			_flow_snap(host)
 			return
@@ -577,7 +633,7 @@ func _flow_frame(host) -> void:
 		return
 	if _flow_phase == "rst":
 		_flow_wait += 1
-		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_rs, 2)
+		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_rs, 2, _flow_rs_d)
 		if _flow_wait < 24:
 			_flow_snap(host)
 			return
@@ -608,6 +664,18 @@ func _flow_frame(host) -> void:
 		for pk in _flow_pourk:
 			pk_txt += "%.2f " % float(pk)
 		print("POURK %s %s" % [_live_ings[_live_mat], pk_txt])
+		print("R20 %s chip %.1f %.1f %.1f box %.1f %.1f %.1f surf %.3f tail_n %s tail_max %s tail %s ghid_n %s ghid_med %s ghid_p90 %s ghid_max %s gpres_med %s gpres_p90 %s gpres_max %s drop3 %s redrop3 %s reset3 %s" % [
+			_live_ings[_live_mat], _flow_chip_rgb.x, _flow_chip_rgb.y, _flow_chip_rgb.z, _flow_box_rgb.x, _flow_box_rgb.y, _flow_box_rgb.z, _flow_surf,
+			_flow_tail_vals.size(), _flow_tail_max, _fmt_ints(_flow_tail_vals),
+			_flow_gmat.size(), _median(_flow_gmat), _p90(_flow_gmat), _flow_gmat_max,
+			_median(_flow_graw), _p90(_flow_graw), _flow_graw_max,
+			_max_of(_flow_drop_d), _max_of(_flow_rd_d), _max_of(_flow_rs_d),
+		])
+		print("R20B %s corners %s/%s worst %s ring %s grind_draws %.1f spoon_draws %.1f" % [
+			_live_ings[_live_mat], _piece_nz, _piece_samples, _piece_worst, _piece_ring,
+			_grind_draw_sum / maxf(float(_grind_draw_n), 1.0),
+			_spoon_draw_sum / maxf(float(_spoon_draw_n), 1.0),
+		])
 		_live_mat += 1
 		var flow_n := _live_ings.size()
 		var flow_env := OS.get_environment("KIM_FLOW_N")
@@ -627,7 +695,9 @@ func _flow_frame(host) -> void:
 
 
 func _seed_span(img: Image, ox: int) -> void:
-	_span_lum = [_luma_bytes(_bowl_crop(img, ox))]
+	var crop := _bowl_crop(img, ox)
+	_span_lum = [_luma_bytes(crop)]
+	_span_rgb = [_rgba(crop)]
 	_span_pose = [_snap.duplicate(true)]
 
 
@@ -646,8 +716,28 @@ func _reset_kind_metrics() -> void:
 	_flow_dropxor = []
 	_flow_drop_max = 0
 	_flow_drop_left = 24
+	_flow_rgb_prev = PackedByteArray()
+	_flow_tail = -1
+	_flow_tail_max = 0
+	_flow_tail_vals = []
+	_flow_surf = -1.0
+	_flow_rd_d = []
+	_flow_rs_d = []
+	_flow_drop_d = []
+	_flow_chip_rgb = Vector3.ZERO
+	_flow_box_rgb = Vector3.ZERO
+	_flow_cornered = false
 	_span_lum = []
 	_span_pose = []
+	_span_rgb = []
+	_grind_draw_sum = 0.0
+	_grind_draw_n = 0
+	_spoon_draw_sum = 0.0
+	_spoon_draw_n = 0
+	_piece_nz = 0
+	_piece_samples = 0
+	_piece_worst = 0
+	_piece_ring = 0
 
 
 func _max_of(values: Array) -> int:
@@ -657,18 +747,27 @@ func _max_of(values: Array) -> int:
 	return m
 
 
-func _span_push(crop: Image, origin: Vector2, bucket: Array, mode: int) -> void:
+func _span_push(crop: Image, origin: Vector2, bucket: Array, mode: int, drgb_bucket: Array = []) -> void:
 	var lum := _luma_bytes(crop)
+	var rgba := _rgba(crop)
 	_span_lum.append(lum)
+	_span_rgb.append(rgba)
 	_span_pose.append(_snap.duplicate(true))
 	if _span_lum.size() >= 4:
 		var cur: PackedByteArray = _span_lum[_span_lum.size() - 1]
 		var old: PackedByteArray = _span_lum[_span_lum.size() - 4]
 		var pose_now: Dictionary = _span_pose[_span_pose.size() - 1]
 		var pose_old: Dictionary = _span_pose[_span_pose.size() - 4]
-		bucket.append(_interior_diff(cur, old, crop.get_width(), crop.get_height(), origin, pose_now, pose_old, mode))
+		var w := crop.get_width()
+		var h := crop.get_height()
+		bucket.append(_interior_diff(cur, old, w, h, origin, pose_now, pose_old, mode))
+		if _span_rgb.size() >= 4:
+			var cr: PackedByteArray = _span_rgb[_span_rgb.size() - 1]
+			var oraw: PackedByteArray = _span_rgb[_span_rgb.size() - 4]
+			drgb_bucket.append(_interior_drgb(cr, oraw, w, h, origin, pose_now, pose_old, mode))
 	if _span_lum.size() > 4:
 		_span_lum.remove_at(0)
+		_span_rgb.remove_at(0)
 		_span_pose.remove_at(0)
 
 
@@ -703,6 +802,57 @@ func _interior_diff(cur: PackedByteArray, old: PackedByteArray, w: int, h: int, 
 			continue
 		n += 1
 	return n
+
+
+## Whole-interior change. mode 0 keeps the pestle, mode 1 hides it, mode 2 also hides the spoon.
+## A pixel counts when the sum of absolute channel deltas is at least 18.
+func _interior_drgb(cur: PackedByteArray, old: PackedByteArray, w: int, h: int, origin: Vector2, pose_now: Dictionary, pose_old: Dictionary, mode: int) -> int:
+	var center := origin + Vector2(140.0, 70.0)
+	var shift := _cam_delta(pose_now, pose_old)
+	var sx0 := int(round(shift.x))
+	var sy0 := int(round(shift.y))
+	var n := 0
+	var pixels := w * h
+	for i in pixels:
+		var x := i % w
+		var y := int(i / w)
+		var sx := x + sx0
+		var sy := y + sy0
+		if sx < 0 or sy < 0 or sx >= w or sy >= h:
+			continue
+		var ic := i * 4
+		var io := (sy * w + sx) * 4
+		if ic + 2 >= cur.size() or io + 2 >= old.size():
+			continue
+		var sum := absi(int(cur[ic]) - int(old[io])) + absi(int(cur[ic + 1]) - int(old[io + 1])) + absi(int(cur[ic + 2]) - int(old[io + 2]))
+		if sum < 18:
+			continue
+		var dx := (float(x) + origin.x - center.x) / 120.0
+		var dy := (float(y) + origin.y - center.y) / 56.0
+		if dx * dx + dy * dy > 1.0:
+			continue
+		var vp := origin + Vector2(float(x), float(y))
+		var prad := 14.0
+		if pose_now.has("head_vp") and pose_old.has("head_vp"):
+			prad = maxf(prad, (pose_now["head_vp"] as Vector2).distance_to(pose_old["head_vp"]))
+		if mode >= 1 and (_near_pestle(vp, pose_now, prad) or _near_pestle(vp, pose_old, prad)):
+			continue
+		if mode >= 2 and (_hit_spoon(vp, pose_now) or _hit_spoon(vp, pose_old)):
+			continue
+		n += 1
+	return n
+
+
+func _flow_pieces_opaque(host) -> bool:
+	if host.workshop._pile == null:
+		return false
+	for chip_v in host.workshop._pile.presentation():
+		var chip: Dictionary = chip_v
+		if str(chip.get("kind", "")) == "dust":
+			continue
+		if float(chip.get("vis_alpha", 0.0)) >= 0.8:
+			return true
+	return false
 
 
 func _flow_begin(host) -> void:
@@ -824,6 +974,16 @@ func _tex_a(rgba: PackedByteArray, w: int, x: int, y: int) -> int:
 
 func _stage_local(vp: Vector2, snap: Dictionary) -> Vector2:
 	return vp - Vector2(float(snap.get("stage_ox", 0.0)), 0.0)
+
+
+func _in_pestle_rect(vp: Vector2, snap: Dictionary, pad: float) -> bool:
+	if not bool(snap.get("pestle", false)):
+		return false
+	var local: Vector2 = (snap["inv"] as Transform2D) * _stage_local(vp, snap)
+	var fitted: Vector2 = snap["fitted"]
+	var inset: Vector2 = snap["inset"]
+	var size := fitted + inset * 2.0
+	return local.x >= -pad and local.y >= -pad and local.x <= size.x + pad and local.y <= size.y + pad
 
 
 func _hit_pestle(vp: Vector2, snap: Dictionary) -> bool:
@@ -1188,6 +1348,16 @@ func _flow_count_scoop(crop: Image, origin: Vector2, moved: float, phase: String
 	if _flow_lum_prev.size() == lum.size() and (phase == "approach" or phase == "dip" or phase == "scoop" or phase == "carry"):
 		var step := _masked_diff(lum, _flow_lum_prev, w, h, origin, true, _snap, prev_pose)
 		var mat := _interior_diff(lum, _flow_lum_prev, w, h, origin, _snap, prev_pose, 2)
+		var rgba := _rgba(crop)
+		if _flow_rgb_prev.size() == rgba.size():
+			var drgb := _interior_drgb(rgba, _flow_rgb_prev, w, h, origin, _snap, prev_pose, 2)
+			if _flow_tail < 0 and phase == "scoop" and level <= 0.14 and level >= 0.09:
+				_flow_tail = 31
+			if _flow_tail > 0:
+				_flow_tail_vals.append(drgb)
+				_flow_tail_max = maxi(_flow_tail_max, drgb)
+				_flow_tail -= 1
+		_flow_rgb_prev = rgba
 		if mat > _flow_mat:
 			_flow_mat = mat
 		if level <= 0.16 and mat > _flow_end:
@@ -1605,6 +1775,204 @@ func _median(values: Array[int]) -> int:
 	var copy: Array[int] = values.duplicate()
 	copy.sort()
 	return copy[copy.size() / 2]
+
+
+func _p90(values: Array[int]) -> int:
+	if values.is_empty():
+		return 0
+	var copy: Array[int] = values.duplicate()
+	copy.sort()
+	var i := int(floor(float(copy.size() - 1) * 0.90))
+	return copy[clampi(i, 0, copy.size() - 1)]
+
+
+func _fmt_ints(values: Array[int]) -> String:
+	var txt := ""
+	var n := mini(values.size(), 31)
+	for i in n:
+		txt += "%s " % int(values[i])
+	return txt
+
+
+func _chip_box(img: Image, ox: int) -> Vector3:
+	if _flow_empty == null:
+		return Vector3.ZERO
+	var crop := _bowl_crop(img, ox)
+	var empty := _bowl_crop(_flow_empty, ox)
+	var w := crop.get_width()
+	var a := _rgba(crop)
+	var b := _rgba(empty)
+	var n := 0
+	var r := 0.0
+	var g := 0.0
+	var bl := 0.0
+	var pixels := mini(int(a.size() / 4), int(b.size() / 4))
+	for i in pixels:
+		var o := i * 4
+		var sum := absi(int(a[o]) - int(b[o])) + absi(int(a[o + 1]) - int(b[o + 1])) + absi(int(a[o + 2]) - int(b[o + 2]))
+		if sum < 30:
+			continue
+		var x := i % w
+		var y := int(i / w)
+		var dx := (float(x) - 140.0) / 120.0
+		var dy := (float(y) - 70.0) / 56.0
+		if dx * dx + dy * dy > 1.0:
+			continue
+		r += float(a[o])
+		g += float(a[o + 1])
+		bl += float(a[o + 2])
+		n += 1
+	if n == 0:
+		return Vector3.ZERO
+	return Vector3(r / float(n), g / float(n), bl / float(n))
+
+
+func _piece_probe(host, img: Image, ox: int) -> void:
+	_piece_nz = 0
+	_piece_samples = 0
+	_piece_worst = 0
+	_piece_ring = 0
+	if _flow_empty == null or host.workshop._pile == null or host.workshop._mortar_fx == null:
+		return
+	var xf: Transform2D = host.workshop._mortar_fx.get_global_transform()
+	var shown: Array = host.workshop._pile.presentation()
+	var quads: Array = []
+	for chip_v in shown:
+		var chip: Dictionary = chip_v
+		if float(chip.get("vis_alpha", 1.0)) < 0.8:
+			continue
+		if str(chip.get("kind", "")) == "dust":
+			continue
+		var lay: Dictionary = host.workshop._pile.layout_chip(chip)
+		var poly: PackedVector2Array = lay["poly"]
+		if poly.size() < 3:
+			continue
+		var pts: Array[Vector2] = []
+		var acc := Vector2.ZERO
+		for p in poly:
+			var g: Vector2 = xf * p
+			var at := Vector2(g.x + float(ox), g.y)
+			pts.append(at)
+			acc += at
+		var uvs: PackedVector2Array = lay["uvs"]
+		quads.append({"pts": pts, "uvs": uvs, "mid": acc / float(pts.size()), "kind": str(chip.get("kind", "")), "spr": int(chip.get("sprite", -1)), "w": float(lay["w"]), "h": float(lay["h"])})
+	var own_nz := 0
+	var lap_nz := 0
+	var core_n := 0
+	var core_r := 0.0
+	var core_g := 0.0
+	var core_b := 0.0
+	for qi in quads.size():
+		var quad: Dictionary = quads[qi]
+		var pts: Array = quad["pts"]
+		var mid: Vector2 = quad["mid"]
+		for corner_v in pts:
+			var corner: Vector2 = corner_v
+			var inward := mid - corner
+			if inward.length() < 0.001:
+				continue
+			inward = inward.normalized()
+			for inset in [0.5, 1.0, 2.0]:
+				var sample: Vector2 = corner + inward * inset
+				if _in_pestle_rect(sample, _snap, 3.0):
+					continue
+				var delta := _px_delta(img, _flow_empty, sample)
+				_piece_samples += 1
+				var lap := false
+				for qj in quads.size():
+					if qj == qi:
+						continue
+					var other: Array = quads[qj]["pts"]
+					if _pt_in_poly(sample, other):
+						lap = true
+						break
+				if delta > 0:
+					_piece_nz += 1
+					if lap:
+						lap_nz += 1
+					else:
+						own_nz += 1
+				if not lap:
+					_piece_worst = maxi(_piece_worst, delta)
+		var min_p: Vector2 = pts[0]
+		var max_p: Vector2 = pts[0]
+		for pt_v in pts:
+			var pt: Vector2 = pt_v
+			min_p.x = minf(min_p.x, pt.x)
+			min_p.y = minf(min_p.y, pt.y)
+			max_p.x = maxf(max_p.x, pt.x)
+			max_p.y = maxf(max_p.y, pt.y)
+		var x0 := int(floor(min_p.x)) - 3
+		var y0 := int(floor(min_p.y)) - 3
+		var x1 := int(ceil(max_p.x)) + 3
+		var y1 := int(ceil(max_p.y)) + 3
+		for y in range(y0, y1 + 1):
+			for x in range(x0, x1 + 1):
+				var inside := x >= int(floor(min_p.x)) and x <= int(ceil(max_p.x)) and y >= int(floor(min_p.y)) and y <= int(ceil(max_p.y))
+				if inside:
+					continue
+				var at := Vector2(x, y)
+				var covered := false
+				for qj2 in quads.size():
+					var box: Array = quads[qj2]["pts"]
+					var b0: Vector2 = box[0]
+					var b1: Vector2 = box[0]
+					for bp_v in box:
+						var bp: Vector2 = bp_v
+						b0.x = minf(b0.x, bp.x)
+						b0.y = minf(b0.y, bp.y)
+						b1.x = maxf(b1.x, bp.x)
+						b1.y = maxf(b1.y, bp.y)
+					if at.x >= b0.x and at.x <= b1.x and at.y >= b0.y and at.y <= b1.y:
+						covered = true
+						break
+				if covered:
+					continue
+				if _in_pestle_rect(at, _snap, 3.0):
+					continue
+				if _px_delta(img, _flow_empty, at) > 0:
+					_piece_ring += 1
+		if not _in_pestle_rect(mid, _snap, 3.0):
+			var mx := int(floor(mid.x))
+			var my := int(floor(mid.y))
+			if mx >= 0 and my >= 0 and mx < img.get_width() and my < img.get_height():
+				var core := img.get_pixel(mx, my)
+				core_r += core.r * 255.0
+				core_g += core.g * 255.0
+				core_b += core.b * 255.0
+				core_n += 1
+	if core_n > 0:
+		_flow_chip_rgb = Vector3(core_r / float(core_n), core_g / float(core_n), core_b / float(core_n))
+	_piece_nz = own_nz
+	print("PIECE own ", own_nz, " lap ", lap_nz, " ring ", _piece_ring, " core ", snappedf(_flow_chip_rgb.x, 0.1), " ", snappedf(_flow_chip_rgb.y, 0.1), " ", snappedf(_flow_chip_rgb.z, 0.1))
+
+
+func _pt_in_poly(pt: Vector2, poly: Array) -> bool:
+	var inside := false
+	var n := poly.size()
+	var j := n - 1
+	for i in n:
+		var a: Vector2 = poly[i]
+		var b: Vector2 = poly[j]
+		if ((a.y > pt.y) != (b.y > pt.y)) and (pt.x < (b.x - a.x) * (pt.y - a.y) / (b.y - a.y) + a.x):
+			inside = not inside
+		j = i
+	return inside
+
+
+func _px_delta(img: Image, empty: Image, at: Vector2) -> int:
+	var x := int(floor(at.x))
+	var y := int(floor(at.y))
+	if x < 0 or y < 0 or x >= img.get_width() or y >= img.get_height():
+		return 0
+	if x >= empty.get_width() or y >= empty.get_height():
+		return 0
+	var a := img.get_pixel(x, y)
+	var b := empty.get_pixel(x, y)
+	var d := int(round(absf(a.r - b.r) * 255.0))
+	d = maxi(d, int(round(absf(a.g - b.g) * 255.0)))
+	d = maxi(d, int(round(absf(a.b - b.b) * 255.0)))
+	return d
 
 
 func _flow_write(host, img: Image, label: String) -> void:

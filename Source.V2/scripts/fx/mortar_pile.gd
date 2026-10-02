@@ -131,8 +131,15 @@ const PRESENT_OUT_TIME := 0.90
 const PRESENT_CLAMP_TIME := 0.25
 ## New split children fade in. The last scooped chips fade out. Neither pops off.
 ## Big splits stagger births; 0.20 s keeps a single child from popping in.
-const PRESENT_BORN_TIME := 0.22
-const PRESENT_SCOOP_TIME := 0.46
+const PRESENT_BORN_TIME := 0.36
+const PRESENT_SCOOP_TIME := 0.40
+## The last scoop's surface falls on a clock, not on the level step.
+const SURFACE_EASE := 0.40
+## A reset bed eases out, then the next heap eases in. Step stays under 0.03.
+const BED_EASE_TIME := 0.50
+const BED_STEP_MAX := 0.03
+## Leftover heap is gone within 2 s of the spoon leaving the bowl.
+const CARRY_FADE_TIME := 2.0
 ## Bed alpha eases across this level span (~0.25 s of the scoop) instead of vanishing at 0.12.
 const BED_FADE_HIGH := 0.30
 const BED_FADE_LOW := 0.08
@@ -170,6 +177,19 @@ var _drawn_pose: Dictionary = {}
 var _bed_color: Color = Color("#8a7a52")
 ## Leftover heap height while the logical pile is already gone. -1 snaps.
 var _drawn_level: float = -1.0
+var _surface_k: float = 1.0
+var _surface_from: float = 1.0
+var _surface_to: float = 1.0
+var _surface_left: float = 0.0
+var _surface_dur: float = 0.0
+var _surface_level_from: float = 0.0
+var _surface_grow: float = 0.0
+var _level_from: float = 0.0
+var _level_to: float = 0.0
+var _level_left: float = 0.0
+var _level_dur: float = 0.0
+var _carry_left: float = -1.0
+var _carry_amount: float = 0.0
 ## The first fill snaps. A later refill onto a cleared bowl fades in.
 var _filled_once: bool = false
 static var _bed_shade: Texture2D
@@ -216,6 +236,19 @@ func setup(state: Dictionary, seed: int = 1) -> void:
 	_last_pose = {}
 	_drawn_pose = {}
 	_drawn_level = -1.0
+	_surface_k = 1.0
+	_surface_from = 1.0
+	_surface_to = 1.0
+	_surface_left = 0.0
+	_surface_dur = 0.0
+	_surface_level_from = 0.0
+	_surface_grow = 0.0
+	_level_from = 0.0
+	_level_to = 0.0
+	_level_left = 0.0
+	_level_dur = 0.0
+	_carry_left = -1.0
+	_carry_amount = 0.0
 	_bed_color = Color("#8a7a52")
 	_aim = _lean_aim()
 	sync(state)
@@ -226,6 +259,7 @@ func sync(state: Dictionary) -> void:
 		_hold_drawn_level()
 		_has_mortar = false
 		_sync_clear()
+		_begin_out_fade(false)
 		_present_sync()
 		return
 	var portions_v: Variant = state.get("portions", null)
@@ -235,6 +269,7 @@ func sync(state: Dictionary) -> void:
 			_hold_drawn_level()
 			_has_mortar = false
 			_sync_clear()
+			_begin_out_fade(false)
 			_present_sync()
 			return
 		var portions: Array[Dictionary] = []
@@ -258,6 +293,7 @@ func sync(state: Dictionary) -> void:
 			_hold_drawn_level()
 			_has_mortar = false
 			_sync_clear()
+			_begin_out_fade(false)
 			_present_sync()
 			return
 		_has_mortar = true
@@ -324,6 +360,51 @@ func clear_visual_level() -> void:
 	_visual_level = -1.0
 
 
+func surface_k() -> float:
+	return _surface_k
+
+
+## The spoon has left the bowl. The leftover heap fades out over the carry.
+func note_carry() -> void:
+	if _carry_left >= 0.0:
+		return
+	_carry_left = CARRY_FADE_TIME
+	_carry_amount = _residue_amount
+
+
+## New residue waits until the old mound is mostly gone.
+func heap_ready() -> bool:
+	if _surface_k > 0.22:
+		return false
+	if _surface_left > 0.05:
+		return false
+	if _drawn_level > 0.05 and _visual_level < 0.0:
+		return false
+	for chip_v in _shown:
+		var chip: Dictionary = chip_v
+		if float(chip.get("alpha", 0.0)) > 0.22:
+			return false
+	return true
+
+
+func _fade_carried_residue(dt: float) -> void:
+	if _carry_left >= 0.0:
+		_carry_left = maxf(0.0, _carry_left - dt)
+		var u := 1.0 if CARRY_FADE_TIME <= 0.0 else clampf(1.0 - _carry_left / CARRY_FADE_TIME, 0.0, 1.0)
+		var e := u * u * (3.0 - 2.0 * u)
+		_residue_amount = lerpf(_carry_amount, 0.0, e)
+		if _carry_left <= 0.0:
+			_residue_amount = 0.0
+			_residue_hex = ""
+			_carry_left = -1.0
+		return
+	if not _has_mortar and _residue_amount > 0.0:
+		_residue_amount = maxf(0.0, _residue_amount - dt / 2.0)
+		if _residue_amount <= 0.01:
+			_residue_hex = ""
+			_residue_amount = 0.0
+
+
 func update(dt: float, grinding: bool, impact: Variant = null) -> void:
 	_fade_marks(dt)
 	var next: String = _mode_for(grinding)
@@ -343,11 +424,7 @@ func update(dt: float, grinding: bool, impact: Variant = null) -> void:
 	_apply_aim()
 	_tick_pile(dt)
 	_tick_present(dt)
-	if not _has_mortar and _residue_amount > 0.0:
-		_residue_amount = maxf(0.0, _residue_amount - dt / 2.0)
-		if _residue_amount <= 0.01:
-			_residue_hex = ""
-			_residue_amount = 0.0
+	_fade_carried_residue(dt)
 
 
 func chips() -> Array[Dictionary]:
@@ -695,10 +772,16 @@ func _push_bed(out: Array, role: String, center: Vector2, rx: float, ry: float, 
 func drawn_bed_fan() -> Dictionary:
 	var level := _bed_draw_level()
 	var progress := _vis_progress
-	var fade := bed_level_fade(level)
-	if fade <= 0.001 or progress < BED_EPS:
+	var fading_out := _surface_left > 0.0 and _surface_to <= 0.001
+	var fade := _surface_k if fading_out or _visual_level >= 0.0 or not _has_mortar else bed_level_fade(level)
+	if fading_out:
+		fade = _surface_k
+		level = _drawn_level if _drawn_level >= 0.0 else _surface_level_from
+	if fade <= 0.001:
 		return {}
-	var grow := bed_grow(progress)
+	if progress < BED_EPS and not fading_out:
+		return {}
+	var grow := _surface_grow if fading_out else bed_grow(progress)
 	if grow < 0.012:
 		return {}
 	var box := bowl()
@@ -746,18 +829,26 @@ func _hold_drawn_level() -> void:
 func _ease_drawn_level(dt: float) -> void:
 	if dt <= 0.0:
 		return
+	_advance_out(dt)
+	if _surface_left > 0.0 or _level_left > 0.0:
+		return
 	if _visual_level >= 0.0:
 		_drawn_level = _visual_level
+		if _chips.is_empty():
+			return
+		var target_fade := bed_level_fade(_visual_level)
+		var step := minf(dt / SURFACE_EASE, 0.08)
+		if _surface_k > target_fade:
+			_surface_k = maxf(target_fade, _surface_k - step)
+		else:
+			_surface_k = minf(target_fade, _surface_k + step)
 		return
 	var target := surface_level()
 	if _drawn_level < 0.0:
 		_drawn_level = target
 		return
-	var rate := maxf(absf(target - _drawn_level), BED_FADE_LOW) / PRESENT_REDROP_TIME
-	if _drawn_level > target:
-		_drawn_level = maxf(target, _drawn_level - rate * dt)
-	else:
-		_drawn_level = minf(target, _drawn_level + rate * dt)
+	var gap := clampf(target - _drawn_level, -BED_STEP_MAX, BED_STEP_MAX)
+	_drawn_level += gap
 
 
 static func bed_level_fade(level: float) -> float:
@@ -767,6 +858,90 @@ static func bed_level_fade(level: float) -> float:
 		return 0.0
 	var u := (level - BED_FADE_LOW) / (BED_FADE_HIGH - BED_FADE_LOW)
 	return u * u * (3.0 - 2.0 * u)
+
+
+func _begin_out_fade(scoop: bool) -> void:
+	if _surface_left > 0.0 and _surface_to <= 0.001:
+		return
+	if _vis_progress < BED_EPS and _drawn_level <= 0.04:
+		return
+	if _surface_k <= 0.02 and _drawn_level <= 0.02:
+		_surface_k = 0.0
+		return
+	var dur := SURFACE_EASE if scoop else BED_EASE_TIME
+	_surface_from = _surface_k
+	_surface_to = 0.0
+	_surface_dur = dur
+	_surface_left = dur
+	var lv := _visual_level if _visual_level >= 0.0 else _drawn_level
+	if lv < 0.0:
+		lv = surface_level()
+	_surface_level_from = lv
+	if _drawn_level < 0.0:
+		_drawn_level = lv
+	_surface_grow = bed_grow(_vis_progress)
+	if _visual_level >= 0.0:
+		_drawn_level = _visual_level
+		_surface_level_from = _visual_level
+	if not scoop and _drawn_level > 0.001 and _level_left <= 0.0:
+		_level_from = _drawn_level
+		_level_to = 0.0
+		_level_dur = BED_EASE_TIME
+		_level_left = BED_EASE_TIME
+
+
+func _advance_out(dt: float) -> void:
+	var step_dt := minf(maxf(dt, 0.0), 0.05)
+	if step_dt <= 0.0:
+		return
+	if _surface_left > 0.0:
+		_surface_left = maxf(0.0, _surface_left - step_dt)
+		var u := 1.0 if _surface_dur <= 0.0 else clampf(1.0 - _surface_left / _surface_dur, 0.0, 1.0)
+		var e := u * u * (3.0 - 2.0 * u)
+		var want := lerpf(_surface_from, _surface_to, e)
+		_surface_k += clampf(want - _surface_k, -0.045, 0.045)
+		if _surface_left <= 0.0:
+			_surface_k = _surface_to
+		if _surface_to <= 0.001:
+			var hwant := lerpf(_surface_level_from, 0.0, e)
+			if _drawn_level < 0.0:
+				_drawn_level = _surface_level_from
+			_drawn_level += clampf(hwant - _drawn_level, -0.012, 0.012)
+			if _surface_left <= 0.0:
+				var tail := clampf(0.0 - _drawn_level, -0.012, 0.012)
+				_drawn_level += tail
+	if _level_left > 0.0 and _visual_level < 0.0:
+		_level_left = maxf(0.0, _level_left - step_dt)
+		var u2 := 1.0 if _level_dur <= 0.0 else clampf(1.0 - _level_left / _level_dur, 0.0, 1.0)
+		var e2 := u2 * u2 * (3.0 - 2.0 * u2)
+		var want2 := lerpf(_level_from, _level_to, e2)
+		if _drawn_level < 0.0:
+			_drawn_level = _level_from
+		_drawn_level += clampf(want2 - _drawn_level, -BED_STEP_MAX, BED_STEP_MAX)
+
+
+## True when the previous mound is already gone, so a new drop can use the
+## same full-size chunks as the first pour.
+func _bowl_clear_for_drop() -> bool:
+	# The fade timer can still be counting after the mound has already dropped
+	# below visibility. A new pour onto that bowl is the same full-size drop
+	# as the first one.
+	if _surface_k > 0.12:
+		return false
+	for chip_v in _shown:
+		var chip: Dictionary = chip_v
+		if float(chip.get("alpha", 0.0)) > 0.18:
+			return false
+	return true
+
+
+func _incoming_wait() -> float:
+	var wait := 0.0
+	if _surface_left > 0.12 or _surface_k > 0.35:
+		wait = maxf(wait, maxf(_surface_left * 0.65, 0.28))
+	if _level_left > 0.12:
+		wait = maxf(wait, _level_left * 0.65)
+	return wait
 
 
 static func _pull_margin(p: Vector2) -> Vector2:
@@ -2401,22 +2576,23 @@ func _present_sync() -> void:
 			return
 		if _filled_once:
 			# A refill onto a cleared bowl used to stamp the new pieces on in one frame.
+			# Once the old mound is gone, the new chunks are the same full-size
+			# sprites as the first drop. Fading them in from a tiny scale left
+			# the bowl empty and sampled the wrong colour.
 			var drop_i := 0
+			var clear := _bowl_clear_for_drop()
 			for chip_v in logical:
+				if clear:
+					_shown.append(_vis_new(chip_v, 1.0))
+					drop_i += 1
+					continue
 				var born := _vis_new(chip_v, 0.0)
-				var bk := 0.32
-				born["w"] = float(born["w"]) * bk
-				born["h"] = float(born["h"]) * bk
-				born["sw"] = float(born["w"])
-				born["sh"] = float(born["h"])
-				born["tw"] = float(born["w"])
-				born["th"] = float(born["h"])
 				born["alpha"] = 0.0
 				born["alpha_from"] = 0.0
 				born["alpha_to"] = 1.0
-				born["alpha_left"] = PRESENT_OUT_TIME
-				born["alpha_dur"] = PRESENT_OUT_TIME
-				born["born_wait"] = float(int(drop_i / 4)) * 0.067
+				born["alpha_left"] = PRESENT_BORN_TIME
+				born["alpha_dur"] = PRESENT_BORN_TIME
+				born["born_wait"] = maxf(float(int(drop_i / 4)) * 0.067, _incoming_wait())
 				drop_i += 1
 				_shown.append(born)
 			_ease_bed(progress)
@@ -2437,7 +2613,8 @@ func _present_sync() -> void:
 			continue
 		live[int(s["id"])] = s
 	if logical.is_empty():
-		var dur := PRESENT_REDROP_TIME if not _has_mortar else PRESENT_SCOOP_TIME
+		var dur := BED_EASE_TIME if not _has_mortar else SURFACE_EASE
+		_begin_out_fade(_has_mortar)
 		for item_v in _shown:
 			var fading: Dictionary = item_v
 			var already := bool(fading.get("ghost", false)) and float(fading.get("alpha_to", 1.0)) <= 0.0 and float(fading.get("alpha_left", 0.0)) > 0.0
@@ -2464,20 +2641,18 @@ func _present_sync() -> void:
 			s2["tw"] = float(s2["sw"]) * 0.42
 			s2["th"] = float(s2["sh"]) * 0.42
 		var drop_i := 0
+		var clear := _bowl_clear_for_drop()
 		for chip_v2 in logical:
+			if clear:
+				_shown.append(_vis_new(chip_v2, 1.0))
+				drop_i += 1
+				continue
 			var born := _vis_new(chip_v2, 0.0)
-			var bk := 0.28
-			born["w"] = float(born["w"]) * bk
-			born["h"] = float(born["h"]) * bk
-			born["sw"] = float(born["w"])
-			born["sh"] = float(born["h"])
-			born["tw"] = float(born["w"])
-			born["th"] = float(born["h"])
 			born["alpha_from"] = 0.0
 			born["alpha_to"] = 1.0
-			born["alpha_left"] = PRESENT_OUT_TIME
-			born["alpha_dur"] = PRESENT_OUT_TIME
-			born["born_wait"] = float(int(drop_i / 4)) * 0.067
+			born["alpha_left"] = PRESENT_BORN_TIME
+			born["alpha_dur"] = PRESENT_BORN_TIME
+			born["born_wait"] = maxf(float(int(drop_i / 4)) * 0.067, _incoming_wait())
 			drop_i += 1
 			_shown.append(born)
 		_ease_bed(progress)
@@ -2518,7 +2693,7 @@ func _present_sync() -> void:
 			born2["trot"] = float(parent["rot"])
 		# Start under the target and grow. A child born at the parent's full size
 		# pops thousands of pixels even while its alpha is fading in.
-		var born_k := 0.16
+		var born_k := 0.10
 		born2["w"] = float(chip_v["w"]) * float(chip_v.get("draw_k", 1.0)) * born_k
 		born2["h"] = float(chip_v["h"]) * float(chip_v.get("draw_k", 1.0)) * born_k
 		born2["alpha"] = 0.0
@@ -2527,7 +2702,9 @@ func _present_sync() -> void:
 		born2["alpha_left"] = PRESENT_BORN_TIME
 		born2["alpha_dur"] = PRESENT_BORN_TIME
 		if pending.size() >= 4:
-			born2["born_wait"] = 0.06 + float(int(birth_i / 2)) * 0.08
+			var span := 0.42
+			var denom := float(maxi(pending.size() - 1, 1))
+			born2["born_wait"] = span * float(birth_i) / denom
 		birth_i += 1
 		_aim_visual(born2, chip_v, extras)
 		next.append(born2)
@@ -2557,11 +2734,18 @@ func _ease_bed(target: float) -> void:
 		_bed_dur = PRESENT_REDROP_TIME
 		_bed_left = PRESENT_REDROP_TIME
 	elif delta > 0.015:
+		if _surface_left > 0.0 and _surface_k > 0.35:
+			return
 		_bed_from = _vis_progress
 		_bed_to = target
 		_bed_dur = PRESENT_CLAMP_TIME
 		_bed_left = PRESENT_CLAMP_TIME
 		_bed_color = mean_color()
+		if _surface_k < 0.98 and _surface_left <= 0.0:
+			_surface_from = _surface_k
+			_surface_to = 1.0
+			_surface_dur = SURFACE_EASE
+			_surface_left = SURFACE_EASE
 	else:
 		if _bed_left > 0.0:
 			return

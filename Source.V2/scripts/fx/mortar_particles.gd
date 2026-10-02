@@ -204,12 +204,12 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 	_draw_flash(c, origin, scale, now)
 
 
-func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary, skip_mound: bool = false) -> void:
+func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary, skip_mound: bool = false, heap_ok: bool = true) -> void:
 	_remember_residue(residue)
 	var scale := Vector2(zone.x / ZONE_W, zone.y / ZONE_H)
 	var wipe_u: float = _wipe_u()
 	var heap_want := 0.0
-	if not residue.is_empty() and chips.is_empty() and wipe_u < 1.0:
+	if heap_ok and not residue.is_empty() and chips.is_empty() and wipe_u < 1.0:
 		heap_want = 1.0
 	var heap_k := _advance_heap(heap_want)
 	if heap_k > 0.004 and not residue.is_empty() and wipe_u < 1.0:
@@ -239,8 +239,9 @@ static func particle_alpha(p: Dictionary) -> float:
 		if t < 0.6:
 			return 1.0
 		return 1.0 - (t - 0.6) / 0.4
-	# Dust eases in. A steep fade rewrites the whole disc between frames.
-	var u := clampf(t / 0.55, 0.0, 1.0)
+	# Dust eases in over a fixed span. A one-frame life jump must not flash the disc.
+	var age: float = float(p["life"])
+	var u := clampf(age / 0.30, 0.0, 1.0)
 	var fade_in := u * u * (3.0 - 2.0 * u)
 	return fade_in * (1.0 - t)
 
@@ -257,7 +258,7 @@ static func particle_size(p: Dictionary) -> float:
 	if kind == "aroma":
 		return size * (1.0 + t * 0.9)
 	if kind == "dust":
-		return size * (1.0 + t * 0.3)
+		return size * (0.45 + t * 0.85)
 	return size
 
 
@@ -584,7 +585,7 @@ func _advance_heap(want: float) -> float:
 	# Sim time, not the wall clock. A slow frame must not dump the whole heap.
 	var dt := minf(_heap_dt, 0.05)
 	_heap_dt = 0.0
-	var step := dt / 0.50
+	var step := minf(dt / 0.90, 0.045)
 	if want >= _heap_k:
 		_heap_k = minf(want, _heap_k + step)
 	else:
@@ -703,7 +704,10 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	var mode: String = str(aim.get("mode", "lean"))
 	if mode == "lean":
 		return
-	if chips.is_empty() and mode != "grind":
+	# An empty bowl used to delete the contact shadow in one frame.
+	var leaving: bool = chips.is_empty() and mode != "grind"
+	if leaving and _shadow_alpha <= 0.02:
+		_shadow_ready = false
 		return
 	# A fresh drop is raw pieces only. The contact shadow read as haze in the gaps.
 	if float(aim.get("progress", 1.0)) < MortarPile.BED_EPS and float(aim.get("impact", 0.0)) < 0.05:
@@ -717,19 +721,21 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	var rx_zone: float = HEAD_R_X * (1.05 + lift * 0.5)
 	var rx: float = (rx_zone / 100.0) * ZONE_W
 	var ry: float = ((rx_zone * MORTAR_ASPECT * 0.42) / 100.0) * ZONE_H
-	var alpha: float = 0.34 * (1.0 - lift * 0.55) + impact * 0.1
+	var alpha := 0.34 * (1.0 - lift * 0.55) + impact * 0.1
+	if leaving:
+		alpha = 0.0
 	var center: Vector2 = _map(scene, origin, scale)
 	# The contact shadow used to pulse with the beat and rewrite a ring of pixels.
 	if not _shadow_ready:
 		_shadow_alpha = 0.0
-		_shadow_rx = rx
-		_shadow_ry = ry
+		_shadow_rx = rx * 0.35
+		_shadow_ry = ry * 0.35
 		_shadow_at = center
 		_shadow_ready = true
-	# A slower follow keeps the contact shadow from rewriting a ring each beat.
-	_shadow_alpha = lerpf(_shadow_alpha, alpha, 0.012)
-	_shadow_rx = lerpf(_shadow_rx, rx, 0.012)
-	_shadow_ry = lerpf(_shadow_ry, ry, 0.012)
+	# A one-frame appearance used to stamp the whole contact ellipse.
+	_shadow_alpha += clampf(alpha - _shadow_alpha, -0.03, 0.03)
+	_shadow_rx += clampf(rx - _shadow_rx, -rx * 0.08, rx * 0.08)
+	_shadow_ry += clampf(ry - _shadow_ry, -ry * 0.08, ry * 0.08)
 	var gap := center - _shadow_at
 	if gap.length() > 1.4:
 		gap = gap.normalized() * 1.4

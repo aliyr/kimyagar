@@ -87,6 +87,7 @@ func _run() -> void:
 	_round17()
 	_round18()
 	_round19()
+	_round20()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2905,15 +2906,19 @@ func _round18() -> void:
 	bed.sync(_portion_state("ginger", 2.0, false))
 	bed.update(1.0 / 60.0, false)
 	bed.set_visual_level(0.20)
+	for _bed_i in 8:
+		bed.update(1.0 / 60.0, false)
 	var hi: Dictionary = bed.drawn_bed_fan()
-	bed.set_visual_level(0.13)
-	var mid: Dictionary = bed.drawn_bed_fan()
 	bed.set_visual_level(0.12)
+	for _bed_j in 10:
+		bed.update(1.0 / 60.0, false)
 	var lo: Dictionary = bed.drawn_bed_fan()
-	check(not hi.is_empty() and not mid.is_empty() and not lo.is_empty(), "the bed does not vanish at level 0.12")
+	check(not hi.is_empty() and not lo.is_empty(), "the bed does not vanish at level 0.12")
 	var drop := float(hi["color"].a) - float(lo["color"].a)
 	check(drop > 0.02 and drop < 0.55, "bed alpha eases across the last of the scoop, drop %s" % drop)
 	bed.set_visual_level(0.08)
+	for _bed_k in 30:
+		bed.update(1.0 / 60.0, false)
 	check(bed.drawn_bed_fan().is_empty(), "the bed is gone once the pile is at the floor")
 	var scoop := MortarPile.new()
 	scoop.motion_reset()
@@ -3035,39 +3040,31 @@ func _round19() -> void:
 			if tex == null:
 				continue
 			var img := tex.get_image()
-			var w := img.get_width() - 1
-			var h := img.get_height() - 1
+			var w := img.get_width()
+			var h := img.get_height()
 			var clear := true
-			var worst := 0.0
-			for corner in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(w, 0), Vector2i(w, h), Vector2i(0, h), Vector2i(w - 1, h - 1)]:
-				var px: Color = img.get_pixelv(corner)
-				worst = maxf(worst, maxf(px.r, maxf(px.g, maxf(px.b, px.a))))
-				if px.a > 0.004 or px.r > 0.004 or px.g > 0.004 or px.b > 0.004:
-					clear = false
-			check(clear, "%s padded border is empty, max %.3f" % [str(piece_name), worst])
+			var worst_a := 0.0
+			for y in mini(2, h):
+				for x in w:
+					worst_a = maxf(worst_a, img.get_pixel(x, y).a)
+					worst_a = maxf(worst_a, img.get_pixel(x, h - 1 - y).a)
+					if img.get_pixel(x, y).a > 0.004 or img.get_pixel(x, h - 1 - y).a > 0.004:
+						clear = false
+			for x2 in mini(2, w):
+				for y2 in h:
+					worst_a = maxf(worst_a, img.get_pixel(x2, y2).a)
+					worst_a = maxf(worst_a, img.get_pixel(w - 1 - x2, y2).a)
+					if img.get_pixel(x2, y2).a > 0.004 or img.get_pixel(w - 1 - x2, y2).a > 0.004:
+						clear = false
+			check(clear, "%s keeps a clear 2px margin, max alpha %.3f" % [str(piece_name), worst_a])
+			var bled := false
+			var bleed_px: Color = img.get_pixel(0, 0)
+			if bleed_px.a <= 0.004 and (bleed_px.r > 0.02 or bleed_px.g > 0.02 or bleed_px.b > 0.02):
+				bled = true
+			check(bled, "%s transparent edge keeps a colour, rgb %.2f %.2f %.2f" % [str(piece_name), bleed_px.r, bleed_px.g, bleed_px.b])
 			check(img.has_mipmaps(), "%s keeps mipmaps" % str(piece_name))
-			if img.has_mipmaps() and img.get_format() == Image.FORMAT_RGBA8:
-				var data := img.get_data()
-				var mip_w := img.get_width()
-				var mip_h := img.get_height()
-				var mip_clear := true
-				var mip_worst := 0
-				for mip in range(1, mini(4, img.get_mipmap_count())):
-					mip_w = maxi(1, mip_w >> 1)
-					mip_h = maxi(1, mip_h >> 1)
-					var off := img.get_mipmap_offset(mip)
-					for corner2 in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(mip_w - 1, 0), Vector2i(0, mip_h - 1), Vector2i(mip_w - 1, mip_h - 1)]:
-						if corner2.x >= mip_w or corner2.y >= mip_h:
-							continue
-						var idx: int = off + (corner2.y * mip_w + corner2.x) * 4
-						if idx < 0 or idx + 3 >= data.size():
-							mip_clear = false
-							continue
-						for channel in 4:
-							mip_worst = maxi(mip_worst, int(data[idx + channel]))
-							if int(data[idx + channel]) > 1:
-								mip_clear = false
-				check(mip_clear, "%s mip corners stay empty, max %s" % [str(piece_name), mip_worst])
+			var imp := FileAccess.get_file_as_string("res://assets/art/mortar/v3/pieces/%s.import" % str(piece_name))
+			check(imp.find("process/fix_alpha_border=true") >= 0, "%s fixes the alpha border" % str(piece_name))
 	var scoop := MortarPile.new()
 	scoop.motion_reset()
 	scoop.sync(_portion_state("chamomile", 2.0, false))
@@ -3115,7 +3112,7 @@ func _round19() -> void:
 	check(mid_n > 0, "reset does not wipe the chunks in one frame, %s" % mid_n)
 	check(not mid_bed.is_empty(), "reset does not wipe the bed in one frame")
 	check(reset.chips().is_empty(), "reset still clears the logical pile")
-	for _j in 24:
+	for _j in 40:
 		reset.update(1.0 / 60.0, false)
 	var end_n := 0
 	for chip_v4 in reset.presentation():
@@ -3155,3 +3152,82 @@ func _round19() -> void:
 			wave_held = held_now
 	check(saw_wave and wave_held >= 4 and wave_now - wave_held <= 4, "saffron wave %s holds %s back" % [wave_now, wave_held])
 	print("ROUND19 scoop_left=%s reset_mid=%s wave=%s held=%s" % [left, mid_n, wave_now, wave_held])
+
+
+func _round20() -> void:
+	var scoop := MortarPile.new()
+	scoop.motion_reset()
+	scoop.sync(_portion_state("chamomile", 2.0, false))
+	scoop.update(1.0 / 60.0, false)
+	var guard := 0
+	while not scoop.chips().is_empty() and guard < 80:
+		var chip: Dictionary = scoop.chips()[0]
+		var zone: Vector2 = scoop.bowl_to_zone(float(chip["x"]), float(chip["y"]))
+		var scene: Vector2 = scoop.zone_to_scene(zone.x, zone.y)
+		scoop.scoop_under(scene.x, scene.y)
+		guard += 1
+	var before := scoop.surface_k()
+	scoop.scoop_rest()
+	scoop.set_visual_level(0.12)
+	scoop.update(1.0 / 60.0, false)
+	var step1 := absf(before - scoop.surface_k())
+	check(step1 < 0.08 and scoop.surface_k() > 0.85, "surface does not drop in one frame, step %s k %s" % [step1, scoop.surface_k()])
+	for _i in 12:
+		scoop.update(1.0 / 60.0, false)
+	check(scoop.surface_k() > 0.15 and scoop.surface_k() < 0.95, "surface is mid-fade after 0.2s, k %s" % scoop.surface_k())
+	for _j in 20:
+		scoop.update(1.0 / 60.0, false)
+	check(scoop.surface_k() <= 0.02, "surface is gone after the 0.4s ease, k %s" % scoop.surface_k())
+	var reset := MortarPile.new()
+	reset.motion_reset()
+	reset.sync(_portion_state("ginger", 2.2, false))
+	for _k in 8:
+		reset.update(1.0 / 60.0, false)
+	var bed_before: Dictionary = reset.drawn_bed_fan()
+	var a0 := 0.0 if bed_before.is_empty() else float(bed_before["color"].a)
+	reset.sync({})
+	reset.update(1.0 / 60.0, false)
+	var bed_mid: Dictionary = reset.drawn_bed_fan()
+	var a1 := 0.0 if bed_mid.is_empty() else float(bed_mid["color"].a)
+	var reset_step := absf(a0 - a1)
+	check(reset_step <= 0.12, "reset bed alpha step %s" % reset_step)
+	for _n in 40:
+		reset.update(1.0 / 60.0, false)
+	check(reset.drawn_bed_fan().is_empty(), "reset bed is gone after 0.5s")
+	var carry := MortarPile.new()
+	carry.motion_reset()
+	carry.sync(_portion_state("mint", 2.0, false))
+	carry.update(1.0 / 60.0, false)
+	carry.seed_residue("#8a5a28", 0.8)
+	carry.note_carry()
+	for _c in 120:
+		carry.update(1.0 / 60.0, false)
+	check(float(carry.residue().get("amount", 1.0)) <= 0.01, "carry residue is gone within 2s")
+	var saffron := MortarPile.new()
+	saffron.motion_reset()
+	var work := 0.0
+	saffron.sync(_portion_state("saffron", work, true))
+	var span := 0.0
+	var held := 0
+	var dw := (3.6 / 3.5) / 60.0
+	for _frame in 240:
+		work = minf(3.6, work + dw)
+		saffron.sync(_portion_state("saffron", work, work < 3.59))
+		saffron.update(1.0 / 60.0, work < 3.59)
+		var waits: Array[float] = []
+		for chip_v in saffron.presentation():
+			if bool(chip_v.get("ghost", false)):
+				continue
+			var bw := float(chip_v.get("born_wait", 0.0))
+			if bw > 0.0:
+				waits.append(bw)
+		if waits.size() >= 4:
+			var lo := waits[0]
+			var hi := waits[0]
+			for w2 in waits:
+				lo = minf(lo, w2)
+				hi = maxf(hi, w2)
+			span = maxf(span, hi - lo)
+			held = maxi(held, waits.size())
+	check(span >= 0.25 and held >= 4, "saffron births span %s held %s" % [span, held])
+	print("ROUND20 surf_step=%.3f reset_step=%.3f span=%.3f" % [step1, reset_step, span])

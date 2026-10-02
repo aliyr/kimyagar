@@ -265,6 +265,8 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	mortar_level = _level_at(t)
 	if pile != null:
 		pile.set_visual_level(mortar_level)
+		if prev < T_SCOOP and t >= T_SCOOP:
+			pile.note_carry()
 	rot = _slew_rot(_rot_target(t), dt)
 	_tick_motes(dt, pos, shedding and _had_material, _chip_color())
 	return {
