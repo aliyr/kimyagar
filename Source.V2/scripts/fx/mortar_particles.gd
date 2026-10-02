@@ -208,11 +208,22 @@ func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim
 	_remember_residue(residue)
 	var scale := Vector2(zone.x / ZONE_W, zone.y / ZONE_H)
 	var wipe_u: float = _wipe_u()
+	var snapped := bool(residue.get("snap", false))
+	if snapped and chips.is_empty():
+		_heap_k = 1.0
+		_heap_dt = 0.0
+	elif chips.is_empty() and not heap_ok:
+		# The old bed is still up. A leftover mound must not pop in under it.
+		_heap_k = 0.0
+		_heap_dt = 0.0
 	var heap_want := 0.0
-	if heap_ok and not residue.is_empty() and chips.is_empty() and wipe_u < 1.0:
+	if not residue.is_empty() and chips.is_empty() and wipe_u < 1.0 and (snapped or heap_ok):
 		heap_want = 1.0
 	var heap_k := _advance_heap(heap_want)
-	if heap_k > 0.004 and not residue.is_empty() and wipe_u < 1.0:
+	if snapped and chips.is_empty():
+		heap_k = 1.0
+		_heap_k = 1.0
+	if heap_k > 0.004 and not residue.is_empty() and chips.is_empty() and wipe_u < 1.0 and (snapped or heap_ok):
 		_draw_residue(c, origin, scale, residue, wipe_u, heap_k)
 	# While the spoon transfer owns the pile, the bed ellipse is the surface.
 	# The dust mound is dozens of ellipses and would paint over that bed.
@@ -241,7 +252,7 @@ static func particle_alpha(p: Dictionary) -> float:
 		return 1.0 - (t - 0.6) / 0.4
 	# Dust eases in over a fixed span. A one-frame life jump must not flash the disc.
 	var age: float = float(p["life"])
-	var u := clampf(age / 0.30, 0.0, 1.0)
+	var u := clampf(age / 0.45, 0.0, 1.0)
 	var fade_in := u * u * (3.0 - 2.0 * u)
 	return fade_in * (1.0 - t)
 
@@ -258,7 +269,7 @@ static func particle_size(p: Dictionary) -> float:
 	if kind == "aroma":
 		return size * (1.0 + t * 0.9)
 	if kind == "dust":
-		return size * (0.45 + t * 0.85)
+		return size * (0.20 + t * 0.50)
 	return size
 
 
@@ -310,7 +321,7 @@ func _burst_spill(opts: Dictionary) -> void:
 
 
 func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: float) -> void:
-	var n: int = _count(5.0 + fineness * 9.0)
+	var n: int = _count(3.0 + fineness * 5.0)
 	var drag: float = 2.4 + fineness * 1.6
 	var gravity: float = 40.0 * (1.0 - fineness * 0.7)
 	for _i in n:
@@ -319,7 +330,7 @@ func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: floa
 		var px: float = x + _range(-6.0, 6.0)
 		var py: float = y + _range(-3.0, 2.0)
 		var ttl: float = _range(0.45, 0.95) + fineness * 0.4
-		var size: float = _range(2.2, 5.5) + fineness * 2.0
+		var size: float = _range(1.3, 2.8) + fineness * 0.8
 		var color: String = _pick(colors, FALLBACK)
 		_push({
 			"kind": "dust",
@@ -585,7 +596,7 @@ func _advance_heap(want: float) -> float:
 	# Sim time, not the wall clock. A slow frame must not dump the whole heap.
 	var dt := minf(_heap_dt, 0.05)
 	_heap_dt = 0.0
-	var step := minf(dt / 0.90, 0.045)
+	var step := minf(dt / 1.20, 0.028)
 	if want >= _heap_k:
 		_heap_k = minf(want, _heap_k + step)
 	else:
@@ -598,7 +609,7 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 	var amount: float = float(residue.get("amount", 0.0)) * grow
 	var hex: String = _residue_color_hex(residue)
 	var scene: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY)
-	var span := lerpf(0.42, 1.0, grow)
+	var span := lerpf(0.22, 1.0, grow)
 	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * 0.92 * span
 	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * 1.5 * span
 	var eased := 0.0
@@ -721,21 +732,21 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	var rx_zone: float = HEAD_R_X * (1.05 + lift * 0.5)
 	var rx: float = (rx_zone / 100.0) * ZONE_W
 	var ry: float = ((rx_zone * MORTAR_ASPECT * 0.42) / 100.0) * ZONE_H
-	var alpha := 0.34 * (1.0 - lift * 0.55) + impact * 0.1
+	var alpha := 0.22 * (1.0 - lift * 0.55) + impact * 0.06
 	if leaving:
 		alpha = 0.0
 	var center: Vector2 = _map(scene, origin, scale)
 	# The contact shadow used to pulse with the beat and rewrite a ring of pixels.
 	if not _shadow_ready:
 		_shadow_alpha = 0.0
-		_shadow_rx = rx * 0.35
-		_shadow_ry = ry * 0.35
+		_shadow_rx = rx * 0.25
+		_shadow_ry = ry * 0.25
 		_shadow_at = center
 		_shadow_ready = true
 	# A one-frame appearance used to stamp the whole contact ellipse.
-	_shadow_alpha += clampf(alpha - _shadow_alpha, -0.03, 0.03)
-	_shadow_rx += clampf(rx - _shadow_rx, -rx * 0.08, rx * 0.08)
-	_shadow_ry += clampf(ry - _shadow_ry, -ry * 0.08, ry * 0.08)
+	_shadow_alpha += clampf(alpha - _shadow_alpha, -0.015, 0.015)
+	_shadow_rx += clampf(rx - _shadow_rx, -rx * 0.04, rx * 0.04)
+	_shadow_ry += clampf(ry - _shadow_ry, -ry * 0.04, ry * 0.04)
 	var gap := center - _shadow_at
 	if gap.length() > 1.4:
 		gap = gap.normalized() * 1.4

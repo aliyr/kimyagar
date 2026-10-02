@@ -88,6 +88,7 @@ func _run() -> void:
 	_round18()
 	_round19()
 	_round20()
+	_round21()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2835,6 +2836,7 @@ func _redrop_ease() -> void:
 	pile.motion_reset()
 	pile.sync(_portion_state("chamomile", 2.0, true))
 	pile.update(1.0 / 60.0, true)
+	_settle_pile(pile, 80)
 	var before := pile.visual_progress()
 	var cover := pile.drawn_bed_coverage()
 	check(before > 0.4, "re-drop starts from a ground bed, progress %s" % before)
@@ -2868,6 +2870,7 @@ func _redrop_ease() -> void:
 	var clamp := MortarPile.new()
 	clamp.sync(_portion_state("ginger", 0.2, true))
 	clamp.update(1.0 / 60.0, true)
+	_settle_pile(clamp, 80)
 	var low := clamp.visual_progress()
 	clamp.sync(_portion_state("ginger", 1.0, false))
 	clamp.update(1.0 / 60.0, false)
@@ -2924,6 +2927,7 @@ func _round18() -> void:
 	scoop.motion_reset()
 	scoop.sync(_portion_state("chamomile", 2.0, false))
 	scoop.update(1.0 / 60.0, false)
+	_settle_pile(scoop, 80)
 	var had := scoop.presentation().size()
 	check(had > 0, "scoop starts with chunks")
 	scoop.scoop_rest()
@@ -3069,6 +3073,7 @@ func _round19() -> void:
 	scoop.motion_reset()
 	scoop.sync(_portion_state("chamomile", 2.0, false))
 	scoop.update(1.0 / 60.0, false)
+	_settle_pile(scoop, 80)
 	var guard := 0
 	var emptied := false
 	while not scoop.chips().is_empty() and guard < 80:
@@ -3099,6 +3104,7 @@ func _round19() -> void:
 	reset.motion_reset()
 	reset.sync(_portion_state("ginger", 2.2, false))
 	reset.update(1.0 / 60.0, false)
+	_settle_pile(reset, 80)
 	var before_n := reset.presentation().size()
 	var before_bed: Dictionary = reset.drawn_bed_fan()
 	check(before_n >= 8 and not before_bed.is_empty(), "reset starts from a drawn pile, n %s" % before_n)
@@ -3231,3 +3237,53 @@ func _round20() -> void:
 			held = maxi(held, waits.size())
 	check(span >= 0.25 and held >= 4, "saffron births span %s held %s" % [span, held])
 	print("ROUND20 surf_step=%.3f reset_step=%.3f span=%.3f" % [step1, reset_step, span])
+
+
+func _settle_pile(pile: MortarPile, frames: int) -> void:
+	for _i in frames:
+		pile.update(1.0 / 60.0, false)
+
+
+func _round21() -> void:
+	var drop := MortarPile.new()
+	drop.motion_reset()
+	drop.sync(_portion_state("chamomile", 0.0, true))
+	drop.update(1.0 / 60.0, true)
+	var early := 1.0
+	var early_w := 999.0
+	var full_w := 1.0
+	for chip_v in drop.presentation():
+		if bool(chip_v.get("ghost", false)) or str(chip_v.get("kind", "")) == "dust":
+			continue
+		early = minf(early, float(chip_v.get("vis_alpha", 1.0)))
+		early_w = minf(early_w, float(chip_v.get("w", 1.0)))
+		break
+	for raw_v in drop.chips():
+		full_w = float(raw_v.get("w", 1.0))
+		break
+	check(early < 0.15, "drop starts faded, alpha %s" % early)
+	check(early_w < full_w * 0.75, "drop starts small, %s vs %s" % [early_w, full_w])
+	_settle_pile(drop, 80)
+	var settled := 0
+	var grown := 0
+	for chip_v2 in drop.presentation():
+		if bool(chip_v2.get("ghost", false)) or str(chip_v2.get("kind", "")) == "dust":
+			continue
+		if float(chip_v2.get("vis_alpha", 0.0)) >= 0.98 and not bool(chip_v2.get("drop_in", false)):
+			settled += 1
+		if float(chip_v2.get("w", 0.0)) > full_w * 0.92:
+			grown += 1
+	check(settled > 0 and grown > 0, "drop settles, opaque %s grown %s" % [settled, grown])
+	var heap := MortarPile.new()
+	heap.motion_reset()
+	heap.sync(_portion_state("mint", 2.0, false))
+	_settle_pile(heap, 40)
+	heap.sync({})
+	heap.update(1.0 / 60.0, false)
+	check(not heap.heap_ready(), "heap stays down while the reset bed is still up")
+	var shot := MortarPile.new()
+	shot.seed_residue("#c6a24e", 0.55)
+	check(bool(shot.residue().get("snap", false)) and shot.heap_ready(), "a seeded heap is present immediately")
+	shot.note_carry()
+	check(not bool(shot.residue().get("snap", false)), "carry releases the seeded heap")
+	print("ROUND21 early_a=%.3f early_w=%.2f full_w=%.2f settled=%s" % [early, early_w, full_w, settled])

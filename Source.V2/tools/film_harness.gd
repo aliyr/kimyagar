@@ -55,6 +55,7 @@ var _flow_drop_d: Array[int] = []
 var _flow_chip_rgb := Vector3.ZERO
 var _flow_box_rgb := Vector3.ZERO
 var _flow_cornered := false
+var _flow_hazed := false
 var _span_lum: Array = []
 var _span_pose: Array = []
 var _span_rgb: Array = []
@@ -476,13 +477,16 @@ func _flow_frame(host) -> void:
 			_span_pose = []
 	if _flow_phase == "drop":
 		_flow_wait += 1
-		if not _flow_cornered and _flow_wait >= 2 and _flow_pieces_opaque(host):
+		# Settled pieces only. A half-faded chip samples the bowl through its centre
+		# and its corners still sit on the texture edge. r18 is already opaque here.
+		if not _flow_cornered and _flow_wait >= 2 and _flow_pieces_settled(host):
 			_flow_box_rgb = _chip_box(img, ox)
 			_flow_chip_rgb = _flow_box_rgb
 			_piece_probe(host, img, ox)
 			_flow_write(host, img, "drop-%s" % _live_ings[_live_mat])
 			_flow_cornered = true
-		if _flow_wait >= 2:
+		if _flow_wait >= 2 and not _flow_hazed:
+			_flow_hazed = true
 			_flow_haze = _flow_gap(img, ox, host)
 			if host.workshop._pile != null:
 				var vis_n := 0
@@ -500,23 +504,26 @@ func _flow_frame(host) -> void:
 				print("FILM done flow")
 				host.get_tree().quit(0)
 				return
-			_flow_phase = "grind"
-			_flow_wait = 0
-			_flow_hist = []
-			_flow_xors = []
-			_flow_lum_hist = []
-			_flow_pose_hist = []
-			_flow_grind_max = 0
-			_flow_grind_at = 0.0
-			_flow_pestle_px = 0
-			_flow_prev = img
-			_flow_saved_grind = false
-			if host.workshop._pile != null:
-				host.workshop._pile.motion_reset()
+		if _flow_wait < 2 or not _flow_pieces_settled(host):
+			_flow_snap(host)
+			return
+		_flow_phase = "grind"
+		_flow_wait = 0
+		_flow_hist = []
+		_flow_xors = []
+		_flow_lum_hist = []
+		_flow_pose_hist = []
+		_flow_grind_max = 0
+		_flow_grind_at = 0.0
+		_flow_pestle_px = 0
+		_flow_prev = img
+		_flow_saved_grind = false
+		if host.workshop._pile != null:
+			host.workshop._pile.motion_reset()
 		_flow_snap(host)
 		return
 	if _flow_phase == "grind":
-		if not _flow_cornered and _flow_pieces_opaque(host):
+		if not _flow_cornered and _flow_pieces_settled(host):
 			_flow_box_rgb = _chip_box(img, ox)
 			_flow_chip_rgb = _flow_box_rgb
 			_piece_probe(host, img, ox)
@@ -571,6 +578,10 @@ func _flow_frame(host) -> void:
 		_flow_wait += 1
 		var level := float(_snap.get("level", 1.0))
 		var phase := str(_snap.get("phase", ""))
+		if _flow_wait <= 8 and host.workshop._pile != null and host.workshop._pile.has_method("surface_k"):
+			print("EARLY %s f%s phase %s level %.3f surf %.3f" % [
+				_live_ings[_live_mat], _flow_wait, phase, level, float(host.workshop._pile.surface_k()),
+			])
 		if _flow_surf < 0.0 and phase == "scoop" and level <= 0.14 and level >= 0.09 and host.workshop._pile != null and host.workshop._pile.has_method("surface_k"):
 			_flow_surf = float(host.workshop._pile.surface_k())
 		var at := Vector2(float(_snap.get("x", 0.0)), float(_snap.get("y", 0.0)))
@@ -727,6 +738,7 @@ func _reset_kind_metrics() -> void:
 	_flow_chip_rgb = Vector3.ZERO
 	_flow_box_rgb = Vector3.ZERO
 	_flow_cornered = false
+	_flow_hazed = false
 	_span_lum = []
 	_span_pose = []
 	_span_rgb = []
@@ -841,6 +853,26 @@ func _interior_drgb(cur: PackedByteArray, old: PackedByteArray, w: int, h: int, 
 			continue
 		n += 1
 	return n
+
+
+func _flow_pieces_settled(host) -> bool:
+	if host.workshop._pile == null:
+		return false
+	var any := false
+	for chip_v in host.workshop._pile.presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)):
+			continue
+		if str(chip.get("kind", "")) == "dust":
+			continue
+		if bool(chip.get("drop_in", false)):
+			return false
+		var a := float(chip.get("vis_alpha", 0.0))
+		if a >= 0.95:
+			any = true
+		elif a > 0.02:
+			return false
+	return any
 
 
 func _flow_pieces_opaque(host) -> bool:

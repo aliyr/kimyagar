@@ -1424,16 +1424,21 @@ func _draw_dashed(c: Control, pts: PackedVector2Array, color: Color, width: floa
 		c.draw_polyline(seg, color, width, true)
 
 
+func _piece_layer_only() -> bool:
+	return OS.get_environment("KIM_PIECE_ONLY") == "1"
+
+
 func _draw_pieces(c: Control) -> void:
 	if _pile == null:
 		return
 	var aim: Dictionary = _pile.pestle()
 	var logical: Array = _pile.chips()
 	var shown: Array = _pile.presentation()
-	_draw_mortar_bed(c)
-	if _mortar_parts:
-		var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS or _pile.visual_progress() >= MortarPile.BED_EPS
-		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, logical, aim, _pile.residue(), hide_mound, _pile.heap_ready())
+	if not _piece_layer_only():
+		_draw_mortar_bed(c)
+		if _mortar_parts:
+			var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS or _pile.visual_progress() >= MortarPile.BED_EPS
+			_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, logical, aim, _pile.residue(), hide_mound, _pile.heap_ready())
 	for chip in shown:
 		var vis_a := float(chip.get("vis_alpha", 1.0))
 		if vis_a <= 0.02:
@@ -1527,6 +1532,8 @@ func _draw_mortar_fx(c: Control) -> void:
 		return
 	if Game.mortar != null and _mortar_norm() < 0.02:
 		_mortar_parts.quiet_fresh()
+	if _piece_layer_only():
+		return
 	_mortar_parts.draw(c, Vector2.ZERO, ZONE_MORTAR.size)
 
 
