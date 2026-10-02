@@ -453,6 +453,10 @@ func pestle() -> Dictionary:
 	return _aim.duplicate(true)
 
 
+func drops_settling() -> bool:
+	return _drops_settling()
+
+
 func last_strike() -> Dictionary:
 	if _last_strike.is_empty():
 		return {}

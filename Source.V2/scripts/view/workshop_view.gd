@@ -1556,6 +1556,10 @@ func _kind(id: String) -> String:
 func _place_pestle() -> void:
 	if _pestle == null or _pile == null:
 		return
+	# Leave the pestle on its resting pixels until a new drop has settled.
+	# Moving it during the fade rewrites the bowl and hides the chunks.
+	if transfer_t < 0.0 and _pile.has_method("drops_settling") and _pile.drops_settling():
+		return
 	var aim: Dictionary = _pile.pestle()
 	var box := Vector2(MortarPile.PESTLE_W, MortarPile.PESTLE_H) / 100.0 * ZONE_MORTAR.size
 	var anchor := Vector2(MortarPile.PESTLE_HEAD_X, MortarPile.PESTLE_HEAD_Y)

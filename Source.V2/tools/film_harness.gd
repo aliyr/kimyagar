@@ -482,9 +482,14 @@ func _flow_frame(host) -> void:
 		if not _flow_cornered and _flow_wait >= 2 and _flow_pieces_settled(host):
 			_flow_box_rgb = _chip_box(img, ox)
 			_flow_chip_rgb = _flow_box_rgb
+			print("BOX %s %.1f %.1f %.1f" % [_live_ings[_live_mat], _flow_box_rgb.x, _flow_box_rgb.y, _flow_box_rgb.z])
 			_piece_probe(host, img, ox)
 			_flow_write(host, img, "drop-%s" % _live_ings[_live_mat])
 			_flow_cornered = true
+			if OS.get_environment("KIM_FLOW_STOP") == "settle":
+				print("FILM done flow")
+				host.get_tree().quit(0)
+				return
 		if _flow_wait >= 2 and not _flow_hazed:
 			_flow_hazed = true
 			_flow_haze = _flow_gap(img, ox, host)
@@ -675,6 +680,7 @@ func _flow_frame(host) -> void:
 		for pk in _flow_pourk:
 			pk_txt += "%.2f " % float(pk)
 		print("POURK %s %s" % [_live_ings[_live_mat], pk_txt])
+		print("DROPX %s %s" % [_live_ings[_live_mat], _fmt_ints(_flow_drop_d)])
 		print("R20 %s chip %.1f %.1f %.1f box %.1f %.1f %.1f surf %.3f tail_n %s tail_max %s tail %s ghid_n %s ghid_med %s ghid_p90 %s ghid_max %s gpres_med %s gpres_p90 %s gpres_max %s drop3 %s redrop3 %s reset3 %s" % [
 			_live_ings[_live_mat], _flow_chip_rgb.x, _flow_chip_rgb.y, _flow_chip_rgb.z, _flow_box_rgb.x, _flow_box_rgb.y, _flow_box_rgb.z, _flow_surf,
 			_flow_tail_vals.size(), _flow_tail_max, _fmt_ints(_flow_tail_vals),
@@ -1906,7 +1912,7 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 			inward = inward.normalized()
 			for inset in [0.5, 1.0, 2.0]:
 				var sample: Vector2 = corner + inward * inset
-				if _in_pestle_rect(sample, _snap, 3.0):
+				if _hit_pestle(sample, _snap):
 					continue
 				var delta := _px_delta(img, _flow_empty, sample)
 				_piece_samples += 1
@@ -1960,11 +1966,11 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 						break
 				if covered:
 					continue
-				if _in_pestle_rect(at, _snap, 3.0):
+				if _hit_pestle(at, _snap):
 					continue
 				if _px_delta(img, _flow_empty, at) > 0:
 					_piece_ring += 1
-		if not _in_pestle_rect(mid, _snap, 3.0):
+		if not _hit_pestle(mid, _snap):
 			var mx := int(floor(mid.x))
 			var my := int(floor(mid.y))
 			if mx >= 0 and my >= 0 and mx < img.get_width() and my < img.get_height():
@@ -1976,7 +1982,13 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 	if core_n > 0:
 		_flow_chip_rgb = Vector3(core_r / float(core_n), core_g / float(core_n), core_b / float(core_n))
 	_piece_nz = own_nz
-	print("PIECE own ", own_nz, " lap ", lap_nz, " ring ", _piece_ring, " core ", snappedf(_flow_chip_rgb.x, 0.1), " ", snappedf(_flow_chip_rgb.y, 0.1), " ", snappedf(_flow_chip_rgb.z, 0.1))
+	var shown_n := 0
+	var hi := 0
+	for chip_v2 in shown:
+		shown_n += 1
+		if float(chip_v2.get("vis_alpha", 0.0)) >= 0.8 and str(chip_v2.get("kind", "")) != "dust":
+			hi += 1
+	print("PIECE own ", own_nz, " lap ", lap_nz, " ring ", _piece_ring, " core ", snappedf(_flow_chip_rgb.x, 0.1), " ", snappedf(_flow_chip_rgb.y, 0.1), " ", snappedf(_flow_chip_rgb.z, 0.1), " shown ", shown_n, " hi ", hi, " quads ", quads.size(), " samples ", _piece_samples)
 
 
 func _pt_in_poly(pt: Vector2, poly: Array) -> bool:
