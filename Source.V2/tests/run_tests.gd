@@ -84,6 +84,7 @@ func _run() -> void:
 	_round11()
 	_round12()
 	_round16()
+	_round17()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2681,3 +2682,193 @@ func _effects_puff() -> void:
 	parts.burst("strike", Vector2(50, 70), {"fineness": 1.0, "hits": 3, "colors": ["#c4a15a"]})
 	check(parts.busy(), "effects on emits the grind puff")
 	settings.effects_enabled = prev
+
+
+func _round17() -> void:
+	_piece_mask()
+	_bed_margin()
+	_grind_continuity()
+	_redrop_ease()
+	var land := MortarParticles.new()
+	land.set_effects(true)
+	land.burst("land", Vector2.ZERO, {"color": "#e6c15a"})
+	check(not land.busy(), "a drop does not puff haze")
+	var fine := MortarParticles.new()
+	fine.set_effects(true)
+	fine.burst("fine", Vector2.ZERO, {"color": "#e6c15a"})
+	check(fine.busy(), "fine still emits strike dust")
+	for _i in 130:
+		fine.update(1.0 / 60.0)
+	fine.settle(2.0)
+	for _j in 130:
+		fine.update(1.0 / 60.0)
+	check(not fine.busy(), "effect leftovers are gone within 2s")
+
+
+func _piece_mask() -> void:
+	var src := FileAccess.get_file_as_string("res://scripts/view/workshop_view.gd")
+	check(src.find("draw_rect(Rect2(-w") < 0, "raw pieces are not tinted rectangles")
+	for kind in ["flower", "leaf", "thread", "root", "seed", "star", "petal"]:
+		var img := Image.new()
+		var err := img.load("res://assets/art/mortar/v3/pieces/%s_1.png" % kind)
+		check(err == OK, "piece sprite %s loads" % kind)
+		if err != OK:
+			continue
+		var w := img.get_width() - 1
+		var h := img.get_height() - 1
+		var clear := true
+		for corner in [Vector2i(0, 0), Vector2i(w, 0), Vector2i(0, h), Vector2i(w, h)]:
+			if img.get_pixelv(corner).a > 0.01:
+				clear = false
+		check(clear, "%s sprite corners are transparent" % kind)
+
+
+func _bed_margin() -> void:
+	var c := MortarPile.interior_center()
+	check(not MortarPile.within_margin(c + Vector2(MortarPile.VIS_RX, 0.0)), "painted edge is outside the margin")
+	check(not MortarPile.within_margin(c + Vector2(MortarPile.VIS_RX - 2.0, 0.0)), "2px inside the side wall is still outside")
+	check(not MortarPile.within_margin(c + Vector2(0.0, MortarPile.VIS_RY - 2.0)), "2px inside the lip is still outside")
+	check(MortarPile.within_margin(c + Vector2(MortarPile.VIS_RX - MortarPile.EDGE_MARGIN, 0.0)), "3px side gap is inside")
+	check(MortarPile.within_margin(c + Vector2(0.0, MortarPile.VIS_RY - MortarPile.EDGE_MARGIN)), "3px lip gap is inside")
+	var pile := MortarPile.new()
+	pile.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 2.0, "grinding": false})
+	var fan: Dictionary = pile.drawn_bed_fan()
+	check(not fan.is_empty(), "ground bed draws at mid grind")
+	var pts: PackedVector2Array = fan["points"]
+	var radii: Array[float] = []
+	var acc := Vector2.ZERO
+	for p in pts:
+		acc += p
+	var mid := acc / float(pts.size())
+	var outside := 0
+	for p in pts:
+		radii.append(p.distance_to(mid))
+		if not MortarPile.within_margin(p, 0.4):
+			outside += 1
+	radii.sort()
+	check(outside == 0, "bed contour stays inside the margin, outside %s" % outside)
+	check(radii[radii.size() - 1] - radii[0] > 1.0, "bed edge is irregular, spread %s" % (radii[radii.size() - 1] - radii[0]))
+	var fresh := MortarPile.new()
+	fresh.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 0.0, "grinding": false})
+	check(fresh.visual_progress() < 0.001, "progress 0 visual bed is off")
+	check(fresh.drawn_bed_coverage() < 0.001, "progress 0 draws no bed")
+	check(fresh.drawn_bed_fan().is_empty(), "progress 0 has no mound")
+
+
+func _grind_continuity() -> void:
+	var names: Array[String] = ["chamomile", "mint", "poppy", "ginger", "borage", "saffron"]
+	var dw := (3.6 / 3.5) / 60.0
+	var worst_pos := 0.0
+	var worst_size := 0.0
+	var worst_rot := 0.0
+	var worst_name := ""
+	for id in names:
+		var pile := MortarPile.new()
+		pile.motion_reset()
+		var work := 0.0
+		pile.sync(_portion_state(id, work, true))
+		for _frame in 220:
+			work = minf(3.6, work + dw)
+			pile.sync(_portion_state(id, work, work < 3.59))
+			pile.update(1.0 / 60.0, work < 3.59)
+			var lay_out := _presented_outside(pile)
+			if lay_out > 0:
+				check(false, "%s material left the margin at work %.2f, verts %s" % [id, work, lay_out])
+				break
+		var report: Dictionary = pile.motion_report()
+		var pos := float(report["pos"])
+		var size := float(report["size"])
+		var rot := float(report["rot"])
+		if pos > worst_pos:
+			worst_pos = pos
+			worst_name = id
+		worst_size = maxf(worst_size, size)
+		worst_rot = maxf(worst_rot, rot)
+		check(pos <= 3.05, "%s per-frame move %s bowl-percent" % [id, pos])
+		check(size <= 0.08, "%s per-frame size %s" % [id, size])
+		check(rot <= 6.05, "%s per-frame rotation %s" % [id, rot])
+		check(float(report["ghost"]) >= 0.4, "%s grain crossfade %ss" % [id, report["ghost"]])
+		check(float(report["bed"]) < 0.03, "%s bed step %s" % [id, report["bed"]])
+	print("ROUND17 continuity pos=%.3f size=%.4f rot=%.2f worst=%s" % [worst_pos, worst_size, worst_rot, worst_name])
+
+
+func _presented_outside(pile: MortarPile) -> int:
+	var n := 0
+	for chip_v in pile.presentation():
+		var chip: Dictionary = chip_v
+		if float(chip.get("vis_alpha", 1.0)) <= 0.02:
+			continue
+		var lay: Dictionary = pile.layout_chip(chip)
+		var poly: PackedVector2Array = lay["poly"]
+		if not MortarPile.polygon_inside(poly, 0.5):
+			poly = MortarPile.clip_to_interior(poly)
+		for p in poly:
+			if not MortarPile.within_margin(p, 0.75):
+				n += 1
+	var fan: Dictionary = pile.drawn_bed_fan()
+	if not fan.is_empty():
+		var pts: PackedVector2Array = fan["points"]
+		for p2 in pts:
+			if not MortarPile.within_margin(p2, 0.75):
+				n += 1
+	return n
+
+
+func _portion_state(id: String, work: float, grinding: bool) -> Dictionary:
+	return {
+		"ingredientId": id,
+		"quantity": 1.0,
+		"grindWork": work,
+		"grinding": grinding,
+		"portions": [{"ingredientId": id, "quantity": 1.0, "grindWork": work}],
+	}
+
+
+func _redrop_ease() -> void:
+	var pile := MortarPile.new()
+	pile.motion_reset()
+	pile.sync(_portion_state("chamomile", 2.0, true))
+	pile.update(1.0 / 60.0, true)
+	var before := pile.visual_progress()
+	var cover := pile.drawn_bed_coverage()
+	check(before > 0.4, "re-drop starts from a ground bed, progress %s" % before)
+	pile.sync({
+		"ingredientId": "mint",
+		"quantity": 2.0,
+		"grindWork": 0.0,
+		"grinding": true,
+		"portions": [
+			{"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 2.0},
+			{"ingredientId": "mint", "quantity": 1.0, "grindWork": 0.0},
+		],
+	})
+	pile.update(1.0 / 60.0, true)
+	var stepped := pile.visual_progress()
+	check(absf(before - stepped) < 0.05, "re-drop bed step %s" % absf(before - stepped))
+	check(pile.drawn_bed_coverage() > cover * 0.45, "re-drop bed is still visible, %s -> %s" % [cover, pile.drawn_bed_coverage()])
+	var old_n := 0
+	var new_n := 0
+	for chip_v in pile.presentation():
+		var chip: Dictionary = chip_v
+		var a := float(chip.get("vis_alpha", 1.0))
+		if a > 0.8:
+			old_n += 1
+		elif a < 0.2:
+			new_n += 1
+	check(old_n > 0 and new_n > 0, "re-drop crossfades, old %s new %s" % [old_n, new_n])
+	for _i in 22:
+		pile.update(1.0 / 60.0, true)
+	check(pile.visual_progress() < 0.02, "re-drop bed is gone after 0.3s, %s" % pile.visual_progress())
+	var clamp := MortarPile.new()
+	clamp.sync(_portion_state("ginger", 0.2, true))
+	clamp.update(1.0 / 60.0, true)
+	var low := clamp.visual_progress()
+	clamp.sync(_portion_state("ginger", 1.0, false))
+	clamp.update(1.0 / 60.0, false)
+	var high := clamp.visual_progress()
+	check(high - low < 0.05, "clamp bed step %s" % (high - low))
+	check(high > low, "clamp bed moves toward coarse")
+	for _j in 20:
+		clamp.update(1.0 / 60.0, false)
+	near(clamp.visual_progress(), 1.0 / 3.6, "clamp bed arrives", 0.03)
+	print("ROUND17 redrop_step=%.4f clamp_step=%.4f" % [absf(before - stepped), high - low])

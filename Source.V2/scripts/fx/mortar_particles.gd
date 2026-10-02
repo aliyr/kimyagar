@@ -43,6 +43,7 @@ var _wipe_t0: float = -1.0
 var _wipe_dur: float = 500.0
 var _residue_hex: String = ""
 var _effects := true
+var _settled := false
 
 
 func _init(seed: int = 1) -> void:
@@ -72,6 +73,7 @@ func busy() -> bool:
 
 
 func burst(kind: String, at: Vector2 = Vector2.ZERO, opts: Dictionary = {}) -> void:
+	_settled = false
 	if _effects_quiet(kind):
 		return
 	match kind:
@@ -116,6 +118,23 @@ func burst(kind: String, at: Vector2 = Vector2.ZERO, opts: Dictionary = {}) -> v
 func set_aroma(intensity: float, color: Color) -> void:
 	_aroma_i = clampf(intensity, 0.0, 1.0)
 	_aroma_hex = _color_hex(color)
+	if _aroma_i > 0.01:
+		_settled = false
+
+
+## After the bowl is empty, leftovers die inside this many seconds.
+func settle(seconds: float = 2.0) -> void:
+	if _settled:
+		return
+	_settled = true
+	_aroma_i = 0.0
+	_flash_t0 = -1.0
+	_sweeps = []
+	for particle_v in _particles:
+		var p: Dictionary = particle_v
+		var remain: float = float(p["ttl"]) - float(p["life"])
+		if remain > seconds:
+			p["ttl"] = float(p["life"]) + seconds
 
 
 func brush(ms: float = 500.0) -> void:
@@ -156,6 +175,8 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 		var local: Vector2 = _map(Vector2(float(p["x"]), float(p["y"])), origin, scale)
 		var col: Color = _parse_hex(str(p["color"]))
 		var kind: String = str(p["kind"])
+		if kind != "ripple" and kind != "aroma" and not _particle_visible(local, p, alpha, origin, scale):
+			continue
 		if kind == "ripple":
 			col.a = alpha
 			c.draw_ellipse(local, maxf(0.4, size * scale.x), maxf(0.4, size * 0.36 * scale.y), col, false, 1.6 * scale.x, false)
@@ -253,9 +274,9 @@ func _burst_strike(at: Vector2, opts: Dictionary) -> void:
 		})
 
 
-func _burst_land(opts: Dictionary) -> void:
-	var p: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY - 2.0)
-	_emit_puff(p.x, p.y, _opt_hex(opts, FALLBACK), 0.8)
+func _burst_land(_opts: Dictionary) -> void:
+	# A drop used to puff yellow dust across the empty bowl. Strikes make the dust.
+	return
 
 
 func _burst_fine(opts: Dictionary) -> void:
@@ -263,8 +284,7 @@ func _burst_fine(opts: Dictionary) -> void:
 	var color: String = _opt_hex(opts, FALLBACK)
 	_emit_puff(p.x, p.y, color, 1.2)
 	_emit_sparks(p.x, p.y, 6)
-	_flash_t0 = _now_ms()
-	_flash_hex = color
+	# The full-mouth flash washed thousands of pixels the moment the spoon scooped.
 
 
 func _burst_spill(opts: Dictionary) -> void:
@@ -529,24 +549,19 @@ func _draw_sweeps(c: CanvasItem, origin: Vector2, scale: Vector2, now: float) ->
 			var k: float = (1.0 - float(i) / 9.0) * fade * strength
 			var col := Color(1.0, 244.0 / 255.0, 214.0 / 255.0, k * 0.85)
 			var rad: float = (2.2 + (1.0 - float(i) / 9.0) * 2.4) * scale.x
-			c.draw_circle(Vector2(px, py), maxf(0.4, rad), col)
+			var at := Vector2(px, py)
+			if not MortarPile.within_margin(_zone_of(at, origin, scale)):
+				continue
+			c.draw_circle(at, maxf(0.4, rad), col)
 	_sweeps = alive
 
 
-func _draw_flash(c: CanvasItem, origin: Vector2, scale: Vector2, now: float) -> void:
+func _draw_flash(_c: CanvasItem, _origin: Vector2, _scale: Vector2, now: float) -> void:
+	# The full-mouth flash is not drawn. The timer still expires so busy() clears.
 	if _flash_t0 < 0.0:
 		return
-	var t: float = (now - _flash_t0) / 520.0
-	if t >= 1.0:
+	if (now - _flash_t0) / 520.0 >= 1.0:
 		_flash_t0 = -1.0
-		return
-	var center: Vector2 = _map(_zone_to_scene(MOUTH_CX, MOUTH_CY), origin, scale)
-	var grow: float = 1.0 + t * 0.12
-	var rx: float = (MOUTH_RX / 100.0) * ZONE_W * grow * scale.x
-	var ry: float = (MOUTH_RY / 100.0) * ZONE_H * grow * scale.y
-	var col: Color = _parse_hex(_flash_hex)
-	col.a = (1.0 - t) * 0.6
-	c.draw_ellipse(center, maxf(0.4, rx), maxf(0.4, ry), col, false, (3.0 + (1.0 - t) * 5.0) * scale.x, false)
 
 
 func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dictionary, wipe_u: float) -> void:
@@ -672,11 +687,12 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	var alpha: float = 0.34 * (1.0 - lift * 0.55) + impact * 0.1
 	var center: Vector2 = _map(scene, origin, scale)
 	var shade := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 1.0)
+	# Dark contact shadow. It stays inside the opening; rising dust is a different layer.
 	_paint_radial(c, center, rx * scale.x, ry * scale.y, PackedFloat32Array([0.0, 0.7, 1.0]), [
 		Color(shade.r, shade.g, shade.b, alpha),
 		Color(shade.r, shade.g, shade.b, alpha * 0.5),
 		Color(shade.r, shade.g, shade.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 
 
 func _fill_ellipse(c: CanvasItem, center: Vector2, rx: float, ry: float, col: Color, clip_bowl: bool) -> void:
@@ -693,15 +709,40 @@ func _fill_ellipse(c: CanvasItem, center: Vector2, rx: float, ry: float, col: Co
 				break
 		erx *= scale
 		ery *= scale
+		if not _ellipse_in_bowl(center, erx, ery):
+			return
 	c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
 
 
 func _ellipse_in_bowl(center: Vector2, rx: float, ry: float) -> bool:
 	for i in 8:
 		var a := TAU * float(i) / 8.0
-		if MortarPile.interior_norm(center + Vector2(cos(a) * rx, sin(a) * ry)) > MortarPile.INTERIOR_INSET:
+		if not MortarPile.within_margin(center + Vector2(cos(a) * rx, sin(a) * ry)):
 			return false
 	return true
+
+
+func _zone_of(draw_pt: Vector2, origin: Vector2, scale: Vector2) -> Vector2:
+	var zone_pos := Vector2(ZONE_X, ZONE_Y)
+	var sx := scale.x if absf(scale.x) > 0.0001 else 1.0
+	var sy := scale.y if absf(scale.y) > 0.0001 else 1.0
+	return (draw_pt - (zone_pos - origin)) / Vector2(sx, sy)
+
+
+func _particle_visible(local: Vector2, p: Dictionary, alpha: float, origin: Vector2, scale: Vector2) -> bool:
+	var z := _zone_of(local, origin, scale)
+	var d := z - MortarPile.interior_center()
+	if d.length_squared() > 180.0 * 180.0:
+		return true
+	if MortarPile.within_margin(z):
+		return true
+	var kind := str(p.get("kind", ""))
+	if (kind == "dust" or kind == "puff") and d.y < -2.0 and absf(d.x) < MortarPile.VIS_RX - 2.0:
+		var ttl := maxf(0.001, float(p.get("ttl", 1.0)))
+		var u := float(p.get("life", 0.0)) / ttl
+		if u > 0.12 and alpha < 0.8:
+			return true
+	return false
 
 
 func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2, clip_bowl: bool = false) -> void:

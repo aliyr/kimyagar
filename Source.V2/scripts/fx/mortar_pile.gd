@@ -117,6 +117,16 @@ const MARK_LIFE := 3.2
 const BED_EPS := 0.04
 ## Clip target sits just inside the painted opening so raster edges stay in the bowl.
 const INTERIOR_INSET := 0.972
+## Painted-edge gap. The opening radii are 120 by 56, so 3 px is inside both axes.
+const EDGE_MARGIN := 3.0
+## Visual motion caps at 60 Hz. Logic still jumps; the picture eases under these.
+const PRESENT_MAX_POS := 3.0
+const PRESENT_MAX_SIZE := 0.08
+const PRESENT_MAX_ROT := 6.0
+const PRESENT_SPLIT_TIME := 0.20
+const PRESENT_GRAIN_TIME := 0.45
+const PRESENT_REDROP_TIME := 0.30
+const PRESENT_CLAMP_TIME := 0.25
 var _pile_crush: float = 0.0
 var _pile_work: float = 0.0
 var _pile_area: float = 0.0
@@ -133,6 +143,21 @@ var _residue_amount: float = 0.0
 var _has_mortar: bool = false
 var _strike_hits: int = 0
 var _strike_colors: Array[Color] = []
+var _shown: Array = []
+var _vis_progress: float = 0.0
+var _bed_from: float = 0.0
+var _bed_to: float = 0.0
+var _bed_left: float = 0.0
+var _bed_dur: float = 0.25
+var _present_snap: bool = false
+var _motion_pos: float = 0.0
+var _motion_size: float = 0.0
+var _motion_rot: float = 0.0
+var _motion_bed: float = 0.0
+var _ghost_seen: float = 0.0
+var _last_pose: Dictionary = {}
+var _bed_color: Color = Color("#8a7a52")
+static var _bed_shade: Texture2D
 
 
 func _init() -> void:
@@ -162,6 +187,19 @@ func setup(state: Dictionary, seed: int = 1) -> void:
 	_residue_amount = 0.0
 	_last_strike = {}
 	_has_mortar = false
+	_shown = []
+	_vis_progress = 0.0
+	_bed_from = 0.0
+	_bed_to = 0.0
+	_bed_left = 0.0
+	_present_snap = false
+	_motion_pos = 0.0
+	_motion_size = 0.0
+	_motion_rot = 0.0
+	_motion_bed = 0.0
+	_ghost_seen = 0.0
+	_last_pose = {}
+	_bed_color = Color("#8a7a52")
 	_aim = _lean_aim()
 	sync(state)
 
@@ -170,6 +208,7 @@ func sync(state: Dictionary) -> void:
 	if state.is_empty() or str(state.get("ingredientId", "")) == "":
 		_has_mortar = false
 		_sync_clear()
+		_present_sync()
 		return
 	var portions_v: Variant = state.get("portions", null)
 	if portions_v is Array:
@@ -177,6 +216,7 @@ func sync(state: Dictionary) -> void:
 		if raw.is_empty():
 			_has_mortar = false
 			_sync_clear()
+			_present_sync()
 			return
 		var portions: Array[Dictionary] = []
 		for item_v in raw:
@@ -198,10 +238,12 @@ func sync(state: Dictionary) -> void:
 		if portions.is_empty():
 			_has_mortar = false
 			_sync_clear()
+			_present_sync()
 			return
 		_has_mortar = true
 		_sync_mix(_mix_key_for(portions), portions)
 		_adopt_mode(bool(state.get("grinding", false)))
+		_present_sync()
 		return
 	_has_mortar = true
 	var id2: String = str(state.get("ingredientId", ""))
@@ -210,6 +252,7 @@ func sync(state: Dictionary) -> void:
 	var units: int = clampi(_js_round(qty2), 1, 3)
 	_sync_pile("%s:%s" % [id2, _qty_key(qty2)], units, work2, id2)
 	_adopt_mode(bool(state.get("grinding", false)))
+	_present_sync()
 
 
 static func pile_surface_y(level: float) -> float:
@@ -279,6 +322,12 @@ func update(dt: float, grinding: bool, impact: Variant = null) -> void:
 			_strike_now(impact)
 	_apply_aim()
 	_tick_pile(dt)
+	_tick_present(dt)
+	if not _has_mortar and _residue_amount > 0.0:
+		_residue_amount = maxf(0.0, _residue_amount - dt / 2.0)
+		if _residue_amount <= 0.01:
+			_residue_hex = ""
+			_residue_amount = 0.0
 
 
 func chips() -> Array[Dictionary]:
@@ -496,6 +545,44 @@ func bed_coverage() -> float:
 	return body / bowl
 
 
+func visual_progress() -> float:
+	return _vis_progress
+
+
+func drawn_bed_coverage() -> float:
+	var fan := drawn_bed_fan()
+	if fan.is_empty():
+		return 0.0
+	var pts: PackedVector2Array = fan["points"]
+	var bowl := polygon_area(interior_polygon())
+	if bowl <= 1.0:
+		return 0.0
+	return polygon_area(pts) / bowl
+
+
+func motion_report() -> Dictionary:
+	return {
+		"pos": _motion_pos,
+		"size": _motion_size,
+		"rot": _motion_rot,
+		"bed": _motion_bed,
+		"ghost": _ghost_seen,
+	}
+
+
+func motion_reset() -> void:
+	_motion_pos = 0.0
+	_motion_size = 0.0
+	_motion_rot = 0.0
+	_motion_bed = 0.0
+	_ghost_seen = 0.0
+	_last_pose = {}
+
+
+func snap_presentation() -> void:
+	_present_snap = true
+
+
 func material_polygons() -> Array:
 	var out: Array = []
 	for spec_v in bed_specs():
@@ -575,6 +662,78 @@ func _push_bed(out: Array, role: String, center: Vector2, rx: float, ry: float, 
 	if pts.size() < 3:
 		return
 	out.append({"role": role, "points": pts, "color": color, "disk": false})
+
+
+## One soft mound. The logical bed_specs() ellipse stays for coverage tests.
+func drawn_bed_fan() -> Dictionary:
+	var level := _visual_level if _visual_level >= 0.0 else surface_level()
+	var progress := _vis_progress
+	if level < 0.12 or progress < BED_EPS:
+		return {}
+	var grow := bed_grow(progress)
+	if grow < 0.012:
+		return {}
+	var box := bowl()
+	var zone := Vector2(ZONE_W, ZONE_H)
+	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * zone
+	var bw := float(box["width"]) / 100.0 * ZONE_W
+	var cx := origin.x + bw * 0.5
+	var surface := pile_surface_y(level) - ZONE_Y
+	var rx := bw * (0.18 + 0.28 * grow)
+	var ry := (16.0 + 6.0 * level) * grow
+	var steps := 28
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	pts.resize(steps)
+	uvs.resize(steps)
+	for i in steps:
+		var a := TAU * float(i) / float(steps)
+		var nrm := 0.90 + 0.055 * sin(a * 3.0 + 0.7) + 0.035 * sin(a * 7.0 + 2.1)
+		nrm = clampf(nrm, 0.80, 0.98)
+		var p := Vector2(cx + cos(a) * rx * nrm, surface + sin(a) * ry * nrm)
+		p = _pull_margin(p)
+		pts[i] = p
+		uvs[i] = Vector2(0.5 + cos(a) * 0.5 * nrm, 0.5 + sin(a) * 0.5 * nrm)
+	var col := _bed_color
+	col.a = 0.92 * clampf(grow, 0.0, 1.0)
+	return {"points": pts, "uvs": uvs, "color": col}
+
+
+static func _pull_margin(p: Vector2) -> Vector2:
+	var c := interior_center()
+	var rx := (VIS_RX - EDGE_MARGIN) * 0.98
+	var ry := (VIS_RY - EDGE_MARGIN) * 0.98
+	var dx := (p.x - c.x) / rx
+	var dy := (p.y - c.y) / ry
+	var n2 := dx * dx + dy * dy
+	if n2 <= 1.0:
+		return p
+	var n := sqrt(n2)
+	return c + Vector2(dx / n * rx, dy / n * ry)
+
+
+static func bed_shade_texture() -> Texture2D:
+	if _bed_shade != null:
+		return _bed_shade
+	var n := 64
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for y in n:
+		for x in n:
+			var u := (float(x) + 0.5) / float(n) * 2.0 - 1.0
+			var v := (float(y) + 0.5) / float(n) * 2.0 - 1.0
+			var rad := sqrt(u * u + v * v)
+			var a := 0.0
+			if rad < 1.0:
+				a = clampf(1.0 - smoothstep(0.62, 1.0, rad), 0.0, 1.0)
+			var mound := clampf(1.0 - rad * rad, 0.0, 1.0)
+			var speckle := 0.0
+			if rad < 0.92:
+				var h := sin(float(x) * 12.7 + float(y) * 4.3) * sin(float(x) * 3.1 - float(y) * 9.2)
+				speckle = h * 0.07
+			var lum := clampf(0.62 + 0.40 * mound + speckle, 0.0, 1.0) * lerpf(0.72, 1.0, mound)
+			img.set_pixel(x, y, Color(lum, lum, lum, a))
+	_bed_shade = ImageTexture.create_from_image(img)
+	return _bed_shade
 
 
 ## Drawn chip in zone-local pixels, before the interior clip.
@@ -824,8 +983,9 @@ static func interior_norm(local: Vector2) -> float:
 
 static func interior_polygon(steps: int = 48) -> PackedVector2Array:
 	var c := interior_center()
-	var rx := VIS_RX * INTERIOR_INSET
-	var ry := VIS_RY * INTERIOR_INSET
+	# Uniform pixel gap inside the painted opening, on both axes.
+	var rx := VIS_RX - EDGE_MARGIN
+	var ry := VIS_RY - EDGE_MARGIN
 	var pts := PackedVector2Array()
 	pts.resize(steps)
 	for i in steps:
@@ -846,20 +1006,31 @@ static func polygon_area(poly: PackedVector2Array) -> float:
 	return absf(a) * 0.5
 
 
+## True when `local` sits on the margin ellipse. `slack_px` grows that ellipse.
+static func within_margin(local: Vector2, slack_px: float = 0.0) -> bool:
+	var c := interior_center()
+	var rx := VIS_RX - EDGE_MARGIN + slack_px
+	var ry := VIS_RY - EDGE_MARGIN + slack_px
+	if rx <= 1.0 or ry <= 1.0:
+		return false
+	var dx := (local.x - c.x) / rx
+	var dy := (local.y - c.y) / ry
+	return dx * dx + dy * dy <= 1.0001
+
+
 static func polygon_inside(poly: PackedVector2Array, slack: float = 0.0) -> bool:
-	var limit := INTERIOR_INSET + slack
 	for p in poly:
-		if interior_norm(p) > limit:
+		if not within_margin(p, slack):
 			return false
 	return poly.size() >= 3
 
 
 static func circle_inside(center: Vector2, radius: float) -> bool:
 	if radius <= 0.2:
-		return interior_norm(center) <= INTERIOR_INSET
+		return within_margin(center)
 	for i in 8:
 		var a := TAU * float(i) / 8.0
-		if interior_norm(center + Vector2(cos(a), sin(a)) * radius) > INTERIOR_INSET:
+		if not within_margin(center + Vector2(cos(a), sin(a)) * radius):
 			return false
 	return true
 
@@ -1905,6 +2076,453 @@ func _hex_byte(text: String, index: int) -> int:
 	if not pair.is_valid_hex_number():
 		return -1
 	return pair.hex_to_int()
+
+
+## What the bowl draws. Logic chips still jump; this copy eases.
+func presentation() -> Array:
+	var press := _press_k()
+	var out: Array = []
+	for item_v in _shown:
+		var src: Dictionary = item_v
+		var chip: Dictionary = src.duplicate(false)
+		var ghost := bool(src.get("ghost", false))
+		chip["ghost"] = ghost
+		chip["hop"] = 0.0
+		chip["draw_k"] = 1.0
+		chip["vis_alpha"] = float(src.get("alpha", 1.0))
+		if not ghost and press > 0.0:
+			chip["h"] = float(src["h"]) * (1.0 - 0.035 * press)
+			chip["y"] = float(src["y"]) + 0.40 * press
+		out.append(chip)
+	return out
+
+
+func _press_k() -> float:
+	if _mode != "grind":
+		return 0.0
+	var ph: float = _beat - floorf(_beat)
+	if ph < PH_FALL_END or ph > PH_PRESS_END:
+		return 0.0
+	var span := PH_PRESS_END - PH_FALL_END
+	var u := 0.0 if span <= 0.0 else (ph - PH_FALL_END) / span
+	return sin(clampf(u, 0.0, 1.0) * PI)
+
+
+func _tick_present(dt: float) -> void:
+	_present_sync()
+	var frames := dt * 60.0
+	var keep: Array = []
+	for item_v in _shown:
+		var s: Dictionary = item_v
+		var px := float(s["x"])
+		var py := float(s["y"])
+		var pw := float(s["w"])
+		var ph := float(s["h"])
+		var prot := float(s["rot"])
+		if float(s["left"]) > 0.0 and dt > 0.0:
+			s["left"] = float(s["left"]) - dt
+			var u := 1.0
+			if float(s["left"]) > 0.0 and float(s["dur"]) > 0.0:
+				u = 1.0 - float(s["left"]) / float(s["dur"])
+			else:
+				s["left"] = 0.0
+				u = 1.0
+			var e := u * u * (3.0 - 2.0 * u)
+			s["x"] = lerpf(float(s["sx"]), float(s["tx"]), e)
+			s["y"] = lerpf(float(s["sy"]), float(s["ty"]), e)
+			s["w"] = lerpf(float(s["sw"]), float(s["tw"]), e)
+			s["h"] = lerpf(float(s["sh"]), float(s["th"]), e)
+			s["rot"] = lerpf(float(s["srot"]), float(s["trot"]), e)
+		if float(s["alpha_left"]) > 0.0 and dt > 0.0:
+			s["alpha_left"] = float(s["alpha_left"]) - dt
+			var ua := 1.0
+			if float(s["alpha_left"]) > 0.0 and float(s["alpha_dur"]) > 0.0:
+				ua = 1.0 - float(s["alpha_left"]) / float(s["alpha_dur"])
+			else:
+				s["alpha_left"] = 0.0
+				ua = 1.0
+			var ea := ua * ua * (3.0 - 2.0 * ua)
+			s["alpha"] = lerpf(float(s["alpha_from"]), float(s["alpha_to"]), ea)
+		if dt > 0.0:
+			_clamp_step(s, px, py, pw, ph, prot, frames)
+		if bool(s.get("ghost", false)) and float(s["alpha"]) <= 0.02 and float(s["alpha_left"]) <= 0.0:
+			continue
+		keep.append(s)
+	_shown = keep
+	var prev_bed := _vis_progress
+	if _bed_left > 0.0 and dt > 0.0:
+		_bed_left -= dt
+		var ub := 1.0
+		if _bed_left > 0.0 and _bed_dur > 0.0:
+			ub = 1.0 - _bed_left / _bed_dur
+		else:
+			_bed_left = 0.0
+			ub = 1.0
+		var eb := ub * ub * (3.0 - 2.0 * ub)
+		_vis_progress = lerpf(_bed_from, _bed_to, eb)
+	if dt > 0.0:
+		_motion_bed = maxf(_motion_bed, absf(_vis_progress - prev_bed))
+	_record_motion()
+
+
+func _clamp_step(s: Dictionary, px: float, py: float, pw: float, ph: float, prot: float, frames: float) -> void:
+	# Stay under the 60 Hz caps even when press squash lands on the same frame.
+	var scale := maxf(frames, 0.0)
+	if scale <= 0.0:
+		return
+	var cap_p := 2.7 * scale
+	var cap_s := 0.06 * scale
+	var cap_r := 5.2 * scale
+	var dx := float(s["x"]) - px
+	var dy := float(s["y"]) - py
+	var dist := sqrt(dx * dx + dy * dy)
+	if dist > cap_p and dist > 0.0:
+		var k := cap_p / dist
+		s["x"] = px + dx * k
+		s["y"] = py + dy * k
+	var bw := maxf(pw, 0.5)
+	var bh := maxf(ph, 0.5)
+	var rel_w := absf(float(s["w"]) - pw) / bw
+	if rel_w > cap_s:
+		s["w"] = pw * (1.0 + cap_s * (1.0 if float(s["w"]) >= pw else -1.0))
+	var rel_h := absf(float(s["h"]) - ph) / bh
+	if rel_h > cap_s:
+		s["h"] = ph * (1.0 + cap_s * (1.0 if float(s["h"]) >= ph else -1.0))
+	var drot := _wrap_deg(float(s["rot"]) - prot)
+	if absf(drot) > cap_r:
+		s["rot"] = prot + cap_r * (1.0 if drot >= 0.0 else -1.0)
+
+
+func _record_motion() -> void:
+	var now: Dictionary = {}
+	for chip_v in presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)):
+			continue
+		var id := int(chip["id"])
+		if _last_pose.has(id):
+			var prev: Dictionary = _last_pose[id]
+			var dx := float(chip["x"]) - float(prev["x"])
+			var dy := float(chip["y"]) - float(prev["y"])
+			_motion_pos = maxf(_motion_pos, sqrt(dx * dx + dy * dy))
+			var rel := maxf(
+				absf(float(chip["w"]) - float(prev["w"])) / maxf(float(prev["w"]), 0.5),
+				absf(float(chip["h"]) - float(prev["h"])) / maxf(float(prev["h"]), 0.5)
+			)
+			_motion_size = maxf(_motion_size, rel)
+			_motion_rot = maxf(_motion_rot, absf(_wrap_deg(float(chip["rot"]) - float(prev["rot"]))))
+		now[id] = {
+			"x": float(chip["x"]),
+			"y": float(chip["y"]),
+			"w": float(chip["w"]),
+			"h": float(chip["h"]),
+			"rot": float(chip["rot"]),
+		}
+	_last_pose = now
+
+
+func _present_sync() -> void:
+	var logical: Array[Dictionary] = chips()
+	var progress := grind_progress()
+	if _present_snap:
+		_shown = []
+		for chip_v in logical:
+			_shown.append(_vis_new(chip_v, 1.0))
+		_vis_progress = progress
+		_bed_from = progress
+		_bed_to = progress
+		_bed_left = 0.0
+		_bed_color = mean_color()
+		_present_snap = false
+		_last_pose = {}
+		return
+	if _shown.is_empty():
+		for chip_v in logical:
+			_shown.append(_vis_new(chip_v, 1.0))
+		_vis_progress = progress
+		_bed_from = progress
+		_bed_to = progress
+		_bed_left = 0.0
+		_bed_color = mean_color()
+		return
+	var live: Dictionary = {}
+	var live_n := 0
+	for item_v in _shown:
+		var s: Dictionary = item_v
+		if bool(s.get("ghost", false)):
+			continue
+		live[int(s["id"])] = s
+		live_n += 1
+	if logical.is_empty():
+		for item_v in _shown:
+			_begin_fade(item_v, PRESENT_REDROP_TIME, true)
+		_ease_bed(0.0)
+		return
+	var overlap := 0
+	for chip_v in logical:
+		if live.has(int(chip_v["id"])):
+			overlap += 1
+	if live_n > 0 and overlap == 0:
+		for item_v in _shown:
+			var s2: Dictionary = item_v
+			if not bool(s2.get("ghost", false)):
+				_begin_fade(s2, PRESENT_REDROP_TIME, true)
+		for chip_v in logical:
+			var born := _vis_new(chip_v, 0.0)
+			born["alpha_from"] = 0.0
+			born["alpha_to"] = 1.0
+			born["alpha_left"] = PRESENT_REDROP_TIME
+			born["alpha_dur"] = PRESENT_REDROP_TIME
+			_shown.append(born)
+		_ease_bed(progress)
+		return
+	var next: Array = []
+	var extras: Array = []
+	var used: Dictionary = {}
+	for chip_v in logical:
+		var id := int(chip_v["id"])
+		if live.has(id):
+			_aim_visual(live[id], chip_v, extras)
+			next.append(live[id])
+			used[id] = true
+		else:
+			var born2 := _vis_new(chip_v, 1.0)
+			var parent: Dictionary = _nearest_live(live, float(chip_v["x"]), float(chip_v["y"]))
+			if not parent.is_empty():
+				born2["x"] = float(parent["x"])
+				born2["y"] = float(parent["y"])
+				born2["w"] = float(parent["w"])
+				born2["h"] = float(parent["h"])
+				born2["rot"] = float(parent["rot"])
+				born2["sx"] = float(parent["x"])
+				born2["sy"] = float(parent["y"])
+				born2["sw"] = float(parent["w"])
+				born2["sh"] = float(parent["h"])
+				born2["srot"] = float(parent["rot"])
+				born2["tx"] = float(parent["x"])
+				born2["ty"] = float(parent["y"])
+				born2["tw"] = float(parent["w"])
+				born2["th"] = float(parent["h"])
+				born2["trot"] = float(parent["rot"])
+			_aim_visual(born2, chip_v, extras)
+			next.append(born2)
+	for id_v in live.keys():
+		if used.has(id_v):
+			continue
+		var old: Dictionary = live[id_v]
+		_begin_fade(old, PRESENT_SPLIT_TIME, true)
+		next.append(old)
+	for item_v in _shown:
+		var ghost: Dictionary = item_v
+		if bool(ghost.get("ghost", false)):
+			next.append(ghost)
+	for extra_v in extras:
+		next.append(extra_v)
+	_shown = next
+	_ease_bed(progress)
+
+
+func _ease_bed(target: float) -> void:
+	var delta := target - _vis_progress
+	if _bed_left > 0.0 and absf(target - _bed_to) < 0.008:
+		return
+	if delta < -0.002:
+		_bed_from = _vis_progress
+		_bed_to = target
+		_bed_dur = PRESENT_REDROP_TIME
+		_bed_left = PRESENT_REDROP_TIME
+	elif delta > 0.015:
+		_bed_from = _vis_progress
+		_bed_to = target
+		_bed_dur = PRESENT_CLAMP_TIME
+		_bed_left = PRESENT_CLAMP_TIME
+		_bed_color = mean_color()
+	else:
+		if _bed_left > 0.0:
+			return
+		_vis_progress = target
+		_bed_from = target
+		_bed_to = target
+		_bed_left = 0.0
+		_bed_color = mean_color()
+
+
+func _vis_new(chip: Dictionary, alpha: float) -> Dictionary:
+	var k := float(chip.get("draw_k", 1.0))
+	var w := float(chip["w"]) * k
+	var h := float(chip["h"]) * k
+	var x := float(chip["x"])
+	var y := float(chip["y"])
+	var rot := float(chip["rot"])
+	return {
+		"id": int(chip["id"]),
+		"x": x, "y": y, "w": w, "h": h, "rot": rot,
+		"sx": x, "sy": y, "sw": w, "sh": h, "srot": rot,
+		"tx": x, "ty": y, "tw": w, "th": h, "trot": rot,
+		"left": 0.0, "dur": 0.0,
+		"alpha": alpha, "alpha_from": alpha, "alpha_to": alpha,
+		"alpha_left": 0.0, "alpha_dur": 0.0,
+		"ghost": false,
+		"kind": str(chip["kind"]),
+		"sprite": int(chip["sprite"]),
+		"color": chip["color"],
+		"nick": int(chip["nick"]),
+		"generation": int(chip["generation"]),
+		"cracked": bool(chip["cracked"]),
+		"crush": float(chip["crush"]),
+		"ingredient_id": str(chip.get("ingredient_id", "")),
+		"hop": 0.0,
+		"draw_k": 1.0,
+		"depth": float(chip.get("depth", y)),
+		"delay": float(chip.get("delay", 0.0)),
+		"vx": 0.0,
+		"vy": 0.0,
+	}
+
+
+func _aim_visual(vis: Dictionary, chip: Dictionary, extras: Array) -> void:
+	var grain := str(chip["kind"]) == "dust" and str(vis["kind"]) != "dust"
+	if grain:
+		var ghost := vis.duplicate(true)
+		ghost["ghost"] = true
+		ghost["alpha_from"] = float(vis["alpha"])
+		ghost["alpha_to"] = 0.0
+		ghost["alpha"] = float(vis["alpha"])
+		ghost["alpha_left"] = PRESENT_GRAIN_TIME
+		ghost["alpha_dur"] = PRESENT_GRAIN_TIME
+		ghost["left"] = 0.0
+		ghost["tx"] = float(ghost["x"])
+		ghost["ty"] = float(ghost["y"])
+		ghost["tw"] = float(ghost["w"])
+		ghost["th"] = float(ghost["h"])
+		ghost["trot"] = float(ghost["rot"])
+		extras.append(ghost)
+		_ghost_seen = maxf(_ghost_seen, PRESENT_GRAIN_TIME)
+		vis["kind"] = "dust"
+		vis["sprite"] = 0
+		vis["cracked"] = false
+		vis["alpha_from"] = 0.0
+		vis["alpha_to"] = 1.0
+		vis["alpha"] = 0.0
+		vis["alpha_left"] = PRESENT_GRAIN_TIME
+		vis["alpha_dur"] = PRESENT_GRAIN_TIME
+	vis["kind"] = str(chip["kind"])
+	vis["sprite"] = int(chip["sprite"])
+	vis["color"] = chip["color"]
+	vis["nick"] = int(chip["nick"])
+	vis["generation"] = int(chip["generation"])
+	vis["cracked"] = bool(chip["cracked"])
+	vis["ingredient_id"] = str(chip.get("ingredient_id", ""))
+	var tx := float(chip["x"])
+	var ty := float(chip["y"])
+	var tw := float(chip["w"]) * float(chip.get("draw_k", 1.0))
+	var th := float(chip["h"]) * float(chip.get("draw_k", 1.0))
+	var trot := float(vis["rot"]) + _wrap_deg(float(chip["rot"]) - float(vis["rot"]))
+	var dist := sqrt(pow(tx - float(vis["x"]), 2.0) + pow(ty - float(vis["y"]), 2.0))
+	var rel := maxf(
+		absf(tw - float(vis["w"])) / maxf(float(vis["w"]), 0.5),
+		absf(th - float(vis["h"])) / maxf(float(vis["h"]), 0.5)
+	)
+	var deg := absf(_wrap_deg(trot - float(vis["rot"])))
+	var shift := sqrt(pow(tx - float(vis["tx"]), 2.0) + pow(ty - float(vis["ty"]), 2.0))
+	var size_shift := maxf(
+		absf(tw - float(vis["tw"])) / maxf(float(vis["tw"]), 0.5),
+		absf(th - float(vis["th"])) / maxf(float(vis["th"]), 0.5)
+	)
+	if float(vis["left"]) > 0.0 and not grain and shift < 1.5 and size_shift < 0.04 and absf(_wrap_deg(trot - float(vis["trot"]))) < 3.0:
+		vis["tx"] = tx
+		vis["ty"] = ty
+		vis["tw"] = tw
+		vis["th"] = th
+		vis["trot"] = trot
+		return
+	var dur := _move_dur(dist, rel, deg, grain)
+	if dur <= 0.0:
+		vis["x"] = tx
+		vis["y"] = ty
+		vis["w"] = tw
+		vis["h"] = th
+		vis["rot"] = trot
+		vis["sx"] = tx
+		vis["sy"] = ty
+		vis["sw"] = tw
+		vis["sh"] = th
+		vis["srot"] = trot
+		vis["tx"] = tx
+		vis["ty"] = ty
+		vis["tw"] = tw
+		vis["th"] = th
+		vis["trot"] = trot
+		vis["left"] = 0.0
+		vis["dur"] = 0.0
+		return
+	vis["sx"] = float(vis["x"])
+	vis["sy"] = float(vis["y"])
+	vis["sw"] = float(vis["w"])
+	vis["sh"] = float(vis["h"])
+	vis["srot"] = float(vis["rot"])
+	vis["tx"] = tx
+	vis["ty"] = ty
+	vis["tw"] = tw
+	vis["th"] = th
+	vis["trot"] = trot
+	vis["left"] = dur
+	vis["dur"] = dur
+
+
+func _move_dur(dist: float, rel: float, deg: float, grain: bool) -> float:
+	# Leave headroom for the pestle press, which is applied on top of this pose.
+	if dist <= 2.2 and rel <= 0.045 and deg <= 4.5 and not grain:
+		return 0.0
+	var dur := maxf(dist / 100.0, maxf(rel / 2.5, deg / 200.0))
+	if grain:
+		return maxf(dur, PRESENT_GRAIN_TIME)
+	return maxf(dur, 0.15)
+
+
+func _begin_fade(s: Dictionary, dur: float, shrink: bool) -> void:
+	if bool(s.get("ghost", false)) and float(s.get("alpha_to", 1.0)) <= 0.0 and float(s.get("alpha_left", 0.0)) > 0.0:
+		return
+	s["ghost"] = true
+	s["alpha_from"] = float(s["alpha"])
+	s["alpha_to"] = 0.0
+	s["alpha_left"] = dur
+	s["alpha_dur"] = dur
+	if not shrink:
+		return
+	s["sx"] = float(s["x"])
+	s["sy"] = float(s["y"])
+	s["sw"] = float(s["w"])
+	s["sh"] = float(s["h"])
+	s["srot"] = float(s["rot"])
+	s["tx"] = float(s["x"])
+	s["ty"] = float(s["y"])
+	s["tw"] = float(s["w"]) * 0.72
+	s["th"] = float(s["h"]) * 0.72
+	s["trot"] = float(s["rot"])
+	s["left"] = dur
+	s["dur"] = dur
+
+
+func _nearest_live(live: Dictionary, x: float, y: float) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := 1.0e12
+	for id_v in live.keys():
+		var s: Dictionary = live[id_v]
+		var dx := float(s["x"]) - x
+		var dy := float(s["y"]) - y
+		var d := dx * dx + dy * dy
+		if d < best_d:
+			best_d = d
+			best = s
+	return best
+
+
+func _wrap_deg(d: float) -> float:
+	var w := fmod(d + 180.0, 360.0)
+	if w < 0.0:
+		w += 360.0
+	return w - 180.0
 
 
 func _publish_all(list: Array) -> Array[Dictionary]:

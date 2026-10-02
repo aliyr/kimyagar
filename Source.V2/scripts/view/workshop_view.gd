@@ -1058,8 +1058,7 @@ func _tick_flights(dt: float) -> void:
 		Game.add_classic_unit(landed_id)
 		Game.start_grinding()
 		Sfx.jar_drop()
-		if _mortar_parts:
-			_mortar_parts.burst("land", Vector2.ZERO, {"color": str(land["color"])})
+		# Dust only appears with pestle strikes. A land puff was the progress-0 haze.
 	_pending_lands = waiting
 
 
@@ -1424,12 +1423,16 @@ func _draw_pieces(c: Control) -> void:
 	if _pile == null:
 		return
 	var aim: Dictionary = _pile.pestle()
-	var shown: Array = _pile.chips()
+	var logical: Array = _pile.chips()
+	var shown: Array = _pile.presentation()
 	_draw_mortar_bed(c)
 	if _mortar_parts:
-		var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS
-		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue(), hide_mound)
+		var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS or _pile.visual_progress() >= MortarPile.BED_EPS
+		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, logical, aim, _pile.residue(), hide_mound)
 	for chip in shown:
+		var vis_a := float(chip.get("vis_alpha", 1.0))
+		if vis_a <= 0.02:
+			continue
 		var lay: Dictionary = _pile.layout_chip(chip)
 		var poly: PackedVector2Array = lay["poly"]
 		var uvs: PackedVector2Array = lay["uvs"]
@@ -1438,7 +1441,7 @@ func _draw_pieces(c: Control) -> void:
 		var tint: Color = chip["color"]
 		var shade := 0.14 + 0.12 * (float(int(chip.get("id", 1)) % 7) / 6.0)
 		if bool(lay["dust"]):
-			var dust_col := Color(tint.r, tint.g, tint.b, 0.9)
+			var dust_col := Color(tint.r, tint.g, tint.b, 0.9 * vis_a)
 			var rad := float(lay["radius"])
 			var center: Vector2 = lay["center"]
 			if MortarPile.circle_inside(center, rad):
@@ -1458,39 +1461,39 @@ func _draw_pieces(c: Control) -> void:
 			uvs = clipped[1]
 			if poly.size() < 3:
 				continue
-		if bool(lay["cracked"]) or not inside:
-			var cols := PackedColorArray()
-			cols.resize(poly.size())
-			cols.fill(Color.WHITE)
-			c.draw_polygon(poly, cols, uvs, tex)
-			var tinted := PackedColorArray()
-			tinted.resize(poly.size())
-			tinted.fill(Color(tint.r, tint.g, tint.b, shade))
-			c.draw_polygon(poly, tinted)
-		else:
-			var center2: Vector2 = lay["center"]
-			var rot := float(lay["rot"])
-			var sc := float(lay["sc"])
-			var w := float(lay["w"])
-			var h := float(lay["h"])
-			c.draw_set_transform(center2, rot, Vector2(sc, sc))
-			c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
-			c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint.r, tint.g, tint.b, shade), true)
-			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		# Texture alpha masks the sprite. A flat rect here painted the clear corners.
+		var wash := Color(lerpf(1.0, tint.r, shade), lerpf(1.0, tint.g, shade), lerpf(1.0, tint.b, shade), vis_a)
+		var cols := PackedColorArray()
+		cols.resize(poly.size())
+		cols.fill(wash)
+		c.draw_polygon(poly, cols, uvs, tex)
 
 
 func _draw_mortar_bed(c: Control) -> void:
 	if _pile == null:
 		return
+	var fan: Dictionary = _pile.drawn_bed_fan()
+	if not fan.is_empty():
+		var pts: PackedVector2Array = fan["points"]
+		var uvs: PackedVector2Array = fan["uvs"]
+		var col: Color = fan["color"]
+		if pts.size() >= 3:
+			var cols := PackedColorArray()
+			cols.resize(pts.size())
+			cols.fill(col)
+			c.draw_polygon(pts, cols, uvs, MortarPile.bed_shade_texture())
 	for spec_v in _pile.bed_specs():
 		var spec: Dictionary = spec_v
-		var col: Color = spec["color"]
-		if bool(spec.get("disk", false)):
-			c.draw_circle(spec["at"], float(spec["radius"]), col)
+		var role := str(spec.get("role", ""))
+		if role == "shadow" or role == "body" or role == "highlight":
 			continue
-		var pts: PackedVector2Array = spec["points"]
-		if pts.size() >= 3:
-			c.draw_colored_polygon(pts, col)
+		var mark: Color = spec["color"]
+		if bool(spec.get("disk", false)):
+			c.draw_circle(spec["at"], float(spec["radius"]), mark)
+			continue
+		var mark_pts: PackedVector2Array = spec["points"]
+		if mark_pts.size() >= 3:
+			c.draw_colored_polygon(mark_pts, mark)
 
 
 func _draw_mortar_fx(c: Control) -> void:
@@ -1910,6 +1913,8 @@ func _tick_mortar(dt: float) -> void:
 			aroma_col = _mortar_mix_color()
 		_mortar_parts.set_effects(Settings.effects_enabled)
 		_mortar_parts.set_aroma(aroma, aroma_col)
+		if Game.mortar == null:
+			_mortar_parts.settle(2.0)
 		_mortar_parts.update(dt)
 	if Game.mortar != null:
 		var gstate = Game.mortar.get("grindState")
@@ -3194,6 +3199,7 @@ func jump_grind(work: float) -> void:
 	Game.mortar = state
 	_pile.force_refill()
 	_pile.prepare_bake()
+	_pile.snap_presentation()
 	_pile.sync(state)
 	_pile.update(0.0, true)
 	_pile.hold_grind_pose(0.50 + 0.28 * absf(sin(amount * 5.2)))
@@ -3209,6 +3215,7 @@ func jump_transfer(at: float) -> void:
 	_transfer_dropped = false
 	if _pile:
 		_pile.force_refill()
+		_pile.snap_presentation()
 		if Game.mortar != null:
 			_pile.sync(Game.mortar)
 	_transfer.begin(_mouth, _mouth_r)
