@@ -15,6 +15,7 @@ var _live_next_u := 0.0
 var _live_empty: Image
 var _live_prev: Image
 var _live_outside := 0
+var _live_outside_hard := 0
 var _live_haze := -1
 var _live_pop := 0
 var _live_wait := 0
@@ -149,6 +150,7 @@ func _live_frame(host) -> void:
 		_live_prev = img
 		return
 	_live_outside = maxi(_live_outside, _shell_leak(img, ox))
+	_live_outside_hard = maxi(_live_outside_hard, _shell_leak_at(img, ox, 0.55))
 	_note_motion(host)
 	if _live_phase == "grind":
 		var u := clampf(_mortar_work() / 3.6, 0.0, 1.0)
@@ -188,7 +190,10 @@ func _live_frame(host) -> void:
 		if _live_wait < 130:
 			return
 		var left := _shell_leak(img, ox)
-		print("LIVE done outside %s haze %s redrop_pop %s tail %s %s" % [_live_outside, _live_haze, _live_pop, left, _motion_line(host)])
+		var left_hard := _shell_leak_at(img, ox, 0.55)
+		_live_empty.save_jpg(str(host._shot_out) + "/empty-full.jpg", 0.85)
+		img.save_jpg(str(host._shot_out) + "/final-full.jpg", 0.85)
+		print("LIVE done outside %s outside_hard %s haze %s redrop_pop %s tail %s tail_hard %s %s" % [_live_outside, _live_outside_hard, _live_haze, _live_pop, left, left_hard, _motion_line(host)])
 		print("FILM done live")
 		host.get_tree().quit(0)
 
@@ -254,6 +259,10 @@ func _opening_ring(img: Image, ox: int) -> int:
 
 
 func _shell_leak(img: Image, ox: int) -> int:
+	return _shell_leak_at(img, ox, 0.20)
+
+
+func _shell_leak_at(img: Image, ox: int, thresh: float) -> int:
 	if _live_empty == null:
 		return 0
 	var cx := 414 + ox
@@ -266,8 +275,7 @@ func _shell_leak(img: Image, ox: int) -> int:
 			var norm := sqrt(dx * dx + dy * dy)
 			if norm < 1.03 or norm > 1.25:
 				continue
-			var d := _pix_delta(img, _live_empty, x, y)
-			if d > 0.20:
+			if _pix_delta(img, _live_empty, x, y) > thresh:
 				n += 1
 	return n
 

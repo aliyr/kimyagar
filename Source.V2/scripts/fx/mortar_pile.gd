@@ -419,6 +419,7 @@ func scoop_under(scene_x: float, scene_y: float) -> Array[Dictionary]:
 	if taken.is_empty():
 		return []
 	_chips = stay
+	_release_shown(taken)
 	_add_residue(taken)
 	return _publish_all(taken)
 
@@ -825,6 +826,7 @@ func take_share(frac: float) -> Array[Dictionary]:
 		else:
 			stay.append(ranked[i])
 	_chips = stay
+	_release_shown(taken)
 	_add_residue(taken)
 	return _publish_all(taken)
 
@@ -870,6 +872,7 @@ func scoop_rest() -> Array[Dictionary]:
 		return []
 	var taken: Array[Dictionary] = _chips
 	_chips = []
+	_release_shown(taken)
 	_add_residue(taken)
 	return _publish_all(taken)
 
@@ -2076,6 +2079,23 @@ func _hex_byte(text: String, index: int) -> int:
 	if not pair.is_valid_hex_number():
 		return -1
 	return pair.hex_to_int()
+
+
+## The spoon now owns these chips, so the bowl stops drawing them at once.
+func _release_shown(taken: Array) -> void:
+	if taken.is_empty() or _shown.is_empty():
+		return
+	var gone := {}
+	for chip_v in taken:
+		var chip: Dictionary = chip_v
+		gone[int(chip["id"])] = true
+	var keep: Array = []
+	for item_v in _shown:
+		var shown: Dictionary = item_v
+		if gone.has(int(shown["id"])):
+			continue
+		keep.append(shown)
+	_shown = keep
 
 
 ## What the bowl draws. Logic chips still jump; this copy eases.

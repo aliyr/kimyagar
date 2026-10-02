@@ -1475,13 +1475,32 @@ func _draw_mortar_bed(c: Control) -> void:
 	var fan: Dictionary = _pile.drawn_bed_fan()
 	if not fan.is_empty():
 		var pts: PackedVector2Array = fan["points"]
-		var uvs: PackedVector2Array = fan["uvs"]
 		var col: Color = fan["color"]
-		if pts.size() >= 3:
-			var cols := PackedColorArray()
-			cols.resize(pts.size())
-			cols.fill(col)
-			c.draw_polygon(pts, cols, uvs, MortarPile.bed_shade_texture())
+		var n := pts.size()
+		if n >= 3:
+			var center := Vector2.ZERO
+			for p in pts:
+				center += p
+			center /= float(n)
+			var points := PackedVector2Array()
+			var colors := PackedColorArray()
+			points.append(center)
+			colors.append(Color(minf(col.r * 1.22, 1.0), minf(col.g * 1.18, 1.0), minf(col.b * 1.08, 1.0), col.a))
+			for i in n:
+				var speckle := 0.06 * sin(float(i) * 2.7 + 0.4)
+				points.append(pts[i])
+				colors.append(Color(
+					clampf(col.r * 0.55 + speckle, 0.0, 1.0),
+					clampf(col.g * 0.48 + speckle * 0.8, 0.0, 1.0),
+					clampf(col.b * 0.40 + speckle * 0.5, 0.0, 1.0),
+					0.0
+				))
+			var indices := PackedInt32Array()
+			for i in n:
+				indices.append(0)
+				indices.append(1 + i)
+				indices.append(1 + ((i + 1) % n))
+			RenderingServer.canvas_item_add_triangle_array(c.get_canvas_item(), indices, points, colors)
 	for spec_v in _pile.bed_specs():
 		var spec: Dictionary = spec_v
 		var role := str(spec.get("role", ""))
