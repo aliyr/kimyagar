@@ -1518,6 +1518,8 @@ func _draw_mortar_bed(c: Control) -> void:
 func _draw_mortar_fx(c: Control) -> void:
 	if _mortar_parts == null:
 		return
+	if Game.mortar != null and _mortar_norm() < 0.02:
+		_mortar_parts.quiet_fresh()
 	_mortar_parts.draw(c, Vector2.ZERO, ZONE_MORTAR.size)
 
 
@@ -1934,6 +1936,10 @@ func _tick_mortar(dt: float) -> void:
 		_mortar_parts.set_aroma(aroma, aroma_col)
 		if Game.mortar == null:
 			_mortar_parts.settle(2.0)
+		elif _mortar_norm() < 0.02:
+			# The opening frames are raw pieces. Leftover dust from the last scoop
+			# is haze, and the first strike is still a fifth of a second away.
+			_mortar_parts.quiet_fresh()
 		_mortar_parts.update(dt)
 	if Game.mortar != null:
 		var gstate = Game.mortar.get("grindState")
@@ -2299,7 +2305,9 @@ func _apply_camera() -> void:
 	if _camera == null:
 		return
 	var shake := Vector2.ZERO
-	if Settings.effects_enabled and _shake_kind != "" and _shake_elapsed < _shake_dur:
+	# Pinned shots keep the bowl still. A cauldron hit otherwise slides the
+	# mortar across the frame and reads as material leaving the opening.
+	if not hold_camera and Settings.effects_enabled and _shake_kind != "" and _shake_elapsed < _shake_dur:
 		shake = RoomFx.shake_offset(_shake_kind, _shake_elapsed)
 	_camera.position = shake
 	_camera.pivot_offset = _cam_focus
@@ -2411,11 +2419,17 @@ func _paint_transfer(c: Control, buried: bool) -> void:
 		var mid := Vector2((from.x + dest.x) * 0.5 + float(item["ox"]) * 0.15, from.y + 18.0)
 		var u := 1.0 - eased
 		var p2 := from * (u * u) + mid * (2.0 * u * eased) + dest * (eased * eased)
-		_draw_mini_chip(c, item["chip"], p2, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
+		var chip: Dictionary = item["chip"]
+		var rad := maxf(float(item["w"]), float(item["h"])) * 0.5
+		if str(chip.get("kind", "")) == "dust":
+			rad = maxf(float(item["w"]), float(item["h"])) * 0.35
+		if MortarPile.disc_visible(p2, rad, 1.0, float(item.get("opacity", 1.0)), false):
+			_draw_mini_chip(c, chip, p2, float(item["w"]), float(item["h"]), float(item.get("opacity", 1.0)))
 	if Settings.effects_enabled:
 		_paint_motes(c, pose)
-	if float(pose.get("pouring", 0.0)) > 0.5:
-		_paint_stream(c, from, _transfer.land, pose.get("color", Color("#8a7a52")), fade)
+	var pour_k := float(pose.get("pouring", 0.0))
+	if pour_k > 0.02:
+		_paint_stream(c, from, _transfer.land, pose.get("color", Color("#8a7a52")), fade, pour_k)
 
 
 func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Vector2, fade: float, bury: float) -> void:
@@ -2424,9 +2438,12 @@ func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Ve
 	var heap_k := clampf(float(pose["blob"]), 0.15, 1.0)
 	var mound := _shift_poly(_oval(24.0 * heap_k, 13.0 * heap_k), heap, rot)
 	var core := _shift_poly(_oval(14.0 * heap_k, 7.0 * heap_k), heap, rot)
-	if bury < 50000.0:
-		mound = _clip_above(mound, bury)
-		core = _clip_above(core, bury)
+	var heap_local := heap - Vector2(MortarPile.ZONE_X, MortarPile.ZONE_Y)
+	var near_bowl := heap_local.distance_squared_to(MortarPile.interior_center()) < 160.0 * 160.0
+	if bury < 50000.0 or near_bowl:
+		if bury < 50000.0:
+			mound = _clip_above(mound, bury)
+			core = _clip_above(core, bury)
 		mound = MortarPile.clip_to_opening(mound)
 		core = MortarPile.clip_to_opening(core)
 	if mound.size() >= 3:
@@ -2438,7 +2455,8 @@ func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Ve
 	for chip in pose.get("chips", []):
 		var local := Vector2(float(chip.get("sx", 0.0)), float(chip.get("sy", 0.0))) * 0.45 + lip * 0.5
 		var p := at + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y)
-		if p.y <= bury and (bury >= 50000.0 or MortarPile.mouth_norm(p) <= MortarPile.INTERIOR_INSET):
+		var chip_r := maxf(float(chip.get("dw", 16.0)), float(chip.get("dh", 16.0))) * 0.4
+		if p.y <= bury and MortarPile.disc_visible(p, chip_r, 0.0, fade, false):
 			_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
 
 
@@ -2448,24 +2466,35 @@ func _paint_motes(c: Control, pose: Dictionary) -> void:
 		var mc: Color = mote.get("color", Color("#8a7a52"))
 		var mr := float(mote.get("r", 2.0))
 		var ma := clampf(float(mote.get("life", 0.2)) / 0.4, 0.0, 1.0)
-		c.draw_circle(Vector2(float(mote.get("x", 0.0)), float(mote.get("y", 0.0))), mr, Color(mc.r, mc.g, mc.b, 0.8 * ma))
+		var at := Vector2(float(mote.get("x", 0.0)), float(mote.get("y", 0.0)))
+		var alpha := 0.8 * ma
+		var rising := bool(mote.get("dust", false))
+		if not MortarPile.disc_visible(at, mr, float(mote.get("vy", 0.0)), alpha, rising):
+			continue
+		c.draw_circle(at, mr, Color(mc.r, mc.g, mc.b, alpha))
 
 
-func _paint_stream(c: Control, from: Vector2, land: Vector2, col: Color, fade: float) -> void:
-	var dir := land - from
+func _paint_stream(c: Control, from: Vector2, land: Vector2, col: Color, fade: float, grow: float) -> void:
+	var e := clampf(grow, 0.0, 1.0)
+	e = e * e * (3.0 - 2.0 * e)
+	if e <= 0.012:
+		return
+	var tip := from.lerp(land, e)
+	var dir := tip - from
 	var span := dir.length()
-	if span < 8.0:
+	if span < 2.0:
 		return
 	dir /= span
 	var nrm := Vector2(-dir.y, dir.x)
 	var left := PackedVector2Array()
 	var right := PackedVector2Array()
 	var n := 12
+	var width_k := lerpf(0.18, 1.0, e)
 	for i in n:
 		var s := float(i) / float(n - 1)
-		var p := from.lerp(land, s)
-		p += nrm * sin(s * PI) * 5.0
-		var w := lerpf(6.2, 2.6, s)
+		var p := from.lerp(tip, s)
+		p += nrm * sin(s * PI) * 5.0 * e
+		var w := lerpf(6.2, 2.6, s) * width_k
 		left.append(p + nrm * w)
 		right.append(p - nrm * w)
 	var poly := PackedVector2Array()
@@ -2473,7 +2502,7 @@ func _paint_stream(c: Control, from: Vector2, land: Vector2, col: Color, fade: f
 		poly.append(p)
 	for i in range(right.size() - 1, -1, -1):
 		poly.append(right[i])
-	c.draw_colored_polygon(poly, Color(col.r, col.g, col.b, 0.9 * fade))
+	c.draw_colored_polygon(poly, Color(col.r, col.g, col.b, 0.9 * fade * e))
 
 
 func _shift_poly(local: PackedVector2Array, at: Vector2, rot: float) -> PackedVector2Array:
@@ -3241,6 +3270,8 @@ func jump_transfer(at: float) -> void:
 	var steps := int(maxf(at, 0.0) * 60.0)
 	for _i in steps:
 		_tick_transfer(1.0 / 60.0)
+		if _pile:
+			_pile.advance_presentation(1.0 / 60.0)
 	# The click ends grinding, and by the carry frame the focus has faded out.
 	_focus_t = 0.0
 	if _vignette_mat:

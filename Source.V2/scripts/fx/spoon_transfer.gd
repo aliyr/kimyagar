@@ -232,7 +232,8 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			_released = true
 			_release()
 		if k4 > 0.10:
-			pouring = 1.0
+			# The ribbon grows out of the lip over 0.2 s. It does not pop in at full width.
+			pouring = clampf((k4 - 0.10) / (0.20 / T_DROP), 0.0, 1.0)
 		if _released and not _landed:
 			var pour := clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0)
 			_place_fall(pour)

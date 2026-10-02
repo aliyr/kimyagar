@@ -85,6 +85,7 @@ func _run() -> void:
 	_round12()
 	_round16()
 	_round17()
+	_round18()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2709,10 +2710,13 @@ func _piece_mask() -> void:
 	var src := FileAccess.get_file_as_string("res://scripts/view/workshop_view.gd")
 	check(src.find("draw_rect(Rect2(-w") < 0, "raw pieces are not tinted rectangles")
 	for kind in ["flower", "leaf", "thread", "root", "seed", "star", "petal"]:
-		var img := Image.new()
-		var err := img.load("res://assets/art/mortar/v3/pieces/%s_1.png" % kind)
-		check(err == OK, "piece sprite %s loads" % kind)
-		if err != OK:
+		var tex := ResourceLoader.load("res://assets/art/mortar/v3/pieces/%s_1.png" % kind) as Texture2D
+		check(tex != null, "piece sprite %s loads" % kind)
+		if tex == null:
+			continue
+		var img := tex.get_image()
+		check(img != null and not img.is_empty(), "piece sprite %s has pixels" % kind)
+		if img == null or img.is_empty():
 			continue
 		var w := img.get_width() - 1
 		var h := img.get_height() - 1
@@ -2785,8 +2789,8 @@ func _grind_continuity() -> void:
 		worst_size = maxf(worst_size, size)
 		worst_rot = maxf(worst_rot, rot)
 		check(pos <= 3.05, "%s per-frame move %s bowl-percent" % [id, pos])
-		check(size <= 0.08, "%s per-frame size %s" % [id, size])
-		check(rot <= 6.05, "%s per-frame rotation %s" % [id, rot])
+		check(size <= 0.06, "%s per-frame size %s" % [id, size])
+		check(rot <= 5.0, "%s per-frame rotation %s" % [id, rot])
 		check(float(report["ghost"]) >= 0.4, "%s grain crossfade %ss" % [id, report["ghost"]])
 		check(float(report["bed"]) < 0.03, "%s bed step %s" % [id, report["bed"]])
 	print("ROUND17 continuity pos=%.3f size=%.4f rot=%.2f worst=%s" % [worst_pos, worst_size, worst_rot, worst_name])
@@ -2872,3 +2876,143 @@ func _redrop_ease() -> void:
 		clamp.update(1.0 / 60.0, false)
 	near(clamp.visual_progress(), 1.0 / 3.6, "clamp bed arrives", 0.03)
 	print("ROUND17 redrop_step=%.4f clamp_step=%.4f" % [absf(before - stepped), high - low])
+
+
+func _round18() -> void:
+	var src := FileAccess.get_file_as_string("res://tests/run_tests.gd")
+	var needle := "var err := " + "img.load"
+	check(src.find(needle) < 0, "piece masks do not Image.load imported pngs")
+	var c := MortarPile.interior_center()
+	var edge := c + Vector2(MortarPile.VIS_RX - 1.0, 0.0)
+	check(not MortarPile.circle_inside(edge, 4.0), "a disc on the lip is outside")
+	check(MortarPile.circle_inside(c, 4.0), "a disc at the centre is inside")
+	var above := Vector2(c.x, c.y - (MortarPile.VIS_RY - MortarPile.EDGE_MARGIN) - 8.0)
+	check(MortarPile.rising_dust_ok(above, 2.0, -30.0, 0.05), "faint dust above the rim may rise")
+	check(not MortarPile.rising_dust_ok(above, 2.0, -30.0, 0.4), "bright dust above the rim is clipped")
+	check(not MortarPile.rising_dust_ok(edge, 3.0, -30.0, 0.05), "dust on the lip is clipped")
+	var rim_scene := Vector2(MortarPile.ZONE_X, MortarPile.ZONE_Y) + edge
+	check(not MortarPile.disc_visible(rim_scene, 4.0, 10.0, 0.9, true), "a scoop crumb on the lip is not drawn")
+	var far := Vector2(MortarPile.VIS_CX + 420.0, MortarPile.VIS_CY + 180.0)
+	check(MortarPile.disc_visible(far, 6.0, 40.0, 1.0, false), "a pour droplet far from the mortar stays")
+	var parts := MortarParticles.new()
+	parts.set_effects(true)
+	parts.burst("strike", Vector2(50, 70), {"fineness": 1.0, "hits": 3, "colors": ["#c4a15a"]})
+	check(parts.busy(), "strike dust is present before a fresh drop")
+	parts.quiet_fresh()
+	check(not parts.busy(), "a fresh drop clears bowl haze")
+	var bed := MortarPile.new()
+	bed.sync(_portion_state("ginger", 2.0, false))
+	bed.update(1.0 / 60.0, false)
+	bed.set_visual_level(0.20)
+	var hi: Dictionary = bed.drawn_bed_fan()
+	bed.set_visual_level(0.13)
+	var mid: Dictionary = bed.drawn_bed_fan()
+	bed.set_visual_level(0.12)
+	var lo: Dictionary = bed.drawn_bed_fan()
+	check(not hi.is_empty() and not mid.is_empty() and not lo.is_empty(), "the bed does not vanish at level 0.12")
+	var drop := float(hi["color"].a) - float(lo["color"].a)
+	check(drop > 0.02 and drop < 0.55, "bed alpha eases across the last of the scoop, drop %s" % drop)
+	bed.set_visual_level(0.08)
+	check(bed.drawn_bed_fan().is_empty(), "the bed is gone once the pile is at the floor")
+	var scoop := MortarPile.new()
+	scoop.motion_reset()
+	scoop.sync(_portion_state("chamomile", 2.0, false))
+	scoop.update(1.0 / 60.0, false)
+	var had := scoop.presentation().size()
+	check(had > 0, "scoop starts with chunks")
+	scoop.scoop_rest()
+	scoop.set_visual_level(0.13)
+	scoop.update(1.0 / 60.0, false)
+	var still := 0
+	for chip_v in scoop.presentation():
+		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
+			still += 1
+	check(still > 0, "the last chunks are still visible on the next frame, %s" % still)
+	for _i in 16:
+		scoop.update(1.0 / 60.0, false)
+	var left := 0
+	for chip_v2 in scoop.presentation():
+		if float(chip_v2.get("vis_alpha", 0.0)) > 0.12:
+			left += 1
+	check(left == 0, "the last chunks fade out within 0.25s, left %s" % left)
+	var born_alpha := 1.0
+	var born_dust := 1.0
+	var saw_born := false
+	var saw_dust := false
+	var names: Array[String] = ["chamomile", "mint", "poppy", "ginger", "borage", "saffron"]
+	var dw := (3.6 / 3.5) / 60.0
+	for id in names:
+		var pile := MortarPile.new()
+		pile.motion_reset()
+		var work := 0.0
+		var seen: Dictionary = {}
+		pile.sync(_portion_state(id, work, true))
+		pile.update(1.0 / 60.0, true)
+		for chip_v3 in pile.presentation():
+			seen[int(chip_v3["id"])] = true
+		for _frame in 220:
+			work = minf(3.6, work + dw)
+			pile.sync(_portion_state(id, work, work < 3.59))
+			pile.update(1.0 / 60.0, work < 3.59)
+			for chip_v4 in pile.presentation():
+				var cid := int(chip_v4["id"])
+				var fresh := not seen.has(cid)
+				seen[cid] = true
+				if bool(chip_v4.get("ghost", false)):
+					continue
+				if fresh:
+					saw_born = true
+					born_alpha = minf(born_alpha, float(chip_v4.get("vis_alpha", 1.0)))
+				if str(chip_v4.get("kind", "")) == "dust" and float(chip_v4.get("vis_alpha", 1.0)) < 0.4:
+					saw_dust = true
+					var logical_w := 1.0
+					for raw_v in pile.chips():
+						if int(raw_v["id"]) == cid:
+							logical_w = maxf(0.5, float(raw_v["w"]))
+					born_dust = minf(born_dust, float(chip_v4["w"]) / logical_w)
+	check(saw_born and born_alpha < 0.35, "split children fade in, alpha %s" % born_alpha)
+	check(saw_dust and born_dust < 0.55, "dust discs start small, scale %s" % born_dust)
+	var worst_pos := 0.0
+	var worst_size := 0.0
+	var worst_rot := 0.0
+	for id2 in names:
+		var slow := MortarPile.new()
+		slow.motion_reset()
+		var work2 := 0.0
+		var step := (3.6 / 3.5) * 0.022
+		slow.sync(_portion_state(id2, work2, true))
+		for _frame2 in 90:
+			work2 = minf(3.6, work2 + step)
+			slow.sync(_portion_state(id2, work2, work2 < 3.59))
+			slow.update(0.022, work2 < 3.59)
+		var report: Dictionary = slow.motion_report()
+		worst_pos = maxf(worst_pos, float(report["pos"]))
+		worst_size = maxf(worst_size, float(report["size"]))
+		worst_rot = maxf(worst_rot, float(report["rot"]))
+	check(worst_pos <= 3.05, "long-frame move %s" % worst_pos)
+	check(worst_size <= 0.06, "long-frame size %s" % worst_size)
+	check(worst_rot <= 5.0, "long-frame rotation %s" % worst_rot)
+	var spoon := SpoonTransfer.new()
+	spoon.begin(Vector2(1180.0, 760.0), Vector2(70.0, 36.0))
+	var pours: Array[float] = []
+	for _step in 280:
+		var pose: Dictionary = spoon.update(1.0 / 60.0, null)
+		if str(pose.get("phase", "")) != "pour":
+			continue
+		pours.append(float(pose.get("pouring", 0.0)))
+		if pours.size() >= 20:
+			break
+	check(pours.size() >= 20, "pour records 20 frames")
+	if pours.size() >= 20:
+		check(pours[0] < 0.2, "pour ribbon starts small, %s" % pours[0])
+		var grew := true
+		var jump := 0.0
+		for i in range(1, pours.size()):
+			jump = maxf(jump, pours[i] - pours[i - 1])
+			if pours[i] + 0.001 < pours[i - 1]:
+				grew = false
+		check(grew and jump < 0.12, "pour ribbon eases, jump %s" % jump)
+		check(pours[pours.size() - 1] > 0.9, "pour ribbon reaches full, %s" % pours[pours.size() - 1])
+	print("ROUND18 born_a=%.3f dust=%.3f long_pos=%.3f long_size=%.4f long_rot=%.2f pour0=%.3f" % [
+		born_alpha, born_dust, worst_pos, worst_size, worst_rot, pours[0] if not pours.is_empty() else -1.0,
+	])

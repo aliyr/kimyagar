@@ -33,6 +33,11 @@ var _scale: float = 1.0
 var _reduced: bool = false
 var _specular: bool = true
 var _live_shadow: bool = true
+var _shadow_ready := false
+var _shadow_alpha := 0.0
+var _shadow_rx := 0.0
+var _shadow_ry := 0.0
+var _shadow_at := Vector2.ZERO
 var _sweeps: Array[Dictionary] = []
 var _aroma_i: float = 0.0
 var _aroma_hex: String = FALLBACK
@@ -175,7 +180,7 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 		var local: Vector2 = _map(Vector2(float(p["x"]), float(p["y"])), origin, scale)
 		var col: Color = _parse_hex(str(p["color"]))
 		var kind: String = str(p["kind"])
-		if kind != "ripple" and kind != "aroma" and not _particle_visible(local, p, alpha, origin, scale):
+		if kind != "ripple" and not _particle_visible(local, p, alpha, origin, scale):
 			continue
 		if kind == "ripple":
 			col.a = alpha
@@ -550,7 +555,8 @@ func _draw_sweeps(c: CanvasItem, origin: Vector2, scale: Vector2, now: float) ->
 			var col := Color(1.0, 244.0 / 255.0, 214.0 / 255.0, k * 0.85)
 			var rad: float = (2.2 + (1.0 - float(i) / 9.0) * 2.4) * scale.x
 			var at := Vector2(px, py)
-			if not MortarPile.within_margin(_zone_of(at, origin, scale)):
+			var zone_r := rad / (scale.x if absf(scale.x) > 0.0001 else 1.0)
+			if not MortarPile.circle_inside(_zone_of(at, origin, scale), zone_r):
 				continue
 			c.draw_circle(at, maxf(0.4, rad), col)
 	_sweeps = alive
@@ -675,6 +681,9 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 		return
 	if chips.is_empty() and mode != "grind":
 		return
+	# A fresh drop is raw pieces only. The contact shadow read as haze in the gaps.
+	if float(aim.get("progress", 1.0)) < MortarPile.BED_EPS and float(aim.get("impact", 0.0)) < 0.05:
+		return
 	var lift: float = float(aim.get("lift", 0.0))
 	var impact: float = float(aim.get("impact", 0.0))
 	var head_x: float = float(aim.get("head_x", FLOOR_CX))
@@ -686,6 +695,21 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	var ry: float = ((rx_zone * MORTAR_ASPECT * 0.42) / 100.0) * ZONE_H
 	var alpha: float = 0.34 * (1.0 - lift * 0.55) + impact * 0.1
 	var center: Vector2 = _map(scene, origin, scale)
+	# The contact shadow used to pulse with the beat and rewrite a ring of pixels.
+	if not _shadow_ready:
+		_shadow_alpha = 0.0
+		_shadow_rx = rx
+		_shadow_ry = ry
+		_shadow_at = center
+		_shadow_ready = true
+	_shadow_alpha = lerpf(_shadow_alpha, alpha, 0.08)
+	_shadow_rx = lerpf(_shadow_rx, rx, 0.08)
+	_shadow_ry = lerpf(_shadow_ry, ry, 0.08)
+	_shadow_at = _shadow_at.lerp(center, 0.08)
+	alpha = _shadow_alpha
+	rx = _shadow_rx
+	ry = _shadow_ry
+	center = _shadow_at
 	var shade := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 1.0)
 	# Dark contact shadow. It stays inside the opening; rising dust is a different layer.
 	_paint_radial(c, center, rx * scale.x, ry * scale.y, PackedFloat32Array([0.0, 0.7, 1.0]), [
@@ -729,20 +753,46 @@ func _zone_of(draw_pt: Vector2, origin: Vector2, scale: Vector2) -> Vector2:
 	return (draw_pt - (zone_pos - origin)) / Vector2(sx, sy)
 
 
+func quiet_fresh() -> void:
+	var keep: Array[Dictionary] = []
+	var center := MortarPile.interior_center()
+	for particle_v in _particles:
+		var p: Dictionary = particle_v
+		if str(p.get("kind", "")) == "ripple":
+			keep.append(p)
+			continue
+		var local := Vector2(float(p.get("x", 0.0)), float(p.get("y", 0.0))) - Vector2(ZONE_X, ZONE_Y)
+		if local.distance_squared_to(center) > 180.0 * 180.0:
+			keep.append(p)
+	_particles = keep
+	_aroma_i = 0.0
+	_sweeps = []
+	_flash_t0 = -1.0
+	_wipe_t0 = -1.0
+	_shadow_ready = false
+	_shadow_alpha = 0.0
+
+
 func _particle_visible(local: Vector2, p: Dictionary, alpha: float, origin: Vector2, scale: Vector2) -> bool:
 	var z := _zone_of(local, origin, scale)
+	var rad := _zone_radius(p, scale)
 	var d := z - MortarPile.interior_center()
 	if d.length_squared() > 180.0 * 180.0:
 		return true
-	if MortarPile.within_margin(z):
+	if MortarPile.circle_inside(z, rad):
 		return true
 	var kind := str(p.get("kind", ""))
-	if (kind == "dust" or kind == "puff") and d.y < -2.0 and absf(d.x) < MortarPile.VIS_RX - 2.0:
-		var ttl := maxf(0.001, float(p.get("ttl", 1.0)))
-		var u := float(p.get("life", 0.0)) / ttl
-		if u > 0.12 and alpha < 0.8:
-			return true
+	if kind == "dust" or kind == "puff" or kind == "trail":
+		return MortarPile.rising_dust_ok(z, rad, float(p.get("vy", 0.0)), alpha)
 	return false
+
+
+func _zone_radius(p: Dictionary, scale: Vector2) -> float:
+	var sx := scale.x if absf(scale.x) > 0.0001 else 1.0
+	var size := particle_size(p) * sx
+	if str(p.get("kind", "")) == "spark":
+		size += 3.0
+	return size / sx
 
 
 func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2, clip_bowl: bool = false) -> void:
