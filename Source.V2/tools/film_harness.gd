@@ -685,8 +685,7 @@ func _flow_frame(host) -> void:
 		print("POUR %s %s" % [_live_ings[_live_mat], pour_txt])
 		var fx_max := 0
 		var fx_txt := ""
-		var fx_from := maxi(0, _flow_pour_fx.size() - 24)
-		for fi in range(fx_from, _flow_pour_fx.size()):
+		for fi in _flow_pour_fx.size():
 			fx_max = maxi(fx_max, int(_flow_pour_fx[fi]))
 			fx_txt += "%s " % int(_flow_pour_fx[fi])
 		print("POURFX %s n %s max %s %s" % [_live_ings[_live_mat], _flow_pour_fx.size(), fx_max, fx_txt])
