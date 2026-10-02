@@ -1751,7 +1751,9 @@ func _flow_gap(img: Image, ox: int, host) -> int:
 	var polys: Array = []
 	for chip_v in host.workshop._pile.presentation():
 		var chip: Dictionary = chip_v
-		if float(chip.get("vis_alpha", 1.0)) < 0.35:
+		# Drawn chips (alpha > 0.02) are pieces, including a drop that is still
+		# fading in. r18 is already opaque, so this does not change its mask.
+		if float(chip.get("vis_alpha", 1.0)) <= 0.02:
 			continue
 		var lay: Dictionary = host.workshop._pile.layout_chip(chip)
 		var poly: PackedVector2Array = lay["poly"]
@@ -1870,6 +1872,11 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 	_piece_samples = 0
 	_piece_worst = 0
 	_piece_ring = 0
+	var ring_max := 0
+	var fill_n := 0
+	var fill_r := 0.0
+	var fill_g := 0.0
+	var fill_b := 0.0
 	if _flow_empty == null or host.workshop._pile == null or host.workshop._mortar_fx == null:
 		return
 	var xf: Transform2D = host.workshop._mortar_fx.get_global_transform()
@@ -1968,8 +1975,10 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 					continue
 				if _hit_pestle(at, _snap):
 					continue
-				if _px_delta(img, _flow_empty, at) > 0:
+				var rd := _px_delta(img, _flow_empty, at)
+				if rd > 0:
 					_piece_ring += 1
+					ring_max = maxi(ring_max, rd)
 		if not _hit_pestle(mid, _snap):
 			var mx := int(floor(mid.x))
 			var my := int(floor(mid.y))
@@ -1979,6 +1988,40 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 				core_g += core.g * 255.0
 				core_b += core.b * 255.0
 				core_n += 1
+		# Interior of the quad, away from the skirt, so the mean is the chunk
+		# and not the bowl, the bed, or the pestle.
+		var min_f: Vector2 = pts[0]
+		var max_f: Vector2 = pts[0]
+		for pt_f in pts:
+			var fp: Vector2 = pt_f
+			min_f.x = minf(min_f.x, fp.x)
+			min_f.y = minf(min_f.y, fp.y)
+			max_f.x = maxf(max_f.x, fp.x)
+			max_f.y = maxf(max_f.y, fp.y)
+		var x_a := int(ceil(min_f.x)) + 2
+		var y_a := int(ceil(min_f.y)) + 2
+		var x_b := int(floor(max_f.x)) - 2
+		var y_b := int(floor(max_f.y)) - 2
+		var step := 2
+		for fy in range(y_a, y_b + 1, step):
+			for fx in range(x_a, x_b + 1, step):
+				var fat := Vector2(fx, fy)
+				if not _pt_in_poly(fat, pts):
+					continue
+				# The drawn quad is 1.25x the opaque art, so the outer skirt is
+				# empty. Stay inside the inner 70%, which is inside that art on
+				# both the padded textures and r18's unpadded ones.
+				if not _pt_in_poly(mid + (fat - mid) / 0.70, pts):
+					continue
+				if _hit_pestle(fat, _snap):
+					continue
+				if fx < 0 or fy < 0 or fx >= img.get_width() or fy >= img.get_height():
+					continue
+				var fc := img.get_pixel(fx, fy)
+				fill_r += fc.r * 255.0
+				fill_g += fc.g * 255.0
+				fill_b += fc.b * 255.0
+				fill_n += 1
 	if core_n > 0:
 		_flow_chip_rgb = Vector3(core_r / float(core_n), core_g / float(core_n), core_b / float(core_n))
 	_piece_nz = own_nz
@@ -1988,7 +2031,7 @@ func _piece_probe(host, img: Image, ox: int) -> void:
 		shown_n += 1
 		if float(chip_v2.get("vis_alpha", 0.0)) >= 0.8 and str(chip_v2.get("kind", "")) != "dust":
 			hi += 1
-	print("PIECE own ", own_nz, " lap ", lap_nz, " ring ", _piece_ring, " core ", snappedf(_flow_chip_rgb.x, 0.1), " ", snappedf(_flow_chip_rgb.y, 0.1), " ", snappedf(_flow_chip_rgb.z, 0.1), " shown ", shown_n, " hi ", hi, " quads ", quads.size(), " samples ", _piece_samples)
+	print("PIECE own ", own_nz, " lap ", lap_nz, " ring ", _piece_ring, " ringmax ", ring_max, " core ", snappedf(_flow_chip_rgb.x, 0.1), " ", snappedf(_flow_chip_rgb.y, 0.1), " ", snappedf(_flow_chip_rgb.z, 0.1), " fill ", snappedf(fill_r / maxf(float(fill_n), 1.0), 0.1), " ", snappedf(fill_g / maxf(float(fill_n), 1.0), 0.1), " ", snappedf(fill_b / maxf(float(fill_n), 1.0), 0.1), " filln ", fill_n, " shown ", shown_n, " hi ", hi, " quads ", quads.size(), " samples ", _piece_samples)
 
 
 func _pt_in_poly(pt: Vector2, poly: Array) -> bool:

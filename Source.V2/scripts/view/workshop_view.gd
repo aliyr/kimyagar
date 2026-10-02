@@ -1558,6 +1558,10 @@ func _place_pestle() -> void:
 		return
 	# Leave the pestle on its resting pixels until a new drop has settled.
 	# Moving it during the fade rewrites the bowl and hides the chunks.
+	# KIM_PESTLE_HOLD keeps that resting pose for a colour sample: the boot
+	# pestle matches the empty frame, so the bowl diff is the herb.
+	if OS.get_environment("KIM_PESTLE_HOLD") == "1" and transfer_t < 0.0:
+		return
 	if transfer_t < 0.0 and _pile.has_method("drops_settling") and _pile.drops_settling():
 		return
 	var aim: Dictionary = _pile.pestle()
