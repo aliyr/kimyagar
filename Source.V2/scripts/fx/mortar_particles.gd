@@ -252,7 +252,7 @@ static func particle_alpha(p: Dictionary) -> float:
 		return 1.0 - (t - 0.6) / 0.4
 	# Dust eases in over a fixed span. A one-frame life jump must not flash the disc.
 	var age: float = float(p["life"])
-	var u := clampf(age / 0.45, 0.0, 1.0)
+	var u := clampf(age / 0.90, 0.0, 1.0)
 	var fade_in := u * u * (3.0 - 2.0 * u)
 	return fade_in * (1.0 - t)
 
@@ -269,7 +269,7 @@ static func particle_size(p: Dictionary) -> float:
 	if kind == "aroma":
 		return size * (1.0 + t * 0.9)
 	if kind == "dust":
-		return size * (0.20 + t * 0.50)
+		return size * (0.06 + t * 0.32)
 	return size
 
 
@@ -324,14 +324,15 @@ func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: floa
 	var n: int = _count(3.0 + fineness * 5.0)
 	var drag: float = 2.4 + fineness * 1.6
 	var gravity: float = 40.0 * (1.0 - fineness * 0.7)
-	for _i in n:
+	for i in n:
 		var ang: float = _range(-PI * 0.95, -PI * 0.05)
 		var speed: float = _range(30.0, 90.0) * (1.0 - fineness * 0.45)
 		var px: float = x + _range(-6.0, 6.0)
 		var py: float = y + _range(-3.0, 2.0)
-		var ttl: float = _range(0.45, 0.95) + fineness * 0.4
-		var size: float = _range(1.3, 2.8) + fineness * 0.8
+		var ttl: float = _range(0.55, 1.05) + fineness * 0.4
+		var size: float = _range(0.55, 1.15) + fineness * 0.28
 		var color: String = _pick(colors, FALLBACK)
+		var gap := 0.48 / float(maxi(n, 1))
 		_push({
 			"kind": "dust",
 			"x": px,
@@ -343,6 +344,7 @@ func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: floa
 			"color": color,
 			"gravity": gravity,
 			"drag": drag,
+			"delay": gap * float(i),
 		})
 
 
@@ -506,6 +508,11 @@ func _step(dt: float) -> void:
 	var next: Array[Dictionary] = []
 	for particle_v in _particles:
 		var p: Dictionary = particle_v
+		var delay := float(p.get("delay", 0.0))
+		if delay > 0.0:
+			p["delay"] = maxf(0.0, delay - dt)
+			next.append(p)
+			continue
 		p["life"] = float(p["life"]) + dt
 		if float(p["life"]) >= float(p["ttl"]):
 			continue
@@ -609,7 +616,8 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 	var amount: float = float(residue.get("amount", 0.0)) * grow
 	var hex: String = _residue_color_hex(residue)
 	var scene: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY)
-	var span := lerpf(0.22, 1.0, grow)
+	# Ease in from nothing. A 22% ellipse on the first frame read as a full mound.
+	var span := grow
 	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * 0.92 * span
 	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * 1.5 * span
 	var eased := 0.0

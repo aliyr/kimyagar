@@ -267,6 +267,9 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 		pile.set_visual_level(mortar_level)
 		if prev < T_SCOOP and t >= T_SCOOP:
 			pile.note_carry()
+		var pour_at := T_SCOOP + T_CARRY
+		if prev < pour_at and t >= pour_at and pile.has_method("note_pour"):
+			pile.note_pour()
 	rot = _slew_rot(_rot_target(t), dt)
 	_tick_motes(dt, pos, shedding and _had_material, _chip_color())
 	return {

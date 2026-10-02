@@ -74,6 +74,8 @@ var _draw_n := 0
 var _flow_haze := 0
 var _flow_haze2 := 0
 var _flow_pour: Array[int] = []
+var _flow_pour_fx: Array[int] = []
+var _flow_pour_fx_prev := PackedByteArray()
 var _flow_ribbon: Array[int] = []
 var _flow_ribbon_n := 0
 var _flow_pourk: Array[float] = []
@@ -566,6 +568,8 @@ func _flow_frame(host) -> void:
 		_flow_still_xor = 0
 		_flow_level_bright = 0.0
 		_flow_pour = []
+		_flow_pour_fx = []
+		_flow_pour_fx_prev = PackedByteArray()
 		_flow_ribbon = []
 		_flow_pourk = []
 		_flow_pour_lum = PackedByteArray()
@@ -618,6 +622,13 @@ func _flow_frame(host) -> void:
 				_flow_write_rect(host, pour_img, "pour-%s-%02d" % [_live_ings[_live_mat], _flow_pour.size() - 1])
 		elif phase != "pour":
 			_flow_pour_lum = _luma_bytes(pour_img)
+		if phase == "pour" or phase == "exit":
+			var fx_crop := _bowl_crop(img, ox)
+			var fx_rgba := _rgba(fx_crop)
+			if _flow_pour_fx_prev.size() == fx_rgba.size():
+				var fx := _interior_drgb(fx_rgba, _flow_pour_fx_prev, fx_crop.get_width(), fx_crop.get_height(), _crop_origin(ox), _snap, _snap, 2)
+				_flow_pour_fx.append(fx)
+			_flow_pour_fx_prev = fx_rgba
 		_flow_prev = img
 		var ended: bool = host.workshop.transfer_t < 0.0 and _flow_wait > 8
 		if ended:
@@ -672,6 +683,13 @@ func _flow_frame(host) -> void:
 		]
 		print(line)
 		print("POUR %s %s" % [_live_ings[_live_mat], pour_txt])
+		var fx_max := 0
+		var fx_txt := ""
+		var fx_from := maxi(0, _flow_pour_fx.size() - 24)
+		for fi in range(fx_from, _flow_pour_fx.size()):
+			fx_max = maxi(fx_max, int(_flow_pour_fx[fi]))
+			fx_txt += "%s " % int(_flow_pour_fx[fi])
+		print("POURFX %s n %s max %s %s" % [_live_ings[_live_mat], _flow_pour_fx.size(), fx_max, fx_txt])
 		var rib_txt := ""
 		for rv in _flow_ribbon:
 			rib_txt += "%s " % int(rv)
@@ -741,6 +759,8 @@ func _reset_kind_metrics() -> void:
 	_flow_rd_d = []
 	_flow_rs_d = []
 	_flow_drop_d = []
+	_flow_pour_fx = []
+	_flow_pour_fx_prev = PackedByteArray()
 	_flow_chip_rgb = Vector3.ZERO
 	_flow_box_rgb = Vector3.ZERO
 	_flow_cornered = false

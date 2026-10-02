@@ -134,15 +134,18 @@ const PRESENT_CLAMP_TIME := 0.25
 const PRESENT_BORN_TIME := 0.36
 const PRESENT_SCOOP_TIME := 0.40
 ## A fresh drop fades and grows in. Full-size stamps rewrote the bowl in one frame.
-const DROP_IN_TIME := 0.25
+## Chunks are staggered so a 3-frame window never catches two of them mid-fade.
+const DROP_IN_TIME := 0.38
 const DROP_IN_SCALE := 0.60
 const DROP_SETTLE := 1.4
-const DROP_STAGGER := 0.055
+const DROP_STAGGER := 0.09
 ## Piece art sits in the centre 80% of the texture. The quad grows so the skirt
 ## is transparent and the painted chunk stays the same size.
 const PIECE_TEX_SCALE := 1.25
-## Last scooped chunks fade linearly. A smoothstep peak rewrote their interior.
-const SCOOP_CHUNK_TIME := 0.48
+## Last scooped chunks ease out. A linear tail and a smoothstep peak both
+## rewrote the interior; this clock is slow at the end and staggered per chunk.
+const SCOOP_CHUNK_TIME := 0.90
+const SCOOP_CHUNK_GAP := 0.06
 ## The last scoop's surface falls on a clock, not on the level step.
 const SURFACE_EASE := 0.40
 ## A reset bed eases out, then the next heap eases in. Step stays under 0.03.
@@ -150,6 +153,9 @@ const BED_EASE_TIME := 0.50
 const BED_STEP_MAX := 0.03
 ## Leftover heap is gone within 2 s of the spoon leaving the bowl.
 const CARRY_FADE_TIME := 2.0
+## The pour itself eases that heap out. A one-frame hide at the pour end
+## used to delete the whole mound.
+const HEAP_OUT_TIME := 0.55
 ## Bed alpha eases across this level span (~0.25 s of the scoop) instead of vanishing at 0.12.
 const BED_FADE_HIGH := 0.30
 const BED_FADE_LOW := 0.08
@@ -200,6 +206,8 @@ var _level_left: float = 0.0
 var _level_dur: float = 0.0
 var _carry_left: float = -1.0
 var _carry_amount: float = 0.0
+var _pour_left: float = -1.0
+var _pour_from: float = 0.0
 ## A directly seeded heap is already there. Gameplay residue eases in.
 var _residue_snap: bool = false
 ## The first fill snaps the bed. The chunks themselves always ease in.
@@ -261,6 +269,8 @@ func setup(state: Dictionary, seed: int = 1) -> void:
 	_level_dur = 0.0
 	_carry_left = -1.0
 	_carry_amount = 0.0
+	_pour_left = -1.0
+	_pour_from = 0.0
 	_residue_snap = false
 	_filled_once = false
 	_bed_color = Color("#8a7a52")
@@ -380,32 +390,64 @@ func surface_k() -> float:
 
 ## The spoon has left the bowl. The leftover heap fades out over the carry.
 func note_carry() -> void:
-	if _carry_left >= 0.0:
+	if _carry_left >= 0.0 or _pour_left >= 0.0:
 		return
 	_carry_left = CARRY_FADE_TIME
 	_carry_amount = _residue_amount
 	_residue_snap = false
 
 
-## New residue waits until the old bed has faded below about 30%.
+## The pour has started. Ease the leftover heap out instead of deleting it
+## on the frame the bowl is cleared.
+func note_pour() -> void:
+	if _pour_left >= 0.0:
+		return
+	if _residue_hex == "" and _residue_amount <= 0.001:
+		return
+	_pour_from = _residue_amount
+	_pour_left = HEAP_OUT_TIME
+	_carry_left = -1.0
+	_residue_snap = false
+
+
+## New residue waits until the old bed has actually finished fading.
 ## A seeded heap (a still frame, a frozen shot) is already present.
 func heap_ready() -> bool:
 	if _residue_snap:
 		return true
-	if _surface_left > 0.02 or _level_left > 0.02:
+	if _pour_left >= 0.0:
+		return true
+	if _surface_left > 0.001 or _level_left > 0.001:
 		return false
-	if _surface_k > 0.30:
+	if _surface_k > 0.05:
 		return false
-	if _drawn_level > 0.30 and _visual_level < 0.0:
+	if _vis_progress > 0.05 and not _has_mortar:
+		return false
+	if _drawn_level > 0.05 and _visual_level < 0.0:
 		return false
 	for chip_v in _shown:
 		var chip: Dictionary = chip_v
-		if float(chip.get("alpha", 0.0)) > 0.12:
+		if float(chip.get("alpha", 0.0)) > 0.06:
 			return false
 	return true
 
 
+func _tick_pour(dt: float) -> void:
+	if _pour_left < 0.0:
+		return
+	_pour_left = maxf(0.0, _pour_left - dt)
+	var u := 1.0 if HEAP_OUT_TIME <= 0.0 else clampf(1.0 - _pour_left / HEAP_OUT_TIME, 0.0, 1.0)
+	var e := u * u * (3.0 - 2.0 * u)
+	_residue_amount = lerpf(_pour_from, 0.0, e)
+	if _pour_left <= 0.0:
+		_residue_amount = 0.0
+		_residue_hex = ""
+		_pour_left = -1.0
+
+
 func _fade_carried_residue(dt: float) -> void:
+	if _pour_left >= 0.0:
+		return
 	if _carry_left >= 0.0:
 		_carry_left = maxf(0.0, _carry_left - dt)
 		var u := 1.0 if CARRY_FADE_TIME <= 0.0 else clampf(1.0 - _carry_left / CARRY_FADE_TIME, 0.0, 1.0)
@@ -442,6 +484,7 @@ func update(dt: float, grinding: bool, impact: Variant = null) -> void:
 	_apply_aim()
 	_tick_pile(dt)
 	_tick_present(dt)
+	_tick_pour(dt)
 	_fade_carried_residue(dt)
 
 
@@ -926,7 +969,12 @@ func _advance_out(dt: float) -> void:
 		var want := lerpf(_surface_from, _surface_to, e)
 		_surface_k += clampf(want - _surface_k, -0.045, 0.045)
 		if _surface_left <= 0.0:
-			_surface_k = _surface_to
+			var rest := _surface_to - _surface_k
+			if absf(rest) <= 0.02:
+				_surface_k = _surface_to
+			else:
+				_surface_k += clampf(rest, -0.02, 0.02)
+				_surface_left = 1.0 / 60.0
 		if _surface_to <= 0.001:
 			var hwant := lerpf(_surface_level_from, 0.0, e)
 			if _drawn_level < 0.0:
@@ -2467,6 +2515,8 @@ func _tick_present(dt: float) -> void:
 				s["w"] = float(s["sw"])
 				s["h"] = float(s["sh"])
 				s["rot"] = float(s["srot"])
+		elif float(s.get("fade_wait", 0.0)) > 0.0 and dt > 0.0:
+			s["fade_wait"] = maxf(0.0, float(s["fade_wait"]) - dt)
 		else:
 			if float(s["left"]) > 0.0 and dt > 0.0:
 				s["left"] = float(s["left"]) - dt
@@ -2491,8 +2541,11 @@ func _tick_present(dt: float) -> void:
 				else:
 					s["alpha_left"] = 0.0
 					ua = 1.0
-				var linear_a := bool(s.get("drop_in", false)) or bool(s.get("ghost", false)) or (float(s.get("alpha_from", 1.0)) < 0.05 and float(s.get("alpha_to", 0.0)) > 0.9)
+				var linear_a := bool(s.get("drop_in", false)) or (bool(s.get("ghost", false)) and not bool(s.get("scoop_out", false))) or (float(s.get("alpha_from", 1.0)) < 0.05 and float(s.get("alpha_to", 0.0)) > 0.9)
 				var ea := ua if linear_a else ua * ua * (3.0 - 2.0 * ua)
+				if bool(s.get("scoop_out", false)):
+					var inv := 1.0 - ua
+					ea = 1.0 - inv * inv
 				s["alpha"] = lerpf(float(s["alpha_from"]), float(s["alpha_to"]), ea)
 		if bool(s.get("drop_in", false)) and float(s.get("born_wait", 0.0)) <= 0.0 and float(s.get("alpha_left", 1.0)) <= 0.0 and float(s.get("left", 1.0)) <= 0.0:
 			s["drop_in"] = false
@@ -2546,7 +2599,7 @@ func _clamp_step(s: Dictionary, px: float, py: float, pw: float, ph: float, prot
 	# the 6% frame limit, so a reset or re-drop does not finish in one frame.
 	var cap_s := 0.008 * paced
 	if bool(s.get("drop_in", false)):
-		# 0.60 -> 1 over 0.25 s peaks near 4.4% per frame. The live cap is 6%.
+		# 0.60 -> 1 over 0.38 s stays under the 6% frame cap.
 		cap_p = 0.16 * paced
 		cap_s = 0.050 * paced
 	elif bool(s.get("ghost", false)) and float(s.get("alpha_to", 1.0)) <= 0.02:
@@ -2643,12 +2696,17 @@ func _present_sync() -> void:
 	if logical.is_empty():
 		var dur := BED_EASE_TIME if not _has_mortar else SCOOP_CHUNK_TIME
 		_begin_out_fade(_has_mortar)
+		var fade_i := 0
 		for item_v in _shown:
 			var fading: Dictionary = item_v
 			var already := bool(fading.get("ghost", false)) and float(fading.get("alpha_to", 1.0)) <= 0.0 and float(fading.get("alpha_left", 0.0)) > 0.0
 			if already:
 				continue
 			_begin_fade(fading, dur, true)
+			if _has_mortar:
+				fading["scoop_out"] = true
+				fading["fade_wait"] = float(fade_i) * SCOOP_CHUNK_GAP
+			fade_i += 1
 			var sk := 0.42
 			fading["tw"] = float(fading["sw"]) * sk
 			fading["th"] = float(fading["sh"]) * sk
@@ -2712,11 +2770,17 @@ func _present_sync() -> void:
 			born2["trot"] = float(parent["rot"])
 		# Start under the target and grow. A child born at the parent's full size
 		# pops thousands of pixels even while its alpha is fading in.
-		var born_k := 0.10
-		var span := 0.42
-		if pending.size() >= 6:
-			born_k = 0.08
-			span = 0.70
+		var born_k := 0.08
+		var span := 0.50
+		var born_time := PRESENT_BORN_TIME
+		if pending.size() >= 8:
+			born_k = 0.035
+			span = 0.95
+			born_time = 0.72
+		elif pending.size() >= 4:
+			born_k = 0.06
+			span = 0.62
+			born_time = 0.55
 		born2["w"] = float(chip_v["w"]) * float(chip_v.get("draw_k", 1.0)) * born_k
 		born2["h"] = float(chip_v["h"]) * float(chip_v.get("draw_k", 1.0)) * born_k
 		born2["sw"] = float(born2["w"])
@@ -2724,8 +2788,8 @@ func _present_sync() -> void:
 		born2["alpha"] = 0.0
 		born2["alpha_from"] = 0.0
 		born2["alpha_to"] = 1.0
-		born2["alpha_left"] = PRESENT_BORN_TIME
-		born2["alpha_dur"] = PRESENT_BORN_TIME
+		born2["alpha_left"] = born_time
+		born2["alpha_dur"] = born_time
 		if pending.size() >= 4:
 			var denom := float(maxi(pending.size() - 1, 1))
 			born2["born_wait"] = span * float(birth_i) / denom

@@ -89,6 +89,7 @@ func _run() -> void:
 	_round19()
 	_round20()
 	_round21()
+	_round22()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2938,13 +2939,13 @@ func _round18() -> void:
 		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
 			still += 1
 	check(still > 0, "the last chunks are still visible on the next frame, %s" % still)
-	for _i in 26:
+	for _i in 130:
 		scoop.update(1.0 / 60.0, false)
 	var left := 0
 	for chip_v2 in scoop.presentation():
 		if float(chip_v2.get("vis_alpha", 0.0)) > 0.12:
 			left += 1
-	check(left == 0, "the last chunks fade out within 0.4s, left %s" % left)
+	check(left == 0, "the last chunks fade out, left %s" % left)
 	var born_alpha := 1.0
 	var born_dust := 1.0
 	var saw_born := false
@@ -3093,13 +3094,13 @@ func _round19() -> void:
 		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
 			still += 1
 	check(still > 0, "last scooped chunks stay up on the next frame, %s" % still)
-	for _i in 26:
+	for _i in 130:
 		scoop.update(1.0 / 60.0, false)
 	var left := 0
 	for chip_v2 in scoop.presentation():
 		if float(chip_v2.get("vis_alpha", 0.0)) > 0.12:
 			left += 1
-	check(left == 0, "last scooped chunks are gone after 0.3s, left %s" % left)
+	check(left == 0, "last scooped chunks are gone after the ease, left %s" % left)
 	var reset := MortarPile.new()
 	reset.motion_reset()
 	reset.sync(_portion_state("ginger", 2.2, false))
@@ -3287,3 +3288,49 @@ func _round21() -> void:
 	shot.note_carry()
 	check(not bool(shot.residue().get("snap", false)), "carry releases the seeded heap")
 	print("ROUND21 early_a=%.3f early_w=%.2f full_w=%.2f settled=%s" % [early, early_w, full_w, settled])
+
+
+func _round22() -> void:
+	var pour := MortarPile.new()
+	pour.motion_reset()
+	pour.seed_residue("#c6a24e", 0.8)
+	pour.note_pour()
+	var prev := 0.8
+	var peak := 0.0
+	for _i in 20:
+		pour.update(1.0 / 60.0, false)
+		var amt := float(pour.residue().get("amount", 0.0))
+		peak = maxf(peak, absf(prev - amt))
+		prev = amt
+	check(peak <= 0.06, "pour heap eases, step %s" % peak)
+	check(prev > 0.15, "pour heap is still up mid-ease, amount %s" % prev)
+	for _j in 20:
+		pour.update(1.0 / 60.0, false)
+	check(pour.residue().is_empty(), "pour heap is gone after the ease")
+	var drop := MortarPile.new()
+	drop.motion_reset()
+	drop.sync(_portion_state("ginger", 0.0, true))
+	drop.update(1.0 / 60.0, true)
+	var waits: Array[float] = []
+	for chip_v in drop.presentation():
+		if bool(chip_v.get("ghost", false)) or str(chip_v.get("kind", "")) == "dust":
+			continue
+		waits.append(float(chip_v.get("born_wait", 0.0)))
+	var gap := 0.0
+	if waits.size() >= 2:
+		var lo := waits[0]
+		var hi := waits[0]
+		for w in waits:
+			lo = minf(lo, w)
+			hi = maxf(hi, w)
+		gap = hi - lo
+	check(gap >= 0.16, "drop chunks stagger by %s" % gap)
+	var heap := MortarPile.new()
+	heap.motion_reset()
+	heap.sync(_portion_state("mint", 2.2, false))
+	_settle_pile(heap, 40)
+	heap.sync({})
+	for _k in 20:
+		heap.update(1.0 / 60.0, false)
+		check(not heap.heap_ready(), "heap stays down through the reset fade")
+	print("ROUND22 pour_step=%.4f pour_mid=%.3f drop_gap=%.3f" % [peak, prev, gap])
