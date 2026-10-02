@@ -83,6 +83,7 @@ func _run() -> void:
 	_round9()
 	_round11()
 	_round12()
+	_round16()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2555,3 +2556,128 @@ func _near_rgb(got: Vector3, exp: Vector3, msg: String) -> void:
 
 func _rgb_text(c: Vector3) -> String:
 	return "%d,%d,%d" % [int(round(c.x)), int(round(c.y)), int(round(c.z))]
+
+
+func _round16() -> void:
+	_grind_progress_bed()
+	_interior_clip()
+	_effects_puff()
+
+
+func _grind_progress_bed() -> void:
+	var works: Array[float] = [0.0, 0.6, 1.2, 1.8, 2.4, 3.0, 3.6]
+	var medians: Array[float] = []
+	var maxes: Array[float] = []
+	var area_med: Array[float] = []
+	var area_max: Array[float] = []
+	var coarses: Array[int] = []
+	var covers: Array[float] = []
+	var counts: Array[int] = []
+	for w in works:
+		var pile := MortarPile.new()
+		pile.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": w, "grinding": false})
+		var st: Dictionary = pile.chunk_stats()
+		medians.append(float(st["median"]))
+		maxes.append(float(st["max"]))
+		area_med.append(float(st["median_area"]))
+		area_max.append(float(st["max_area"]))
+		coarses.append(int(st["coarse"]))
+		covers.append(pile.bed_coverage())
+		counts.append(int(st["n"]))
+		var outside := _outside_verts(pile.material_polygons())
+		check(outside == 0, "material stays in the bowl at work %s, outside %s" % [w, outside])
+	check(covers[0] < 0.01, "progress 0 ground bed covers %s" % covers[0])
+	check(counts[0] > 0, "drop leaves chunks")
+	var fresh := MortarPile.new()
+	fresh.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 0.0, "grinding": false})
+	var dust0 := 0
+	var whole := true
+	for chip in fresh.chips():
+		if str(chip["kind"]) == "dust":
+			dust0 += 1
+		if int(chip["generation"]) != 0:
+			whole = false
+	check(whole, "fresh pieces are whole")
+	check(dust0 == 0, "fresh drop has no powder grains")
+	var mono := true
+	for i in range(1, medians.size()):
+		if area_med[i] > area_med[i - 1] + 0.05:
+			mono = false
+		if area_max[i] > area_max[i - 1] + 0.05:
+			mono = false
+		if coarses[i] > coarses[i - 1]:
+			mono = false
+		if covers[i] + 0.0001 < covers[i - 1]:
+			mono = false
+	check(mono, "size, coarse count, and bed move with progress")
+	check(area_max[area_max.size() - 1] < area_max[0] * 0.55, "fine pieces are smaller than the drop")
+	check(coarses[coarses.size() - 1] < coarses[0], "coarse chunk count falls")
+	check(covers[covers.size() - 1] > covers[0] + 0.04, "ground bed grows")
+	var full := MortarPile.new()
+	full.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": 3.6, "grinding": false})
+	var full_cover := full.bed_coverage()
+	for level in [1.0, 0.54, 0.08]:
+		full.set_visual_level(level)
+		var bad := _outside_verts(full.material_polygons())
+		check(bad == 0, "level %s material stays inside, outside %s" % [level, bad])
+	full.clear_visual_level()
+	var clamped := MortarPile.new()
+	clamped.sync({"ingredientId": "chamomile", "quantity": 1.0, "grindWork": maxf(0.2, MortarPile.WORK_COARSE), "grinding": false})
+	near(clamped.grind_progress(), MortarPile.WORK_COARSE / 3.6, "early scoop clamps to coarse", 0.001)
+	check(int(clamped.chunk_stats()["dust"]) == 0, "coarse clamp is not powder")
+	check(clamped.bed_coverage() < full_cover, "mid grind bed is smaller than fine, %s vs %s" % [clamped.bed_coverage(), full_cover])
+	full.force_refill()
+	full.sync({})
+	check(full.chips().is_empty(), "reset clears the mortar")
+	near(full.grind_progress(), 0.0, "reset progress")
+	near(full.bed_coverage(), 0.0, "reset bowl has no ground bed")
+	full.sync({"ingredientId": "mint", "quantity": 1.0, "grindWork": 0.0, "grinding": false})
+	check(full.bed_coverage() < 0.01, "refill starts as chunks, cover %s" % full.bed_coverage())
+	check(int(full.chunk_stats()["dust"]) == 0, "refill has no powder")
+	print("ROUND16 progress0_bed=%.4f n=%s median=%s max=%s area_med=%s area_max=%s coarse=%s cover=%s" % [covers[0], str(counts), str(medians), str(maxes), str(area_med), str(area_max), str(coarses), str(covers)])
+
+
+func _outside_verts(polys: Array) -> int:
+	var n := 0
+	for poly_v in polys:
+		var poly: PackedVector2Array = poly_v
+		for p in poly:
+			if MortarPile.interior_norm(p) > 1.01:
+				n += 1
+	return n
+
+
+func _interior_clip() -> void:
+	var wide := MortarPile.oval_at(MortarPile.interior_center(), 200.0, 80.0, 24)
+	var saw_out := false
+	for p in wide:
+		if MortarPile.interior_norm(p) > 1.05:
+			saw_out = true
+	check(saw_out, "unclipped oval crosses the opening")
+	var clipped := MortarPile.clip_to_interior(wide)
+	check(_outside_verts([clipped]) == 0, "clipped oval stays inside")
+	var area := MortarPile.polygon_area(clipped)
+	var bowl := MortarPile.polygon_area(MortarPile.interior_polygon())
+	check(area > bowl * 0.45 and area < bowl * 1.05, "clipped oval fills the bowl, area %s bowl %s" % [area, bowl])
+	var uvs := PackedVector2Array()
+	uvs.resize(wide.size())
+	for i in wide.size():
+		uvs[i] = Vector2(float(i) / float(wide.size()), 0.2)
+	var pair: Array = MortarPile.clip_poly_uv(wide, uvs)
+	var uv_poly: PackedVector2Array = pair[0]
+	check(uv_poly.size() >= 3 and _outside_verts([uv_poly]) == 0, "uv clip stays inside, n %s" % uv_poly.size())
+
+
+func _effects_puff() -> void:
+	var settings: Node = root.get_node("Settings")
+	var prev: bool = settings.effects_enabled
+	var parts := MortarParticles.new()
+	settings.effects_enabled = false
+	parts.set_effects(false)
+	parts.burst("strike", Vector2(50, 70), {"fineness": 1.0, "hits": 3, "colors": ["#c4a15a"]})
+	check(not parts.busy(), "effects off skips the grind puff")
+	settings.effects_enabled = true
+	parts.set_effects(true)
+	parts.burst("strike", Vector2(50, 70), {"fineness": 1.0, "hits": 3, "colors": ["#c4a15a"]})
+	check(parts.busy(), "effects on emits the grind puff")
+	settings.effects_enabled = prev

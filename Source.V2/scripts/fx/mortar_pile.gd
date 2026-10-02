@@ -113,6 +113,10 @@ const VIS_RY := 56.0
 ## Front stone. Alpha is about 0.2 at y=620 and 1.0 by y=626.
 const LIP_Y := 622.0
 const MARK_LIFE := 3.2
+## Ground bed stays off until the pestle has actually started crushing.
+const BED_EPS := 0.04
+## Clip target sits just inside the painted opening so raster edges stay in the bowl.
+const INTERIOR_INSET := 0.972
 var _pile_crush: float = 0.0
 var _pile_work: float = 0.0
 var _pile_area: float = 0.0
@@ -415,17 +419,225 @@ func material_kind() -> String:
 	return "leaf"
 
 
+func grind_progress() -> float:
+	return clampf(_pile_work / WORK_FINE, 0.0, 1.0)
+
+
+## 0 keeps whole chunks. 1 is the smoothstep used to grow the ground bed.
+static func bed_grow(progress: float) -> float:
+	var u := clampf(progress, 0.0, 1.0)
+	return u * u * (3.0 - 2.0 * u)
+
+
 func decor() -> Dictionary:
 	var level := _visual_level if _visual_level >= 0.0 else surface_level()
+	var progress := grind_progress()
 	# An empty bowl shows the mortar floor. Marks fade, and they do not sit on
-	# the bare floor.
-	var show := level >= 0.12
+	# the bare floor. A fresh drop (progress 0) is chunks only, not powder.
+	var show := level >= 0.12 and progress >= BED_EPS
 	return {
 		"level": level,
+		"progress": progress,
 		"color": mean_color(),
 		"hollows": _hollows if show else [],
 		"spills": _spills if show else [],
 	}
+
+
+func chunk_stats() -> Dictionary:
+	var spans: Array[float] = []
+	var areas: Array[float] = []
+	var coarse := 0
+	var dust_n := 0
+	for chip_v in _chips:
+		var chip: Dictionary = chip_v
+		var span := maxf(float(chip["w"]), float(chip["h"]))
+		var area := sqrt(maxf(1.0, float(chip["w"]) * float(chip["h"])))
+		spans.append(span)
+		areas.append(area)
+		if str(chip.get("kind", "")) == "dust":
+			dust_n += 1
+		elif span >= 36.0:
+			coarse += 1
+	spans.sort()
+	areas.sort()
+	var n := spans.size()
+	var median := 0.0
+	var max_span := 0.0
+	var median_area := 0.0
+	var max_area := 0.0
+	if n > 0:
+		median = spans[n / 2]
+		max_span = spans[n - 1]
+		median_area = areas[n / 2]
+		max_area = areas[n - 1]
+	return {
+		"n": n,
+		"coarse": coarse,
+		"dust": dust_n,
+		"median": median,
+		"max": max_span,
+		"median_area": median_area,
+		"max_area": max_area,
+	}
+
+
+func bed_coverage() -> float:
+	var body := 0.0
+	for spec_v in bed_specs():
+		var spec: Dictionary = spec_v
+		if str(spec.get("role", "")) != "body":
+			continue
+		var pts: PackedVector2Array = spec["points"]
+		body += polygon_area(pts)
+	var bowl := polygon_area(interior_polygon())
+	if bowl <= 1.0:
+		return 0.0
+	return body / bowl
+
+
+func material_polygons() -> Array:
+	var out: Array = []
+	for spec_v in bed_specs():
+		var spec: Dictionary = spec_v
+		var pts: PackedVector2Array = spec["points"]
+		if pts.size() >= 3:
+			out.append(pts)
+	for chip_v in chips():
+		var lay := layout_chip(chip_v)
+		var poly: PackedVector2Array = lay["poly"]
+		if not polygon_inside(poly):
+			poly = clip_to_interior(poly)
+		if poly.size() >= 3:
+			out.append(poly)
+	return out
+
+
+## Zone-local polygons for the ground bed, hollows, and spills. Already clipped.
+func bed_specs() -> Array:
+	var info := decor()
+	var level := float(info.get("level", 0.0))
+	var progress := float(info.get("progress", 0.0))
+	if level < 0.12 or progress < BED_EPS:
+		return []
+	var grow := bed_grow(progress)
+	if grow < 0.012:
+		return []
+	var box := bowl()
+	var zone := Vector2(ZONE_W, ZONE_H)
+	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * zone
+	var bw := float(box["width"]) / 100.0 * ZONE_W
+	var bh := float(box["height"]) / 100.0 * ZONE_H
+	var col: Color = info.get("color", Color("#8a7a52"))
+	var cx := origin.x + bw * 0.5
+	var surface := pile_surface_y(level) - ZONE_Y
+	var rx := bw * (0.18 + 0.28 * grow)
+	var ry := (16.0 + 6.0 * level) * grow
+	var out: Array = []
+	_push_bed(out, "shadow", Vector2(cx, surface + ry * 0.35), rx * 0.92, ry * 1.15, Color(col.r * 0.72, col.g * 0.68, col.b * 0.55, 0.96 * grow))
+	_push_bed(out, "body", Vector2(cx, surface), rx, ry, Color(col.r, col.g, col.b, 0.96 * grow))
+	_push_bed(out, "highlight", Vector2(cx, surface), rx * 0.62, ry * 0.55, Color(col.r * 0.78, col.g * 0.74, col.b * 0.6, 0.55 * grow))
+	for hollow_v in info.get("hollows", []):
+		var hollow: Dictionary = hollow_v
+		var hx := origin.x + float(hollow.get("x", 50.0)) / 100.0 * bw
+		var hy := origin.y + float(hollow.get("y", 60.0)) / 100.0 * bh
+		var ha := clampf(float(hollow.get("life", MARK_LIFE)) / MARK_LIFE, 0.0, 1.0)
+		_push_bed(out, "hollow", Vector2(hx, hy), rx * 0.22, maxf(1.2, ry * 0.7), Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.8 * ha * grow))
+	for spill_v in info.get("spills", []):
+		var spill: Dictionary = spill_v
+		var sc: Color = spill.get("color", col)
+		var spot := Vector2(
+			origin.x + float(spill.get("x", 50.0)) / 100.0 * bw,
+			origin.y + float(spill.get("y", 70.0)) / 100.0 * bh
+		)
+		var sa := clampf(float(spill.get("life", MARK_LIFE)) / MARK_LIFE, 0.0, 1.0)
+		var tint := Color(sc.r, sc.g, sc.b, 0.85 * sa)
+		var disk := oval_at(spot, 3.4, 3.4, 10)
+		var whole := polygon_inside(disk)
+		var pts := disk if whole else clip_to_interior(disk)
+		if pts.size() < 3:
+			continue
+		out.append({
+			"role": "spill",
+			"points": pts,
+			"color": tint,
+			"disk": whole,
+			"at": spot,
+			"radius": 3.4,
+		})
+	return out
+
+
+func _push_bed(out: Array, role: String, center: Vector2, rx: float, ry: float, color: Color) -> void:
+	if rx < 0.4 or ry < 0.4 or color.a <= 0.004:
+		return
+	var pts := clip_to_interior(oval_at(center, rx, ry, 16))
+	if pts.size() < 3:
+		return
+	out.append({"role": role, "points": pts, "color": color, "disk": false})
+
+
+## Drawn chip in zone-local pixels, before the interior clip.
+func layout_chip(chip: Dictionary) -> Dictionary:
+	var box := bowl()
+	var zone := Vector2(ZONE_W, ZONE_H)
+	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * zone
+	var bw := float(box["width"]) / 100.0 * ZONE_W
+	var bh := float(box["height"]) / 100.0 * ZONE_H
+	var k := float(chip.get("draw_k", 1.0))
+	var w := float(chip["w"]) / 100.0 * bw * k
+	var h := float(chip["h"]) / 100.0 * bh * k
+	var hop := float(chip.get("hop", 0.0))
+	var center := origin + Vector2(float(chip["x"]) / 100.0 * bw, float(chip["y"]) / 100.0 * bh)
+	center.y -= hop * 9.0
+	var sc := 1.0 + hop * 0.08
+	var rot := deg_to_rad(float(chip.get("rot", 0.0)))
+	var dust := str(chip.get("kind", "")) == "dust"
+	var cracked := bool(chip.get("cracked", false)) or int(chip.get("generation", 0)) > 0
+	var poly := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	if dust:
+		var rad := maxf(w, h) * 0.5 * sc
+		for i in 12:
+			var a := TAU * float(i) / 12.0
+			var p := Vector2(cos(a), sin(a))
+			uvs.append(Vector2(0.5, 0.5) + p * 0.5)
+			poly.append(center + p * rad)
+	else:
+		var src := clip_polygon(int(chip.get("nick", 0))) if cracked else PackedVector2Array([
+			Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1),
+		])
+		var cs := cos(rot)
+		var sn := sin(rot)
+		for p in src:
+			uvs.append(p)
+			var local := Vector2((p.x - 0.5) * w, (p.y - 0.5) * h) * sc
+			poly.append(center + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y))
+	return {
+		"poly": poly,
+		"uvs": uvs,
+		"center": center,
+		"w": w,
+		"h": h,
+		"sc": sc,
+		"rot": rot,
+		"dust": dust,
+		"cracked": cracked and not dust,
+		"radius": maxf(w, h) * 0.5 * sc,
+	}
+
+
+## A contact sheet bakes each step from the same seed as a fresh drop.
+func prepare_bake() -> void:
+	_seq = 1
+
+
+## Film helper. Pins the pestle on a grind beat without advancing work.
+func hold_grind_pose(phase: float) -> void:
+	if _mode != "grind":
+		_set_mode("grind")
+	_beat = clampf(phase, 0.0, 0.999)
+	_apply_aim()
 
 
 func force_refill() -> void:
@@ -596,6 +808,175 @@ static func clip_polygon(nick: int) -> PackedVector2Array:
 			return PackedVector2Array([
 				Vector2(0.14, 0.0), Vector2(0.86, 0.04), Vector2(1.0, 0.22), Vector2(0.92, 1.0), Vector2(0.08, 0.94), Vector2(0.0, 0.28),
 			])
+
+
+static func interior_center() -> Vector2:
+	return Vector2(VIS_CX - ZONE_X, VIS_CY - ZONE_Y)
+
+
+## Zone-local norm of the painted opening. 1 is the silhouette.
+static func interior_norm(local: Vector2) -> float:
+	var c := interior_center()
+	var dx := (local.x - c.x) / VIS_RX
+	var dy := (local.y - c.y) / VIS_RY
+	return sqrt(dx * dx + dy * dy)
+
+
+static func interior_polygon(steps: int = 48) -> PackedVector2Array:
+	var c := interior_center()
+	var rx := VIS_RX * INTERIOR_INSET
+	var ry := VIS_RY * INTERIOR_INSET
+	var pts := PackedVector2Array()
+	pts.resize(steps)
+	for i in steps:
+		var a := TAU * float(i) / float(steps)
+		pts[i] = c + Vector2(cos(a) * rx, sin(a) * ry)
+	return pts
+
+
+static func polygon_area(poly: PackedVector2Array) -> float:
+	var a := 0.0
+	var n := poly.size()
+	if n < 3:
+		return 0.0
+	for i in n:
+		var p: Vector2 = poly[i]
+		var q: Vector2 = poly[(i + 1) % n]
+		a += p.x * q.y - q.x * p.y
+	return absf(a) * 0.5
+
+
+static func polygon_inside(poly: PackedVector2Array, slack: float = 0.0) -> bool:
+	var limit := INTERIOR_INSET + slack
+	for p in poly:
+		if interior_norm(p) > limit:
+			return false
+	return poly.size() >= 3
+
+
+static func circle_inside(center: Vector2, radius: float) -> bool:
+	if radius <= 0.2:
+		return interior_norm(center) <= INTERIOR_INSET
+	for i in 8:
+		var a := TAU * float(i) / 8.0
+		if interior_norm(center + Vector2(cos(a), sin(a)) * radius) > INTERIOR_INSET:
+			return false
+	return true
+
+
+static func oval_at(center: Vector2, rx: float, ry: float, steps: int = 16) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	pts.resize(steps)
+	for i in steps:
+		var a := TAU * float(i) / float(steps)
+		pts[i] = center + Vector2(cos(a) * rx, sin(a) * ry)
+	return pts
+
+
+static func clip_to_interior(poly: PackedVector2Array) -> PackedVector2Array:
+	if poly.size() < 3:
+		return PackedVector2Array()
+	if polygon_inside(poly):
+		return poly
+	var parts: Array = Geometry2D.intersect_polygons(poly, interior_polygon())
+	if parts.is_empty():
+		return PackedVector2Array()
+	var best: PackedVector2Array = parts[0]
+	var best_a := polygon_area(best)
+	for i in range(1, parts.size()):
+		var part: PackedVector2Array = parts[i]
+		var area := polygon_area(part)
+		if area > best_a:
+			best = part
+			best_a = area
+	return best
+
+
+## Scene-pixel polygon clipped to the same opening.
+static func clip_to_opening(scene_poly: PackedVector2Array) -> PackedVector2Array:
+	if scene_poly.size() < 3:
+		return PackedVector2Array()
+	var origin := Vector2(ZONE_X, ZONE_Y)
+	var local := PackedVector2Array()
+	local.resize(scene_poly.size())
+	for i in scene_poly.size():
+		local[i] = scene_poly[i] - origin
+	var clipped := clip_to_interior(local)
+	if clipped.size() < 3:
+		return PackedVector2Array()
+	if clipped == local:
+		return scene_poly
+	var scene := PackedVector2Array()
+	scene.resize(clipped.size())
+	for i in clipped.size():
+		scene[i] = clipped[i] + origin
+	return scene
+
+
+static func clip_poly_uv(poly: PackedVector2Array, uvs: PackedVector2Array) -> Array:
+	if poly.size() < 3 or uvs.size() != poly.size():
+		return [PackedVector2Array(), PackedVector2Array()]
+	if polygon_inside(poly):
+		return [poly, uvs]
+	var clip := interior_polygon()
+	var out_p := poly
+	var out_u := uvs
+	var n := clip.size()
+	for i in n:
+		if out_p.is_empty():
+			break
+		var a: Vector2 = clip[i]
+		var b: Vector2 = clip[(i + 1) % n]
+		var next_p := PackedVector2Array()
+		var next_u := PackedVector2Array()
+		var m := out_p.size()
+		var prev_p: Vector2 = out_p[m - 1]
+		var prev_u: Vector2 = out_u[m - 1]
+		var prev_in := _half_inside(a, b, prev_p)
+		for j in m:
+			var cur_p: Vector2 = out_p[j]
+			var cur_u: Vector2 = out_u[j]
+			var cur_in := _half_inside(a, b, cur_p)
+			if cur_in:
+				if not prev_in:
+					var hit := _segment_clip(prev_p, cur_p, a, b)
+					next_p.append(hit)
+					next_u.append(prev_u.lerp(cur_u, _segment_u(prev_p, cur_p, hit)))
+				next_p.append(cur_p)
+				next_u.append(cur_u)
+			elif prev_in:
+				var hit2 := _segment_clip(prev_p, cur_p, a, b)
+				next_p.append(hit2)
+				next_u.append(prev_u.lerp(cur_u, _segment_u(prev_p, cur_p, hit2)))
+			prev_p = cur_p
+			prev_u = cur_u
+			prev_in = cur_in
+		out_p = next_p
+		out_u = next_u
+	return [out_p, out_u]
+
+
+static func _half_inside(a: Vector2, b: Vector2, p: Vector2) -> bool:
+	var cross := (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
+	return cross >= -0.05
+
+
+static func _segment_clip(p: Vector2, q: Vector2, a: Vector2, b: Vector2) -> Vector2:
+	var r := q - p
+	var s := b - a
+	var den := r.cross(s)
+	if absf(den) < 0.0000001:
+		return p
+	var u := (a - p).cross(s) / den
+	return p + r * clampf(u, 0.0, 1.0)
+
+
+static func _segment_u(p: Vector2, q: Vector2, hit: Vector2) -> float:
+	var r := q - p
+	var len2 := r.length_squared()
+	if len2 < 0.0000001:
+		return 0.0
+	return clampf((hit - p).dot(r) / len2, 0.0, 1.0)
 
 
 func _adopt_mode(grinding: bool) -> void:

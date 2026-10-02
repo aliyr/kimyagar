@@ -42,12 +42,17 @@ var _flash_hex: String = "#ffe3a0"
 var _wipe_t0: float = -1.0
 var _wipe_dur: float = 500.0
 var _residue_hex: String = ""
+var _effects := true
 
 
 func _init(seed: int = 1) -> void:
 	_s = seed & 0xFFFFFFFF
 	if _s == 0:
 		_s = 1
+
+
+func set_effects(on: bool) -> void:
+	_effects = on
 
 
 func set_budget(scale: float, reduced_motion: bool = false, specular: bool = true, live_shadow: bool = true) -> void:
@@ -67,6 +72,8 @@ func busy() -> bool:
 
 
 func burst(kind: String, at: Vector2 = Vector2.ZERO, opts: Dictionary = {}) -> void:
+	if _effects_quiet(kind):
+		return
 	match kind:
 		"strike":
 			_burst_strike(at, opts)
@@ -216,6 +223,12 @@ static func particle_size(p: Dictionary) -> float:
 	if kind == "dust":
 		return size * (1.0 + t * 0.3)
 	return size
+
+
+func _effects_quiet(kind: String) -> bool:
+	if _effects:
+		return false
+	return kind == "strike" or kind == "dust" or kind == "puff" or kind == "sparks" or kind == "fine"
 
 
 func _budget() -> float:
@@ -562,7 +575,7 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 		var keep_w: float = rx * 2.1 * (1.0 - eased)
 		var top: float = scene.y - ry * 3.0
 		clip = _map_rect(Rect2(left, top, keep_w, ry * 6.0), origin, scale)
-	_paint_radial(c, center, rx * scale.x, ry * scale.y, stops_t, stops_c, use_clip, clip)
+	_paint_radial(c, center, rx * scale.x, ry * scale.y, stops_t, stops_c, use_clip, clip, true)
 	var speck: Color = Color(col.r, col.g, col.b, 0.55 * amount * fade)
 	for i in 14:
 		var a: float = (float(i) / 14.0) * PI * 2.0 + 0.4
@@ -574,6 +587,8 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 				continue
 		var local: Vector2 = _map(at, origin, scale)
 		var speck_r: float = (1.1 + float((i * 13) % 5) * 0.3) * scale.x
+		if not MortarPile.circle_inside(local, speck_r):
+			continue
 		c.draw_circle(local, maxf(0.3, speck_r), speck)
 
 
@@ -607,7 +622,7 @@ func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -
 	_paint_radial(c, shadow_at, lrx * 1.05, lry * 0.9, PackedFloat32Array([0.0, 1.0]), [
 		Color(shade.r, shade.g, shade.b, 0.38 * frac),
 		Color(shade.r, shade.g, shade.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 	var body: Color = _parse_hex(hex)
 	# Offset radial (highlight up-left of the mound) approximated with stacked ellipses.
 	# Web radial is centered up-left of the ellipse. Stack a centered body, then that offset highlight.
@@ -616,22 +631,25 @@ func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -
 		Color(body.r, body.g, body.b, 0.9 * frac),
 		Color(body.r, body.g, body.b, 0.55 * frac),
 		Color(body.r, body.g, body.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 	var hi := Vector2(center.x - lrx * 0.18, center.y - lry * 0.55)
 	_paint_radial(c, hi, maxf(0.4, lrx * 0.42), maxf(0.4, lry * 0.42), PackedFloat32Array([0.0, 1.0]), [
 		Color(body.r, body.g, body.b, 0.98 * frac),
 		Color(body.r, body.g, body.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 	var foot := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 0.32 * frac)
-	c.draw_ellipse(Vector2(center.x, center.y + lry * 0.42), maxf(0.4, lrx * 0.72), maxf(0.4, lry * 0.38), foot, true, -1.0, false)
+	_fill_ellipse(c, Vector2(center.x, center.y + lry * 0.42), maxf(0.4, lrx * 0.72), maxf(0.4, lry * 0.38), foot, true)
 	for i in 46:
 		var a: float = float(i) * 2.399963
 		var rad: float = sqrt((float(i) + 0.5) / 46.0)
 		var px: float = center.x + cos(a) * rad * lrx * 0.88
 		var py: float = center.y + sin(a) * rad * lry * 0.82
-		var speck: Color = Color(40.0 / 255.0, 20.0 / 255.0, 6.0 / 255.0, 0.28 * frac) if i % 3 == 0 else Color(1.0, 248.0 / 255.0, 230.0 / 255.0, 0.22 * frac)
+		var speck_at := Vector2(px, py)
 		var speck_r: float = (0.7 + float((i * 7) % 4) * 0.25) * scale.x
-		c.draw_circle(Vector2(px, py), maxf(0.25, speck_r), speck)
+		if not MortarPile.circle_inside(speck_at, speck_r):
+			continue
+		var speck: Color = Color(40.0 / 255.0, 20.0 / 255.0, 6.0 / 255.0, 0.28 * frac) if i % 3 == 0 else Color(1.0, 248.0 / 255.0, 230.0 / 255.0, 0.22 * frac)
+		c.draw_circle(speck_at, maxf(0.25, speck_r), speck)
 
 
 func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array, aim: Dictionary) -> void:
@@ -661,7 +679,32 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	], false, Rect2())
 
 
-func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2) -> void:
+func _fill_ellipse(c: CanvasItem, center: Vector2, rx: float, ry: float, col: Color, clip_bowl: bool) -> void:
+	if col.a <= 0.001 or rx <= 0.05 or ry <= 0.05:
+		return
+	var erx := rx
+	var ery := ry
+	# Stay on draw_ellipse. A polygon here splits the cauldron batches.
+	if clip_bowl and not _ellipse_in_bowl(center, erx, ery):
+		var scale := 1.0
+		for _i in 5:
+			scale *= 0.84
+			if _ellipse_in_bowl(center, erx * scale, ery * scale):
+				break
+		erx *= scale
+		ery *= scale
+	c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
+
+
+func _ellipse_in_bowl(center: Vector2, rx: float, ry: float) -> bool:
+	for i in 8:
+		var a := TAU * float(i) / 8.0
+		if MortarPile.interior_norm(center + Vector2(cos(a) * rx, sin(a) * ry)) > MortarPile.INTERIOR_INSET:
+			return false
+	return true
+
+
+func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2, clip_bowl: bool = false) -> void:
 	if rx <= 0.05 or ry <= 0.05:
 		return
 	var rings := 12
@@ -673,10 +716,12 @@ func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t
 		var erx: float = maxf(0.4, rx * t)
 		var ery: float = maxf(0.4, ry * t)
 		if not use_clip:
-			c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
+			_fill_ellipse(c, center, erx, ery, col, clip_bowl)
 			continue
 		var poly: PackedVector2Array = _ellipse_poly(center, erx, ery, 40)
 		poly = _clip_rect(poly, clip)
+		if clip_bowl:
+			poly = MortarPile.clip_to_interior(poly)
 		if poly.size() >= 3:
 			c.draw_colored_polygon(poly, col)
 

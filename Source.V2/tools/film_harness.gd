@@ -10,7 +10,12 @@ var armed := false
 
 
 func setup(shot: String) -> void:
-	kind = "stir" if shot.begins_with("stir") else "spoon"
+	if shot.begins_with("grind"):
+		kind = "grind"
+	elif shot.begins_with("stir"):
+		kind = "stir"
+	else:
+		kind = "spoon"
 
 
 func adjust_dt(dt: float, shot_frames: int) -> float:
@@ -39,6 +44,10 @@ func prepare(host) -> void:
 		return
 	Game.add_classic_unit("chamomile")
 	Game.start_grinding()
+	if kind == "grind":
+		host._warm_workshop(0.2)
+		host.workshop.jump_grind(0.0)
+		return
 	Game.apply_grind_work(2.0)
 	host._warm_workshop(0.35)
 	host.workshop.jump_transfer(0.02)
@@ -56,6 +65,11 @@ func arm(host) -> void:
 		host.workshop.hold_sim = false
 		for i in 24:
 			frames.append({"name": "stir", "i": i, "t": 0.0})
+		return
+	if kind == "grind":
+		for i in 24:
+			var u := float(i) / 23.0
+			frames.append({"name": "grind", "i": i, "t": 0.0, "work": u * 3.6})
 		return
 	frames.append_array(_span("approach", 0.02, 0.30, 24))
 	frames.append_array(_span("dip", 0.36, 0.72, 24))
@@ -80,6 +94,8 @@ func on_frame(host) -> void:
 		var spec: Dictionary = frames[index]
 		if kind == "spoon":
 			host.workshop.jump_transfer(float(spec["t"]))
+		elif kind == "grind":
+			host.workshop.jump_grind(float(spec["work"]))
 		armed = true
 
 
@@ -103,4 +119,10 @@ func _save(host) -> void:
 	var err := img.save_jpg(path, 0.8)
 	var pose: Dictionary = host.workshop._transfer_last
 	var draws := Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
-	print("FILM ", path, " ", img.get_width(), "x", img.get_height(), " spoon ", pose.get("x", 0), ",", pose.get("y", 0), " draws ", draws, " err ", err)
+	var extra := ""
+	if kind == "grind" and host.workshop._pile != null:
+		var st: Dictionary = host.workshop._pile.chunk_stats()
+		extra = " work %.3f chunks %s coarse %s dust %s median %.2f max %.2f area %.2f bed %.4f" % [
+			float(spec.get("work", 0.0)), st["n"], st["coarse"], st["dust"], st["median"], st["max"], st["median_area"], host.workshop._pile.bed_coverage(),
+		]
+	print("FILM ", path, " ", img.get_width(), "x", img.get_height(), " spoon ", pose.get("x", 0), ",", pose.get("y", 0), " draws ", draws, extra, " err ", err)

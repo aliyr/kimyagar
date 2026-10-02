@@ -1427,90 +1427,70 @@ func _draw_pieces(c: Control) -> void:
 	var shown: Array = _pile.chips()
 	_draw_mortar_bed(c)
 	if _mortar_parts:
-		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue(), _pile.bed_active())
-	var box: Dictionary = _pile.bowl()
-	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * ZONE_MORTAR.size
-	var bw := float(box["width"]) / 100.0 * ZONE_MORTAR.size.x
-	var bh := float(box["height"]) / 100.0 * ZONE_MORTAR.size.y
+		var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS
+		_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, shown, aim, _pile.residue(), hide_mound)
 	for chip in shown:
-		var k := float(chip["draw_k"])
-		var w := float(chip["w"]) / 100.0 * bw * k
-		var h := float(chip["h"]) / 100.0 * bh * k
-		var hop := float(chip["hop"])
-		var center := origin + Vector2(float(chip["x"]) / 100.0 * bw, float(chip["y"]) / 100.0 * bh)
-		center.y -= hop * 9.0
-		var sc := 1.0 + hop * 0.08
-		if str(chip["kind"]) == "dust":
-			var col: Color = chip["color"]
-			c.draw_circle(center, maxf(w, h) * 0.5 * sc, Color(col.r, col.g, col.b, 0.9))
+		var lay: Dictionary = _pile.layout_chip(chip)
+		var poly: PackedVector2Array = lay["poly"]
+		var uvs: PackedVector2Array = lay["uvs"]
+		if poly.size() < 3:
+			continue
+		var tint: Color = chip["color"]
+		var shade := 0.14 + 0.12 * (float(int(chip.get("id", 1)) % 7) / 6.0)
+		if bool(lay["dust"]):
+			var dust_col := Color(tint.r, tint.g, tint.b, 0.9)
+			var rad := float(lay["radius"])
+			var center: Vector2 = lay["center"]
+			if MortarPile.circle_inside(center, rad):
+				c.draw_circle(center, rad, dust_col)
+			else:
+				var grain := MortarPile.clip_to_interior(poly)
+				if grain.size() >= 3:
+					c.draw_colored_polygon(grain, dust_col)
 			continue
 		var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(chip["kind"]), int(chip["sprite"])])
 		if tex == null:
 			continue
-		var rot := deg_to_rad(float(chip["rot"]))
-		var nick := int(chip.get("nick", 0))
-		var cracked := bool(chip.get("cracked", false)) or int(chip.get("generation", 0)) > 0
-		if cracked:
-			var clip := MortarPile.clip_polygon(nick)
-			var poly := PackedVector2Array()
-			var uvs := PackedVector2Array()
-			for p in clip:
-				uvs.append(p)
-				var local := Vector2((p.x - 0.5) * w, (p.y - 0.5) * h) * sc
-				poly.append(center + Vector2(cos(rot) * local.x - sin(rot) * local.y, sin(rot) * local.x + cos(rot) * local.y))
+		var inside := MortarPile.polygon_inside(poly)
+		if not inside:
+			var clipped: Array = MortarPile.clip_poly_uv(poly, uvs)
+			poly = clipped[0]
+			uvs = clipped[1]
+			if poly.size() < 3:
+				continue
+		if bool(lay["cracked"]) or not inside:
 			var cols := PackedColorArray()
 			cols.resize(poly.size())
 			cols.fill(Color.WHITE)
 			c.draw_polygon(poly, cols, uvs, tex)
 			var tinted := PackedColorArray()
 			tinted.resize(poly.size())
-			var tint: Color = chip["color"]
-			tinted.fill(Color(tint.r, tint.g, tint.b, 0.22))
+			tinted.fill(Color(tint.r, tint.g, tint.b, shade))
 			c.draw_polygon(poly, tinted)
 		else:
-			c.draw_set_transform(center, rot, Vector2(sc, sc))
+			var center2: Vector2 = lay["center"]
+			var rot := float(lay["rot"])
+			var sc := float(lay["sc"])
+			var w := float(lay["w"])
+			var h := float(lay["h"])
+			c.draw_set_transform(center2, rot, Vector2(sc, sc))
 			c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
-			var tint2: Color = chip["color"]
-			c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint2.r, tint2.g, tint2.b, 0.22), true)
+			c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint.r, tint.g, tint.b, shade), true)
 			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_mortar_bed(c: Control) -> void:
 	if _pile == null:
 		return
-	var info: Dictionary = _pile.decor()
-	var level := float(info.get("level", 1.0))
-	var box: Dictionary = _pile.bowl()
-	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * ZONE_MORTAR.size
-	var bw := float(box["width"]) / 100.0 * ZONE_MORTAR.size.x
-	var bh := float(box["height"]) / 100.0 * ZONE_MORTAR.size.y
-	var col: Color = info.get("color", Color("#8a7a52"))
-	if level >= 0.12:
-		var cx := origin.x + bw * 0.5
-		var surface := MortarPile.pile_surface_y(level) - ZONE_MORTAR.position.y
-		var rx := bw * 0.46
-		var ry := 16.0 + 6.0 * level
-		c.draw_set_transform(Vector2(cx, surface + ry * 0.35), 0.0, Vector2.ONE)
-		c.draw_colored_polygon(_oval(rx * 0.92, ry * 1.15), Color(col.r * 0.72, col.g * 0.68, col.b * 0.55, 0.96))
-		c.draw_set_transform(Vector2(cx, surface), 0.0, Vector2.ONE)
-		c.draw_colored_polygon(_oval(rx, ry), Color(col.r, col.g, col.b, 0.96))
-		c.draw_colored_polygon(_oval(rx * 0.62, ry * 0.55), Color(col.r * 0.78, col.g * 0.74, col.b * 0.6, 0.55))
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		for hollow_v in info.get("hollows", []):
-			var hollow: Dictionary = hollow_v
-			var hx := origin.x + float(hollow.get("x", 50.0)) / 100.0 * bw
-			var hy := origin.y + float(hollow.get("y", 60.0)) / 100.0 * bh
-			var ha := clampf(float(hollow.get("life", MortarPile.MARK_LIFE)) / MortarPile.MARK_LIFE, 0.0, 1.0)
-			c.draw_set_transform(Vector2(hx, hy), 0.0, Vector2.ONE)
-			c.draw_colored_polygon(_oval(rx * 0.22, ry * 0.7), Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.8 * ha))
-			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		for spill_v in info.get("spills", []):
-			var spill: Dictionary = spill_v
-			var sc: Color = spill.get("color", col)
-			var sx := origin.x + float(spill.get("x", 50.0)) / 100.0 * bw
-			var sy := origin.y + float(spill.get("y", 70.0)) / 100.0 * bh
-			var sa := clampf(float(spill.get("life", MortarPile.MARK_LIFE)) / MortarPile.MARK_LIFE, 0.0, 1.0)
-			c.draw_circle(Vector2(sx, sy), 3.4, Color(sc.r, sc.g, sc.b, 0.85 * sa))
+	for spec_v in _pile.bed_specs():
+		var spec: Dictionary = spec_v
+		var col: Color = spec["color"]
+		if bool(spec.get("disk", false)):
+			c.draw_circle(spec["at"], float(spec["radius"]), col)
+			continue
+		var pts: PackedVector2Array = spec["points"]
+		if pts.size() >= 3:
+			c.draw_colored_polygon(pts, col)
 
 
 func _draw_mortar_fx(c: Control) -> void:
@@ -1911,6 +1891,8 @@ func _tick_mortar(dt: float) -> void:
 			_brush_t = -1.0
 	if _pile == null:
 		return
+	if _mortar_parts:
+		_mortar_parts.set_effects(Settings.effects_enabled)
 	var grinding := Game.mortar != null and bool(Game.mortar.get("grinding", false)) and transfer_t < 0.0 and not Game.is_paused()
 	_tick_grind_camera(grinding, dt)
 	if Game.mortar == null:
@@ -1926,6 +1908,7 @@ func _tick_mortar(dt: float) -> void:
 		if Game.mortar != null and transfer_t < 0.0:
 			aroma = _mortar_norm() * (1.0 if grinding else 0.55)
 			aroma_col = _mortar_mix_color()
+		_mortar_parts.set_effects(Settings.effects_enabled)
 		_mortar_parts.set_aroma(aroma, aroma_col)
 		_mortar_parts.update(dt)
 	if Game.mortar != null:
@@ -2420,6 +2403,8 @@ func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Ve
 	if bury < 50000.0:
 		mound = _clip_above(mound, bury)
 		core = _clip_above(core, bury)
+		mound = MortarPile.clip_to_opening(mound)
+		core = MortarPile.clip_to_opening(core)
 	if mound.size() >= 3:
 		c.draw_colored_polygon(mound, Color(col.r, col.g, col.b, 0.96 * fade))
 	if core.size() >= 3:
@@ -2429,7 +2414,7 @@ func _paint_mound(c: Control, pose: Dictionary, at: Vector2, rot: float, lip: Ve
 	for chip in pose.get("chips", []):
 		var local := Vector2(float(chip.get("sx", 0.0)), float(chip.get("sy", 0.0))) * 0.45 + lip * 0.5
 		var p := at + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y)
-		if p.y <= bury:
+		if p.y <= bury and (bury >= 50000.0 or MortarPile.mouth_norm(p) <= MortarPile.INTERIOR_INSET):
 			_draw_mini_chip(c, chip, p, float(chip.get("dw", 16.0)) * 0.8, float(chip.get("dh", 16.0)) * 0.8, fade)
 
 
@@ -3187,6 +3172,34 @@ func _note_pin() -> TextureRect:
 	g.mouse_filter = MOUSE_FILTER_IGNORE
 	g.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	return g
+
+
+func _grind_state(work: float) -> Dictionary:
+	return {
+		"ingredientId": str(Game.mortar.get("ingredientId", "chamomile")),
+		"quantity": float(Game.mortar.get("quantity", 1.0)),
+		"grindWork": work,
+		"grindState": Game.grind_state_for_work(work),
+		"grinding": work < 3.6,
+	}
+
+
+## Absolute grind work for the grind contact sheet. Does not start the spoon.
+## Each step is a fresh bake from the same seed, so the sheet matches the tests.
+func jump_grind(work: float) -> void:
+	if Game.mortar == null or _pile == null:
+		return
+	var amount := clampf(work, 0.0, 3.6)
+	var state := _grind_state(amount)
+	Game.mortar = state
+	_pile.force_refill()
+	_pile.prepare_bake()
+	_pile.sync(state)
+	_pile.update(0.0, true)
+	_pile.hold_grind_pose(0.50 + 0.28 * absf(sin(amount * 5.2)))
+	_place_pestle()
+	if _mortar_fx:
+		_mortar_fx.queue_redraw()
 
 
 func jump_transfer(at: float) -> void:

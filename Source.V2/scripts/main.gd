@@ -197,7 +197,7 @@ func _parse_args() -> void:
 	# Engine args first, then user args after `--`, so `-- --hour=N` wins.
 	_scan_args(OS.get_cmdline_args())
 	_scan_args(OS.get_cmdline_user_args())
-	if _shot.begins_with("spoon-film") or _shot.begins_with("stir-film"):
+	if _shot.begins_with("spoon-film") or _shot.begins_with("stir-film") or _shot.begins_with("grind-film"):
 		_harness = _FilmHarness.new()
 		_harness.setup(_shot)
 
@@ -501,7 +501,7 @@ func _prepare_shot() -> void:
 			Game.apply_grind_work(2.0)
 			_warm_workshop(0.35)
 			workshop.jump_transfer(1.49 if _shot == "scoop" else 3.20)
-		"spoon-film", "spoon-film-wide", "stir-film", "stir-film-wide":
+		"spoon-film", "spoon-film-wide", "stir-film", "stir-film-wide", "grind-film", "grind-film-wide":
 			if _harness != null:
 				_harness.prepare(self)
 		"gate-stages":
