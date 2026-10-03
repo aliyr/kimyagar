@@ -1,0 +1,23 @@
+{
+  "axes": [
+    { "id": "sleep_wake", "nameFa": "خواب و بیداری", "positiveProperty": "sleep", "negativeProperty": "wake" },
+    { "id": "warm_cold", "nameFa": "گرمی و سردی", "positiveProperty": "warm", "negativeProperty": "cold" },
+    { "id": "calm_excitement", "nameFa": "آرامش و هیجان", "positiveProperty": "calm", "negativeProperty": "excitement" },
+    { "id": "strength_weakness", "nameFa": "نیرو و سستی", "positiveProperty": "strength", "negativeProperty": "weakness" },
+    { "id": "focus_distract", "nameFa": "تمرکز و پریشانی", "positiveProperty": "focus", "negativeProperty": "distract" }
+  ],
+  "properties": [
+    { "id": "calm", "nameFa": "آرامش", "type": "axis_side", "axisId": "calm_excitement", "oppositePropertyId": "excitement", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "excitement", "nameFa": "هیجان", "type": "axis_side", "axisId": "calm_excitement", "oppositePropertyId": "calm", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "sleep", "nameFa": "خواب‌آوری", "type": "axis_side", "axisId": "sleep_wake", "oppositePropertyId": "wake", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "wake", "nameFa": "بیدارکنندگی", "type": "axis_side", "axisId": "sleep_wake", "oppositePropertyId": "sleep", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "warm", "nameFa": "گرمی", "type": "axis_side", "axisId": "warm_cold", "oppositePropertyId": "cold", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "cold", "nameFa": "سردی", "type": "axis_side", "axisId": "warm_cold", "oppositePropertyId": "warm", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "strength", "nameFa": "نیروبخشی", "type": "axis_side", "axisId": "strength_weakness", "oppositePropertyId": "weakness", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "weakness", "nameFa": "سستی", "type": "axis_side", "axisId": "strength_weakness", "oppositePropertyId": "strength", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "focus", "nameFa": "تمرکز", "type": "axis_side", "axisId": "focus_distract", "oppositePropertyId": "distract", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "distract", "nameFa": "پریشانی", "type": "axis_side", "axisId": "focus_distract", "oppositePropertyId": "focus", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "pain_relief", "nameFa": "تسکین درد", "type": "independent", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } },
+    { "id": "joy", "nameFa": "شادی", "type": "independent", "thresholds": { "low": 0.5, "medium": 1.5, "high": 2.5, "veryHigh": 3.5 } }
+  ]
+}
