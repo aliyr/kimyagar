@@ -41,6 +41,12 @@ var _shadow_at := Vector2.ZERO
 ## Leftover heap grows in after the bowl empties. It does not pop on.
 var _heap_k := 0.0
 var _heap_dt := 0.0
+var _outgoing := 0.0
+var _bed_live := false
+var _mound_shown := 0.0
+var _mound_hex := ""
+var _mound_hold := false
+var _mound_hold_frac := 0.0
 var _sweeps: Array[Dictionary] = []
 var _aroma_i: float = 0.0
 var _aroma_hex: String = FALLBACK
@@ -204,6 +210,14 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 	_draw_flash(c, origin, scale, now)
 
 
+func set_outgoing(k: float) -> void:
+	_outgoing = clampf(k, 0.0, 1.0)
+
+
+func set_bed_active(on: bool) -> void:
+	_bed_live = on
+
+
 func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary, skip_mound: bool = false, heap_ok: bool = true) -> void:
 	_remember_residue(residue)
 	var scale := Vector2(zone.x / ZONE_W, zone.y / ZONE_H)
@@ -227,8 +241,18 @@ func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim
 		_draw_residue(c, origin, scale, residue, wipe_u, heap_k)
 	# While the spoon transfer owns the pile, the bed ellipse is the surface.
 	# The dust mound is dozens of ellipses and would paint over that bed.
-	if not skip_mound and not chips.is_empty():
-		_draw_mound(c, origin, scale, chips)
+	if not skip_mound:
+		_draw_mound_eased(c, origin, scale, chips)
+	else:
+		# Ease the value down so a later frame cannot pop it back. While the
+		# spoon owns the bowl, do not paint: that ellipse was the tail rescale.
+		_mound_hold = false
+		if _mound_shown > 0.02:
+			_mound_shown = maxf(0.0, _mound_shown - 0.008)
+			if _mound_shown > 0.02 and not _bed_live and _mound_hex != "":
+				_paint_mound(c, origin, scale, _mound_shown, _mound_hex)
+		else:
+			_mound_shown = 0.0
 	_draw_pestle_shadow(c, origin, scale, chips, aim)
 
 
@@ -330,9 +354,9 @@ func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: floa
 		var px: float = x + _range(-6.0, 6.0)
 		var py: float = y + _range(-3.0, 2.0)
 		var ttl: float = _range(0.55, 1.05) + fineness * 0.4
-		var size: float = _range(0.55, 1.15) + fineness * 0.28
+		var size: float = _range(0.35, 0.75) + fineness * 0.16
 		var color: String = _pick(colors, FALLBACK)
-		var gap := 0.48 / float(maxi(n, 1))
+		var gap := 0.70 / float(maxi(n, 1))
 		_push({
 			"kind": "dust",
 			"x": px,
@@ -657,25 +681,57 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 		c.draw_circle(local, maxf(0.3, speck_r), speck)
 
 
-func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -> void:
+func _dust_frac(chips: Array) -> float:
 	var total := 0.0
 	var dust_area := 0.0
-	var dust_colors: Array = []
 	for chip_v in chips:
 		if not (chip_v is Dictionary):
 			continue
 		var chip: Dictionary = chip_v
 		var area: float = float(chip.get("w", 0.0)) * float(chip.get("h", 0.0))
 		total += area
-		if str(chip.get("kind", "")) != "dust":
-			continue
-		dust_area += area
-		if chip.has("color") and chip.get("color", null) != null:
-			dust_colors.append(_any_hex(chip.get("color", FALLBACK)))
-	var frac: float = 0.0 if total <= 0.0 else dust_area / total
-	if frac <= 0.05:
+		if str(chip.get("kind", "")) == "dust":
+			dust_area += area
+	if total <= 0.0:
+		return 0.0
+	return dust_area / total
+
+
+func _draw_mound_eased(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -> void:
+	var target := _dust_frac(chips)
+	var hex := ""
+	if target > 0.05:
+		var colors: Array = []
+		for chip_v in chips:
+			if chip_v is Dictionary and str(chip_v.get("kind", "")) == "dust" and chip_v.get("color", null) != null:
+				colors.append(_any_hex(chip_v.get("color", FALLBACK)))
+		hex = _mix_hex(colors)
+	# A logical refill zeroes the dust fraction in one frame. Hold the ellipse
+	# and fade it with the outgoing bed instead of deleting it.
+	if _outgoing > 0.02:
+		if not _mound_hold:
+			_mound_hold = true
+			_mound_hold_frac = maxf(_mound_shown, target)
+			if _mound_hex == "":
+				_mound_hex = hex
+		var shown := _mound_hold_frac * _outgoing
+		_mound_shown = shown
+		if shown > 0.02 and _mound_hex != "":
+			_paint_mound(c, origin, scale, shown, _mound_hex)
 		return
-	var hex: String = _mix_hex(dust_colors)
+	_mound_hold = false
+	var step := 0.012
+	if target + 0.001 < _mound_shown:
+		_mound_shown = maxf(target, _mound_shown - step)
+	else:
+		_mound_shown = minf(target, _mound_shown + step)
+	if hex != "":
+		_mound_hex = hex
+	if _mound_shown > 0.02 and _mound_hex != "" and not chips.is_empty():
+		_paint_mound(c, origin, scale, _mound_shown, _mound_hex)
+
+
+func _paint_mound(c: CanvasItem, origin: Vector2, scale: Vector2, frac: float, hex: String) -> void:
 	var scene: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY - 1.5)
 	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * (0.55 + 0.45 * frac)
 	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * (1.4 + 0.8 * frac)
@@ -689,8 +745,6 @@ func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -
 		Color(shade.r, shade.g, shade.b, 0.0),
 	], false, Rect2(), true)
 	var body: Color = _parse_hex(hex)
-	# Offset radial (highlight up-left of the mound) approximated with stacked ellipses.
-	# Web radial is centered up-left of the ellipse. Stack a centered body, then that offset highlight.
 	_paint_radial(c, center, lrx, lry, PackedFloat32Array([0.0, 0.5, 0.86, 1.0]), [
 		Color(body.r, body.g, body.b, 0.9 * frac),
 		Color(body.r, body.g, body.b, 0.9 * frac),
@@ -722,6 +776,19 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 		return
 	var mode: String = str(aim.get("mode", "lean"))
 	if mode == "lean":
+		# The grind pose used to drop this ellipse on the frame the pestle leaned.
+		if _shadow_alpha <= 0.012 or not _shadow_ready:
+			_shadow_alpha = 0.0
+			_shadow_ready = false
+			return
+		_shadow_alpha = maxf(0.0, _shadow_alpha - 0.012)
+		var shade_lean := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 1.0)
+		var a_lean := _shadow_alpha
+		_paint_radial(c, _shadow_at, _shadow_rx * scale.x, _shadow_ry * scale.y, PackedFloat32Array([0.0, 0.7, 1.0]), [
+			Color(shade_lean.r, shade_lean.g, shade_lean.b, a_lean),
+			Color(shade_lean.r, shade_lean.g, shade_lean.b, a_lean * 0.5),
+			Color(shade_lean.r, shade_lean.g, shade_lean.b, 0.0),
+		], false, Rect2(), true)
 		return
 	# An empty bowl used to delete the contact shadow in one frame.
 	var leaving: bool = chips.is_empty() and mode != "grind"

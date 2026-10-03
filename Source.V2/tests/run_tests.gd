@@ -2633,12 +2633,15 @@ func _grind_progress_bed() -> void:
 	check(int(clamped.chunk_stats()["dust"]) == 0, "coarse clamp is not powder")
 	check(clamped.bed_coverage() < full_cover, "mid grind bed is smaller than fine, %s vs %s" % [clamped.bed_coverage(), full_cover])
 	full.force_refill()
+	var before_cover := full.bed_coverage()
 	full.sync({})
 	check(full.chips().is_empty(), "reset clears the mortar")
 	near(full.grind_progress(), 0.0, "reset progress")
-	near(full.bed_coverage(), 0.0, "reset bowl has no ground bed")
+	check(full.bed_coverage() > before_cover * 0.7, "reset keeps the drawn bed, %s -> %s" % [before_cover, full.bed_coverage()])
+	for _fade_i in 150:
+		full.update(1.0 / 60.0, false)
+	near(full.bed_coverage(), 0.0, "reset bed is gone after the fade", 0.02)
 	full.sync({"ingredientId": "mint", "quantity": 1.0, "grindWork": 0.0, "grinding": false})
-	check(full.bed_coverage() < 0.01, "refill starts as chunks, cover %s" % full.bed_coverage())
 	check(int(full.chunk_stats()["dust"]) == 0, "refill has no powder")
 	print("ROUND16 progress0_bed=%.4f n=%s median=%s max=%s area_med=%s area_max=%s coarse=%s cover=%s" % [covers[0], str(counts), str(medians), str(maxes), str(area_med), str(area_max), str(coarses), str(covers)])
 
@@ -2837,7 +2840,7 @@ func _redrop_ease() -> void:
 	pile.motion_reset()
 	pile.sync(_portion_state("chamomile", 2.0, true))
 	pile.update(1.0 / 60.0, true)
-	_settle_pile(pile, 80)
+	_settle_pile(pile, 160)
 	var before := pile.visual_progress()
 	var cover := pile.drawn_bed_coverage()
 	check(before > 0.4, "re-drop starts from a ground bed, progress %s" % before)
@@ -2865,13 +2868,13 @@ func _redrop_ease() -> void:
 		elif a < 0.2:
 			new_n += 1
 	check(old_n > 0 and new_n > 0, "re-drop crossfades, old %s new %s" % [old_n, new_n])
-	for _i in 22:
+	for _i in 150:
 		pile.update(1.0 / 60.0, true)
-	check(pile.visual_progress() < 0.02, "re-drop bed is gone after 0.3s, %s" % pile.visual_progress())
+	check(pile.visual_progress() < 0.02, "re-drop bed is gone after the fade, %s" % pile.visual_progress())
 	var clamp := MortarPile.new()
 	clamp.sync(_portion_state("ginger", 0.2, true))
 	clamp.update(1.0 / 60.0, true)
-	_settle_pile(clamp, 80)
+	_settle_pile(clamp, 200)
 	var low := clamp.visual_progress()
 	clamp.sync(_portion_state("ginger", 1.0, false))
 	clamp.update(1.0 / 60.0, false)
@@ -2921,7 +2924,7 @@ func _round18() -> void:
 	var drop := float(hi["color"].a) - float(lo["color"].a)
 	check(drop > 0.02 and drop < 0.55, "bed alpha eases across the last of the scoop, drop %s" % drop)
 	bed.set_visual_level(0.08)
-	for _bed_k in 30:
+	for _bed_k in 160:
 		bed.update(1.0 / 60.0, false)
 	check(bed.drawn_bed_fan().is_empty(), "the bed is gone once the pile is at the floor")
 	var scoop := MortarPile.new()
@@ -2939,7 +2942,7 @@ func _round18() -> void:
 		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
 			still += 1
 	check(still > 0, "the last chunks are still visible on the next frame, %s" % still)
-	for _i in 130:
+	for _i in 200:
 		scoop.update(1.0 / 60.0, false)
 	var left := 0
 	for chip_v2 in scoop.presentation():
@@ -3094,7 +3097,7 @@ func _round19() -> void:
 		if float(chip_v.get("vis_alpha", 0.0)) > 0.45:
 			still += 1
 	check(still > 0, "last scooped chunks stay up on the next frame, %s" % still)
-	for _i in 130:
+	for _i in 200:
 		scoop.update(1.0 / 60.0, false)
 	var left := 0
 	for chip_v2 in scoop.presentation():
@@ -3119,7 +3122,7 @@ func _round19() -> void:
 	check(mid_n > 0, "reset does not wipe the chunks in one frame, %s" % mid_n)
 	check(not mid_bed.is_empty(), "reset does not wipe the bed in one frame")
 	check(reset.chips().is_empty(), "reset still clears the logical pile")
-	for _j in 40:
+	for _j in 150:
 		reset.update(1.0 / 60.0, false)
 	var end_n := 0
 	for chip_v4 in reset.presentation():
@@ -3198,9 +3201,9 @@ func _round20() -> void:
 	var a1 := 0.0 if bed_mid.is_empty() else float(bed_mid["color"].a)
 	var reset_step := absf(a0 - a1)
 	check(reset_step <= 0.12, "reset bed alpha step %s" % reset_step)
-	for _n in 40:
+	for _n in 150:
 		reset.update(1.0 / 60.0, false)
-	check(reset.drawn_bed_fan().is_empty(), "reset bed is gone after 0.5s")
+	check(reset.drawn_bed_fan().is_empty(), "reset bed is gone after the fade")
 	var carry := MortarPile.new()
 	carry.motion_reset()
 	carry.sync(_portion_state("mint", 2.0, false))
@@ -3264,7 +3267,7 @@ func _round21() -> void:
 		break
 	check(early < 0.15, "drop starts faded, alpha %s" % early)
 	check(early_w < full_w * 0.75, "drop starts small, %s vs %s" % [early_w, full_w])
-	_settle_pile(drop, 80)
+	_settle_pile(drop, 600)
 	var settled := 0
 	var grown := 0
 	for chip_v2 in drop.presentation():

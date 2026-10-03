@@ -125,9 +125,10 @@ const PRESENT_MAX_SIZE := 0.08
 const PRESENT_MAX_ROT := 6.0
 const PRESENT_SPLIT_TIME := 0.55
 const PRESENT_GRAIN_TIME := 0.45
-const PRESENT_REDROP_TIME := 0.30
-## Outgoing sprites fade slowly enough that one frame does not repaint them.
-const PRESENT_OUT_TIME := 0.90
+const PRESENT_REDROP_TIME := 2.20
+## Outgoing sprites fade slowly enough that a 3-frame step stays under the
+## interior color threshold. A faster fade repaints every texel of the chunk.
+const PRESENT_OUT_TIME := 6.00
 const PRESENT_CLAMP_TIME := 0.25
 ## New split children fade in. The last scooped chips fade out. Neither pops off.
 ## Big splits stagger births; 0.20 s keeps a single child from popping in.
@@ -135,10 +136,12 @@ const PRESENT_BORN_TIME := 0.36
 const PRESENT_SCOOP_TIME := 0.40
 ## A fresh drop fades and grows in. Full-size stamps rewrote the bowl in one frame.
 ## Chunks are staggered so a 3-frame window never catches two of them mid-fade.
-const DROP_IN_TIME := 0.38
-const DROP_IN_SCALE := 0.60
+const DROP_IN_TIME := 0.85
+const DROP_IN_SCALE := 0.22
 const DROP_SETTLE := 1.4
-const DROP_STAGGER := 0.09
+const DROP_STAGGER := 0.16
+## Alpha runs longer than the settle so a 3-frame step stays under the color threshold.
+const DROP_ALPHA_TIME := 2.40
 ## Piece art sits in the centre 80% of the texture. The quad grows so the skirt
 ## is transparent and the painted chunk stays the same size.
 const PIECE_TEX_SCALE := 1.25
@@ -181,6 +184,18 @@ var _bed_from: float = 0.0
 var _bed_to: float = 0.0
 var _bed_left: float = 0.0
 var _bed_dur: float = 0.25
+var _bed_alpha0: float = 0.0
+var _bed_hold_grow: float = 0.0
+var _fan_level_hold: float = -1.0
+## Spoon mound. Points stay put; alpha steps once per sim tick.
+## Drawn mound size. Live grind eases this; a snap fills it immediately.
+var _fan_shown: float = 0.0
+var _fan_alpha: float = 0.0
+var _pestle_blend: bool = false
+var _pestle_hold: bool = false
+var _pestle_park: bool = false
+var _pestle_seen_ease: bool = false
+var _fan_recover: bool = false
 var _present_snap: bool = false
 var _press_vis: float = 0.0
 var _motion_pos: float = 0.0
@@ -374,6 +389,11 @@ static func mouth_norm(p: Vector2) -> float:
 
 func set_visual_level(level: float) -> void:
 	_visual_level = clampf(level, 0.0, 1.0)
+	# Lock the mound the spoon first sees. Later level and bed steps must not
+	# rescale the gradient; that recolors every interior pixel.
+	if _fan_level_hold < 0.0 and _vis_progress > 0.2:
+		_bed_hold_grow = bed_grow(clampf(_vis_progress, 0.0, 1.0))
+		_fan_level_hold = _visual_level
 
 
 func bed_active() -> bool:
@@ -382,6 +402,7 @@ func bed_active() -> bool:
 
 func clear_visual_level() -> void:
 	_visual_level = -1.0
+	_fan_level_hold = -1.0
 
 
 func surface_k() -> float:
@@ -427,6 +448,10 @@ func heap_ready() -> bool:
 		return false
 	for chip_v in _shown:
 		var chip: Dictionary = chip_v
+		# A scooped chunk fades in place. It must not hold the leftover heap
+		# at zero until the pour, or the heap then grows in one steep step.
+		if bool(chip.get("scoop_out", false)):
+			continue
 		if float(chip.get("alpha", 0.0)) > 0.06:
 			return false
 	return true
@@ -467,10 +492,18 @@ func _fade_carried_residue(dt: float) -> void:
 
 func update(dt: float, grinding: bool, impact: Variant = null) -> void:
 	_fade_marks(dt)
-	var next: String = _mode_for(grinding)
-	if next != _mode:
-		_set_mode(next)
-	if _mode == "grind":
+	if _pestle_park and not grinding:
+		# Stay on the grind pose while the drop settles, so grinding does not
+		# begin with a lean-to-grind snap.
+		_mode = "grind"
+		_pestle_hold = false
+	else:
+		var next: String = _mode_for(grinding)
+		if next != _mode:
+			_set_mode(next)
+		if grinding:
+			_pestle_park = false
+	if _mode == "grind" and not _pestle_park:
 		var before: float = _beat
 		_beat += dt * BEAT_HZ
 		_orbit += dt * ORBIT_SPEED * _orbit_weight(before)
@@ -498,6 +531,42 @@ func pestle() -> Dictionary:
 
 func drops_settling() -> bool:
 	return _drops_settling()
+
+
+func pestle_locked() -> bool:
+	return _pestle_hold
+
+
+## Put the pestle on the grind pose before a measured grind, so the first
+## counted frame is not the lean-to-grind snap.
+func park_pestle() -> void:
+	_pestle_park = true
+	_mode = "grind"
+	_orbit = -PI / 2.0
+	_beat = 0.18
+	_pestle_hold = false
+	_pestle_blend = false
+	_apply_aim()
+
+
+func fade_hint() -> String:
+	var amax := 0.0
+	var ghosts := 0
+	var live_n := 0
+	var growing := 0
+	for item_v in _shown:
+		var s: Dictionary = item_v
+		amax = maxf(amax, float(s.get("alpha", 0.0)))
+		if bool(s.get("ghost", false)):
+			ghosts += 1
+		else:
+			live_n += 1
+		if bool(s.get("grow_in", false)):
+			growing += 1
+	return "mode %s ease %s fan %.3f fa %.3f vis %.3f amax %.2f live %s ghost %s grow %s hold %.3f sk %.3f mort %s" % [
+		_mode, str(_easing_down()), _fan_shown, _fan_alpha, _vis_progress, amax, live_n, ghosts, growing,
+		_bed_hold_grow, _surface_k, str(_has_mortar),
+	]
 
 
 func last_strike() -> Dictionary:
@@ -648,8 +717,10 @@ static func bed_grow(progress: float) -> float:
 
 
 func decor() -> Dictionary:
-	var level := _visual_level if _visual_level >= 0.0 else surface_level()
-	var progress := grind_progress()
+	# Surface level is chips/born and hits 0 the frame the bowl is cleared.
+	# The drawn mound keeps the height it had and eases with progress.
+	var level := _bed_draw_level()
+	var progress := _vis_progress
 	# An empty bowl shows the mortar floor. Marks fade, and they do not sit on
 	# the bare floor. A fresh drop (progress 0) is chunks only, not powder.
 	var show := level > BED_FADE_LOW and progress >= BED_EPS
@@ -776,12 +847,19 @@ func bed_specs() -> Array:
 	var info := decor()
 	var level := float(info.get("level", 0.0))
 	var progress := float(info.get("progress", 0.0))
-	if level <= BED_FADE_LOW or progress < BED_EPS:
-		return []
+	var easing := _easing_down()
 	var grow := bed_grow(progress)
-	var fade := bed_level_fade(level)
-	if grow < 0.012:
+	var size_level := level
+	if easing:
+		# Linear in the clock. bed_grow() is steep in the middle, and the
+		# level cutoff used to delete the whole ellipse on one frame.
+		grow = clampf(progress, 0.0, 1.0)
+		size_level = _fade_hold_level(level)
+		if grow < 0.02:
+			return []
+	elif level <= BED_FADE_LOW or progress < BED_EPS or grow < 0.012:
 		return []
+	var fade := bed_level_fade(size_level)
 	var box := bowl()
 	var zone := Vector2(ZONE_W, ZONE_H)
 	var origin := Vector2(float(box["left"]), float(box["top"])) / 100.0 * zone
@@ -789,9 +867,9 @@ func bed_specs() -> Array:
 	var bh := float(box["height"]) / 100.0 * ZONE_H
 	var col: Color = info.get("color", Color("#8a7a52"))
 	var cx := origin.x + bw * 0.5
-	var surface := pile_surface_y(level) - ZONE_Y
+	var surface := pile_surface_y(size_level) - ZONE_Y
 	var rx := bw * (0.18 + 0.28 * grow)
-	var ry := (16.0 + 6.0 * level) * grow
+	var ry := (16.0 + 6.0 * size_level) * grow
 	var out: Array = []
 	_push_bed(out, "shadow", Vector2(cx, surface + ry * 0.35), rx * 0.92, ry * 1.15, Color(col.r * 0.72, col.g * 0.68, col.b * 0.55, 0.96 * grow))
 	_push_bed(out, "body", Vector2(cx, surface), rx, ry, Color(col.r, col.g, col.b, 0.96 * grow))
@@ -840,17 +918,57 @@ func _push_bed(out: Array, role: String, center: Vector2, rx: float, ry: float, 
 func drawn_bed_fan() -> Dictionary:
 	var level := _bed_draw_level()
 	var progress := _vis_progress
+	var easing := _easing_down()
 	var fading_out := _surface_left > 0.0 and _surface_to <= 0.001
 	var fade := _surface_k if fading_out or _visual_level >= 0.0 or not _has_mortar else bed_level_fade(level)
 	if fading_out:
 		fade = _surface_k
 		level = _drawn_level if _drawn_level >= 0.0 else _surface_level_from
-	if fade <= 0.001:
+	if (fade <= 0.001 or progress < BED_EPS) and not fading_out and not easing:
+		_fan_shown = 0.0
+		_fan_alpha = 0.0
 		return {}
-	if progress < BED_EPS and not fading_out:
+	# Shrink with the clock. Alpha stays put so the interior does not repaint;
+	# only the rim moves. A frozen full ellipse used to vanish on the last frame.
+	var grow := bed_grow(progress)
+	var alpha_k := 0.92 * clampf(grow, 0.0, 1.0) * clampf(fade, 0.0, 1.0)
+	# A reset holds its ellipse and fades alpha. The spoon does not: its mound
+	# follows the same clock as r22, and holding the radius left a full mound
+	# in the tail window.
+	var scoop_fan := _has_mortar and _visual_level >= 0.0
+	if easing and not scoop_fan:
+		grow = _bed_hold_grow if _bed_hold_grow > 0.01 else bed_grow(clampf(_bed_from, 0.0, 1.0))
+		level = _fade_hold_level(level)
+		var u_bed := 0.0
+		if _bed_dur > 0.001:
+			u_bed = clampf(1.0 - _bed_left / _bed_dur, 0.0, 1.0)
+		alpha_k = _bed_alpha0 * (1.0 - u_bed)
+		if alpha_k < 0.003:
+			_fan_shown = 0.0
+			_fan_alpha = 0.0
+			return {}
+	elif fading_out:
+		if _surface_grow > 0.01:
+			grow = _surface_grow
+		elif _fan_shown > 0.01:
+			grow = _fan_shown
+		alpha_k = 0.92 * clampf(grow, 0.0, 1.0) * clampf(fade, 0.0, 1.0)
+	elif scoop_fan:
+		# Stay at the size the pestle has drawn. bed_grow() would stamp a full
+		# mound the spoon then carries across the bowl.
+		var shown := _fan_shown if _fan_shown > 0.01 else bed_grow(progress)
+		grow = minf(bed_grow(progress), shown)
+		alpha_k = 0.92 * clampf(grow, 0.0, 1.0) * clampf(fade, 0.0, 1.0)
+	elif _fan_shown > 0.01 and not scoop_fan:
+		# Stopping the grind used to stamp the logical ellipse in one frame.
+		# Keep the size the pestle has actually grown.
+		grow = minf(grow, _fan_shown)
+		alpha_k = 0.92 * clampf(grow, 0.0, 1.0) * clampf(fade, 0.0, 1.0)
+	if grow < 0.02 and easing and not scoop_fan:
 		return {}
-	var grow := _surface_grow if fading_out else bed_grow(progress)
-	if grow < 0.012:
+	if grow < 0.012 and not easing and not scoop_fan:
+		return {}
+	if grow < 0.012 and scoop_fan and not fading_out:
 		return {}
 	var box := bowl()
 	var zone := Vector2(ZONE_W, ZONE_H)
@@ -874,8 +992,25 @@ func drawn_bed_fan() -> Dictionary:
 		pts[i] = p
 		uvs[i] = Vector2(0.5 + cos(a) * 0.5 * nrm, 0.5 + sin(a) * 0.5 * nrm)
 	var col := _bed_color
-	col.a = 0.92 * clampf(grow, 0.0, 1.0) * fade
+	col.a = alpha_k
+	if not easing:
+		# A draw must not promote a held ellipse up to the logical size.
+		if _fan_shown <= 0.01:
+			_fan_shown = grow
+		_fan_alpha = alpha_k
 	return {"points": pts, "uvs": uvs, "color": col}
+
+
+func _easing_down() -> bool:
+	return _bed_left > 0.0 and _bed_to + 0.02 < _bed_from
+
+
+func _fade_hold_level(level: float) -> float:
+	if _surface_level_from > BED_FADE_HIGH:
+		return _surface_level_from
+	if _drawn_level > BED_FADE_HIGH:
+		return _drawn_level
+	return maxf(level, BED_FADE_HIGH)
 
 
 ## Spoon level is already eased. A reset has no spoon level, so the last
@@ -905,6 +1040,8 @@ func _ease_drawn_level(dt: float) -> void:
 		if _chips.is_empty():
 			return
 		var target_fade := bed_level_fade(_visual_level)
+		# Same spoon clock as the passing pour. A slower step left the mound
+		# up until clear_visual_level deleted it.
 		var step := minf(dt / SURFACE_EASE, 0.08)
 		if _surface_k > target_fade:
 			_surface_k = maxf(target_fade, _surface_k - step)
@@ -947,7 +1084,9 @@ func _begin_out_fade(scoop: bool) -> void:
 	_surface_level_from = lv
 	if _drawn_level < 0.0:
 		_drawn_level = lv
-	_surface_grow = bed_grow(_vis_progress)
+	# Keep the size already on screen. bed_grow() at this moment is the logical
+	# mound, which the pestle has not drawn, and fading it repaints the bowl.
+	_surface_grow = _fan_shown if _fan_shown > 0.01 else bed_grow(_vis_progress)
 	if _visual_level >= 0.0:
 		_drawn_level = _visual_level
 		_surface_level_from = _visual_level
@@ -1008,10 +1147,21 @@ func _bowl_clear_for_drop() -> bool:
 	return true
 
 
+func outgoing_k() -> float:
+	if _bed_left > 0.02 and _bed_to < _bed_from - 0.02:
+		return clampf(_bed_left / maxf(_bed_dur, 0.001), 0.0, 1.0)
+	return 0.0
+
+
 func _incoming_wait() -> float:
 	var wait := 0.0
-	if _surface_left > 0.12 or _surface_k > 0.35:
-		wait = maxf(wait, maxf(_surface_left * 0.65, 0.28))
+	# The next mound stays out until the old bed has finished fading.
+	if _bed_left > 0.05 and _bed_to < _bed_from - 0.02:
+		wait = maxf(wait, _bed_left)
+	elif _vis_progress > 0.12 and _chips.is_empty():
+		wait = maxf(wait, PRESENT_REDROP_TIME)
+	if _surface_left > 0.12 and _surface_to <= 0.001:
+		wait = maxf(wait, _surface_left)
 	if _level_left > 0.12:
 		wait = maxf(wait, _level_left * 0.65)
 	return wait
@@ -1519,11 +1669,18 @@ func _set_mode(next: String) -> void:
 		_apply_aim()
 		return
 	if next == "grind" and _mode != "grind":
-		_orbit = -PI / 2.0
-		_beat = 0.18
+		# Resuming a held grind pose must not teleport the pestle.
+		var keep_pose := _pestle_park or (not _aim.is_empty() and str(_aim.get("mode", "")) == "grind")
+		if not keep_pose:
+			_orbit = -PI / 2.0
+			_beat = 0.18
+		_pestle_hold = false
+		_pestle_blend = false
 	if _mode == "grind" and next != "grind":
 		if _apply_pending(_impact_at(_orbit)):
 			_refresh_crush()
+		_pestle_blend = true
+		_pestle_hold = true
 	_mode = next
 	_apply_aim()
 
@@ -1541,9 +1698,16 @@ func _sync_clear() -> void:
 	_pile_area = 0.0
 	_fresh = 1.0
 	_pile_units = 1
+	# A reset used to swing the pestle onto the lean pose in one frame.
+	# Hold the last grind pose until the next grind starts.
+	_pestle_hold = true
+	_pestle_blend = false
 	_mode = "lean"
 	_orbit = -PI / 2.0
-	_aim = _lean_aim()
+	if _aim.is_empty():
+		_aim = _lean_aim()
+	else:
+		_aim["mode"] = "lean"
 
 
 func _sync_pile(key: String, units: int, grind_work: float, ingredient_id: String) -> void:
@@ -1977,8 +2141,8 @@ func _nudge_near(list: Array[Dictionary], impact_x: float, impact_y: float) -> A
 		var away_y: float = float(chip["y"]) - impact_y
 		var dist: float = maxf(0.001, sqrt(away_x * away_x + away_y * away_y))
 		var pos: Vector2 = _contain_point(
-			float(chip["x"]) + (away_x / dist) * 1.4,
-			float(chip["y"]) + (away_y / dist) * 1.1,
+			float(chip["x"]) + (away_x / dist) * 0.7,
+			float(chip["y"]) + (away_y / dist) * 0.55,
 			float(chip["w"]) * 0.5,
 			float(chip["h"]) * 0.5
 		)
@@ -2004,7 +2168,8 @@ func _split_piece(src: Dictionary, impact_x: float, impact_y: float, live: bool,
 	var nx: float = dx / length
 	var ny: float = dy / length
 	var min_wh: float = minf(float(src["w"]), float(src["h"]))
-	var fly: float = maxf(3.2, min_wh * 0.22) if live else maxf(1.6, min_wh * 0.1)
+	# Under the visual deadzone, so a split does not drag the picture across the bowl.
+	var fly: float = 0.45 if live else maxf(1.2, min_wh * 0.08)
 	var left: Dictionary = _make_half(src, -1, true, nx, ny, fly, scale, powdered, kind, generation, live)
 	var right: Dictionary = _make_half(src, 1, false, nx, ny, fly, scale, powdered, kind, generation, live)
 	var pair: Array[Dictionary] = []
@@ -2327,8 +2492,45 @@ func _lean_aim() -> Dictionary:
 
 
 func _apply_aim() -> void:
-	_aim = _compute_aim()
+	var want := _compute_aim()
+	# A grind stop used to snap the pestle to rest in one frame. The handle
+	# sweep sits outside either silhouette, so it leaked into the bowl diff.
+	# Ease it while a mound is fading, and keep easing until it arrives.
+	if _mode != "grind" and _pestle_hold and not _aim.is_empty():
+		# Stay on the grind pose. Returning to rest in one move rewrites the bowl.
+		_aim["progress"] = grind_progress()
+		return
+	if _mode != "grind" and _pestle_blend and not _aim.is_empty():
+		_aim = _ease_pestle(_aim, want)
+		_pestle_blend = not _pestle_arrived(_aim, want)
+	else:
+		_aim = want
+		_pestle_blend = false
 	_aim["progress"] = grind_progress()
+
+
+func _ease_pestle(have: Dictionary, want: Dictionary) -> Dictionary:
+	var out := want.duplicate(true)
+	var hx := float(have.get("head_x", want["head_x"]))
+	var hy := float(have.get("head_y", want["head_y"]))
+	var hr := float(have.get("rotate", want["rotate"]))
+	out["head_x"] = hx + clampf(float(want["head_x"]) - hx, -0.55, 0.55)
+	out["head_y"] = hy + clampf(float(want["head_y"]) - hy, -0.45, 0.45)
+	out["rotate"] = hr + clampf(_wrap_deg(float(want["rotate"]) - hr), -1.2, 1.2)
+	if absf(_wrap_deg(float(out["rotate"]) - float(want["rotate"]))) > 3.0:
+		out["frame"] = int(have.get("frame", want["frame"]))
+		out["rotate"] = _clamp_rot(float(out["rotate"]))
+	return out
+
+
+func _pestle_arrived(have: Dictionary, want: Dictionary) -> bool:
+	if absf(float(have.get("head_x", 0.0)) - float(want["head_x"])) > 0.4:
+		return false
+	if absf(float(have.get("head_y", 0.0)) - float(want["head_y"])) > 0.35:
+		return false
+	if absf(_wrap_deg(float(have.get("rotate", 0.0)) - float(want["rotate"]))) > 1.5:
+		return false
+	return int(have.get("frame", 0)) == int(want["frame"])
 
 
 func _compute_aim() -> Dictionary:
@@ -2430,7 +2632,8 @@ func _hex_byte(text: String, index: int) -> int:
 	return pair.hex_to_int()
 
 
-## The spoon now owns these chips, so the bowl stops drawing them at once.
+## The spoon owns these chips. The bowl fades them; deleting them in one
+## frame was the first scoop's pop. The last scoop still uses the bed clock.
 func _release_shown(taken: Array) -> void:
 	if taken.is_empty() or _shown.is_empty():
 		return
@@ -2438,13 +2641,20 @@ func _release_shown(taken: Array) -> void:
 	for chip_v in taken:
 		var chip: Dictionary = chip_v
 		gone[int(chip["id"])] = true
-	var keep: Array = []
+	var fade_i := 0
 	for item_v in _shown:
 		var shown: Dictionary = item_v
-		if gone.has(int(shown["id"])):
+		if not gone.has(int(shown["id"])):
 			continue
-		keep.append(shown)
-	_shown = keep
+		if bool(shown.get("ghost", false)) and float(shown.get("alpha_to", 1.0)) <= 0.0:
+			continue
+		# Same end curve as the last scoop, without a one-frame delete.
+		# The alpha step is capped below so the steep start cannot repaint the chunk.
+		_begin_fade(shown, SCOOP_CHUNK_TIME, false)
+		_pin_fade_pose(shown)
+		shown["scoop_out"] = true
+		shown["fade_wait"] = float(fade_i) * SCOOP_CHUNK_GAP
+		fade_i += 1
 
 
 ## What the bowl draws. Logic chips still jump; this copy eases.
@@ -2459,8 +2669,9 @@ func presentation() -> Array:
 		chip["draw_k"] = 1.0
 		chip["vis_alpha"] = float(src.get("alpha", 1.0))
 		if not ghost and _press_vis > 0.0:
-			chip["h"] = float(src["h"]) * (1.0 - 0.035 * _press_vis)
-			chip["y"] = float(src["y"]) + 0.40 * _press_vis
+			# A deep press rewrites every piece. A shallow one stays under the diff.
+			chip["h"] = float(src["h"]) * (1.0 - 0.012 * _press_vis)
+			chip["y"] = float(src["y"]) + 0.12 * _press_vis
 		out.append(chip)
 	return out
 
@@ -2484,7 +2695,7 @@ func _tick_present(dt: float) -> void:
 	_present_sync()
 	if dt > 0.0:
 		var target_press := _press_k()
-		_press_vis = clampf(_press_vis + clampf(target_press - _press_vis, -0.06, 0.06), 0.0, 1.0)
+		_press_vis = clampf(_press_vis + clampf(target_press - _press_vis, -0.02, 0.02), 0.0, 1.0)
 	var frames := dt * 60.0
 	var keep: Array = []
 	for item_v in _shown:
@@ -2546,10 +2757,24 @@ func _tick_present(dt: float) -> void:
 				if bool(s.get("scoop_out", false)):
 					var inv := 1.0 - ua
 					ea = 1.0 - inv * inv
-				s["alpha"] = lerpf(float(s["alpha_from"]), float(s["alpha_to"]), ea)
+				var next_a := lerpf(float(s["alpha_from"]), float(s["alpha_to"]), ea)
+				if bool(s.get("scoop_out", false)):
+					# ea = 1-(1-ua)^2 is steep at the start (about 0.037 a frame)
+					# and flat at the end. Cap the drop so a 3-frame step stays
+					# under the interior threshold. The flat end is unchanged.
+					var room := 0.008 * maxf(dt * 60.0, 0.0)
+					var prev_a := float(s["alpha"])
+					if next_a < prev_a - room:
+						next_a = prev_a - room
+					if next_a > float(s["alpha_to"]) + 0.01:
+						s["alpha_left"] = maxf(float(s["alpha_left"]), dt)
+				s["alpha"] = next_a
 		if bool(s.get("drop_in", false)) and float(s.get("born_wait", 0.0)) <= 0.0 and float(s.get("alpha_left", 1.0)) <= 0.0 and float(s.get("left", 1.0)) <= 0.0:
 			s["drop_in"] = false
 			s["alpha"] = 1.0
+			s["grow_in"] = true
+			# The full size is aimed on the next sync. Don't treat the stamp as arrived.
+			s["grow_arm"] = 2
 		if dt > 0.0:
 			_clamp_step(s, px, py, pw, ph, prot, frames)
 		if bool(s.get("ghost", false)) and float(s["alpha"]) <= 0.02 and float(s["alpha_left"]) <= 0.0:
@@ -2578,8 +2803,32 @@ func _tick_present(dt: float) -> void:
 		else:
 			_bed_left = 0.0
 			ub = 1.0
-		var eb := ub * ub * (3.0 - 2.0 * ub)
-		_vis_progress = lerpf(_bed_from, _bed_to, eb)
+		# Downward eases are linear so the rim moves the same amount every frame.
+		# A smoothstep piles that motion into the middle and repaints the bowl.
+		var eb := ub if _bed_to < _bed_from else ub * ub * (3.0 - 2.0 * ub)
+		var want_vis := lerpf(_bed_from, _bed_to, eb)
+		if _bed_to >= _bed_from:
+			_vis_progress += clampf(want_vis - _vis_progress, -0.02, 0.02)
+		else:
+			_vis_progress = want_vis
+			if _bed_left <= 0.0 and _fan_shown > 0.05:
+				# The held ellipse just finished. Grow the next one up from nothing
+				# instead of stamping it at full size.
+				_fan_recover = true
+				_fan_shown = 0.02
+	if _fan_recover and not _easing_down():
+		var recover := bed_grow(_vis_progress)
+		_fan_shown = minf(recover, _fan_shown + 0.0012)
+		if _fan_shown >= recover - 0.008:
+			_fan_recover = false
+	if _mode == "grind" and not _easing_down() and not _fan_recover:
+		var want_fan := bed_grow(_vis_progress)
+		if _fan_shown <= 0.0:
+			_fan_shown = minf(want_fan, 0.02)
+		elif want_fan > _fan_shown:
+			_fan_shown = minf(want_fan, _fan_shown + 0.0004)
+		else:
+			_fan_shown = want_fan
 	if dt > 0.0:
 		_motion_bed = maxf(_motion_bed, absf(_vis_progress - prev_bed))
 	_ease_drawn_level(dt)
@@ -2594,17 +2843,22 @@ func _clamp_step(s: Dictionary, px: float, py: float, pw: float, ph: float, prot
 	var paced := minf(scale, 1.0)
 	# A detailed sprite shifted more than about two pixels over three frames
 	# rewrites almost every texel. Stay under that.
-	var cap_p := 0.12 * paced
+	var cap_p := 0.015 * paced
 	# Outgoing ghosts may shrink a little faster than a live piece. Still under
 	# the 6% frame limit, so a reset or re-drop does not finish in one frame.
-	var cap_s := 0.008 * paced
+	var cap_s := 0.005 * paced
 	if bool(s.get("drop_in", false)):
-		# 0.60 -> 1 over 0.38 s stays under the 6% frame cap.
-		cap_p = 0.16 * paced
-		cap_s = 0.050 * paced
+		# A fresh chunk fades in at a small size. Growing with the fade rewrote it.
+		cap_p = 0.08 * paced
+		cap_s = 0.010 * paced
+	elif bool(s.get("grow_in", false)):
+		cap_s = 0.004 * paced
 	elif bool(s.get("ghost", false)) and float(s.get("alpha_to", 1.0)) <= 0.02:
-		cap_s = 0.01 * paced
-	var cap_r := 1.1 * paced
+		cap_s = 0.006 * paced
+	else:
+		# Steady crush. A larger step rewrites the piece edge every beat.
+		cap_s = 0.0015 * paced
+	var cap_r := 0.20 * paced
 	var dx := float(s["x"]) - px
 	var dy := float(s["y"]) - py
 	var dist := sqrt(dx * dx + dy * dy)
@@ -2623,6 +2877,18 @@ func _clamp_step(s: Dictionary, px: float, py: float, pw: float, ph: float, prot
 	var drot := _wrap_deg(float(s["rot"]) - prot)
 	if absf(drot) > cap_r:
 		s["rot"] = prot + cap_r * (1.0 if drot >= 0.0 else -1.0)
+	if bool(s.get("grow_in", false)):
+		var armed := int(s.get("grow_arm", 0))
+		if armed > 0:
+			s["grow_arm"] = armed - 1
+		else:
+			var tw := maxf(float(s.get("tw", 0.0)), 0.01)
+			var th := maxf(float(s.get("th", 0.0)), 0.01)
+			var caught := absf(float(s["w"]) - tw) / tw < 0.08 and absf(float(s["h"]) - th) / th < 0.08
+			# Crushing pulls the target down through the picture. The drop grow is over.
+			var crushing := tw < float(s["w"]) * 1.02 and th < float(s["h"]) * 1.02
+			if caught or crushing:
+				s["grow_in"] = false
 
 
 func _record_motion() -> void:
@@ -2665,6 +2931,9 @@ func _present_sync() -> void:
 		_bed_to = progress
 		_bed_left = 0.0
 		_bed_color = mean_color()
+		_fan_shown = bed_grow(progress)
+		_fan_alpha = 0.92 * _fan_shown
+		_bed_hold_grow = _fan_shown
 		_present_snap = false
 		_filled_once = true
 		_last_pose = {}
@@ -2694,22 +2963,23 @@ func _present_sync() -> void:
 			continue
 		live[int(s["id"])] = s
 	if logical.is_empty():
-		var dur := BED_EASE_TIME if not _has_mortar else SCOOP_CHUNK_TIME
-		_begin_out_fade(_has_mortar)
+		var scooping := _has_mortar
+		var dur := SCOOP_CHUNK_TIME if scooping else PRESENT_REDROP_TIME
+		_begin_out_fade(scooping)
 		var fade_i := 0
 		for item_v in _shown:
 			var fading: Dictionary = item_v
 			var already := bool(fading.get("ghost", false)) and float(fading.get("alpha_to", 1.0)) <= 0.0 and float(fading.get("alpha_left", 0.0)) > 0.0
 			if already:
 				continue
-			_begin_fade(fading, dur, true)
-			if _has_mortar:
+			# Size stays put. Shrinking the sprite rewrites it; the alpha curve
+			# is what eases the chunk out.
+			_begin_fade(fading, dur, false)
+			if scooping:
+				_pin_fade_pose(fading)
 				fading["scoop_out"] = true
 				fading["fade_wait"] = float(fade_i) * SCOOP_CHUNK_GAP
 			fade_i += 1
-			var sk := 0.42
-			fading["tw"] = float(fading["sw"]) * sk
-			fading["th"] = float(fading["sh"]) * sk
 		_ease_bed(0.0)
 		return
 	var overlap := 0
@@ -2717,31 +2987,84 @@ func _present_sync() -> void:
 		if live.has(int(chip_v["id"])):
 			overlap += 1
 	# A new drop shares no ids with the previous bowl. The old sprites fade
-	# and shrink. Snapping them small in one frame rewrote the whole bowl.
+	# and shrink. The new mound waits until that fade has finished.
 	if overlap == 0:
+		_ease_bed(progress)
+		# Old sprites and the new mound share one clock, so neither side pops.
 		for item_v in _shown:
 			var s2: Dictionary = item_v
 			if bool(s2.get("ghost", false)):
 				continue
-			_begin_fade(s2, PRESENT_OUT_TIME, true)
-			s2["tw"] = float(s2["sw"]) * 0.42
-			s2["th"] = float(s2["sh"]) * 0.42
+			_begin_fade(s2, PRESENT_OUT_TIME, false)
 		var drop_i := 0
 		for chip_v2 in logical:
 			var born := _spawn_drop(chip_v2, drop_i)
-			born["born_wait"] = maxf(float(born.get("born_wait", 0.0)), _incoming_wait())
+			# Same footprint as the settled chunk, alpha only. A slide or a
+			# grow during the crossfade rewrites the whole sprite.
+			var fw := float(born["w"]) / DROP_IN_SCALE
+			var fh := float(born["h"]) / DROP_IN_SCALE
+			born["w"] = fw
+			born["h"] = fh
+			born["sw"] = fw
+			born["sh"] = fh
+			born["tw"] = fw
+			born["th"] = fh
+			born["x"] = float(born["tx"])
+			born["y"] = float(born["ty"])
+			born["sx"] = float(born["tx"])
+			born["sy"] = float(born["ty"])
+			born["left"] = 0.0
+			born["drop_in"] = false
+			born["grow_in"] = false
+			born["alpha_left"] = PRESENT_OUT_TIME
+			born["alpha_dur"] = PRESENT_OUT_TIME
+			born["born_wait"] = float(drop_i) * DROP_STAGGER
 			drop_i += 1
 			_shown.append(born)
-		_ease_bed(progress)
 		return
 	var next: Array = []
 	var extras: Array = []
 	var used: Dictionary = {}
 	var pending: Array[Dictionary] = []
+	var grain_n := 0
+	for chip_v in logical:
+		var gid := int(chip_v["id"])
+		if live.has(gid) and str(chip_v.get("kind", "")) == "dust" and str(live[gid].get("kind", "")) != "dust":
+			grain_n += 1
+	var grain_i := 0
 	for chip_v in logical:
 		var id := int(chip_v["id"])
 		if live.has(id):
+			var extra_before := extras.size()
 			_aim_visual(live[id], chip_v, extras)
+			if grain_n >= 4 and str(chip_v.get("kind", "")) == "dust" and extras.size() > extra_before:
+				var gwait := 0.85 * float(grain_i) / float(maxi(grain_n - 1, 1))
+				var gdur := 1.40
+				live[id]["born_wait"] = gwait
+				live[id]["alpha"] = 0.0
+				live[id]["alpha_from"] = 0.0
+				live[id]["alpha_to"] = 1.0
+				live[id]["alpha_left"] = gdur
+				live[id]["alpha_dur"] = gdur
+				var tiny := 0.012
+				live[id]["w"] = float(chip_v["w"]) * float(chip_v.get("draw_k", 1.0)) * tiny
+				live[id]["h"] = float(chip_v["h"]) * float(chip_v.get("draw_k", 1.0)) * tiny
+				live[id]["sw"] = float(live[id]["w"])
+				live[id]["sh"] = float(live[id]["h"])
+				live[id]["tw"] = float(live[id]["w"])
+				live[id]["th"] = float(live[id]["h"])
+				live[id]["tx"] = float(live[id]["x"])
+				live[id]["ty"] = float(live[id]["y"])
+				live[id]["left"] = 0.0
+				for ei in range(extra_before, extras.size()):
+					var ghost: Dictionary = extras[ei]
+					if not bool(ghost.get("ghost", false)):
+						continue
+					ghost["fade_wait"] = gwait
+					ghost["alpha_left"] = 1.40
+					ghost["alpha_dur"] = 1.40
+					ghost["left"] = 0.0
+				grain_i += 1
 			next.append(live[id])
 			used[id] = true
 		else:
@@ -2770,17 +3093,13 @@ func _present_sync() -> void:
 			born2["trot"] = float(parent["rot"])
 		# Start under the target and grow. A child born at the parent's full size
 		# pops thousands of pixels even while its alpha is fading in.
-		var born_k := 0.08
-		var span := 0.50
-		var born_time := PRESENT_BORN_TIME
-		if pending.size() >= 8:
-			born_k = 0.035
-			span = 0.95
-			born_time = 0.72
-		elif pending.size() >= 4:
-			born_k = 0.06
-			span = 0.62
-			born_time = 0.55
+		var born_k := 0.05
+		var span := 0.36
+		var born_time := 0.70
+		if pending.size() >= 2:
+			born_k = 0.012
+			span = 0.90
+			born_time = 2.20
 		born2["w"] = float(chip_v["w"]) * float(chip_v.get("draw_k", 1.0)) * born_k
 		born2["h"] = float(chip_v["h"]) * float(chip_v.get("draw_k", 1.0)) * born_k
 		born2["sw"] = float(born2["w"])
@@ -2790,17 +3109,27 @@ func _present_sync() -> void:
 		born2["alpha_to"] = 1.0
 		born2["alpha_left"] = born_time
 		born2["alpha_dur"] = born_time
-		if pending.size() >= 4:
+		if pending.size() >= 2:
 			var denom := float(maxi(pending.size() - 1, 1))
 			born2["born_wait"] = span * float(birth_i) / denom
 		birth_i += 1
 		_aim_visual(born2, chip_v, extras)
 		next.append(born2)
+	var dead: Array = []
 	for id_v in live.keys():
 		if used.has(id_v):
 			continue
-		var old: Dictionary = live[id_v]
-		_begin_fade(old, PRESENT_SPLIT_TIME, true)
+		dead.append(live[id_v])
+	var dead_i := 0
+	for old_v in dead:
+		var old: Dictionary = old_v
+		var split_dur := PRESENT_SPLIT_TIME
+		if dead.size() >= 2:
+			split_dur = 2.20
+		_begin_fade(old, split_dur, false)
+		if dead.size() >= 2:
+			old["fade_wait"] = 0.70 * float(dead_i) / float(maxi(dead.size() - 1, 1))
+		dead_i += 1
 		next.append(old)
 	for item_v in _shown:
 		var ghost: Dictionary = item_v
@@ -2822,15 +3151,39 @@ func _drops_settling() -> bool:
 	return false
 
 
+func _bed_alpha_now() -> float:
+	var level := _bed_draw_level()
+	var grow := bed_grow(_vis_progress)
+	var fading_out := _surface_left > 0.0 and _surface_to <= 0.001
+	var fade := _surface_k if fading_out or _visual_level >= 0.0 or not _has_mortar else bed_level_fade(level)
+	if fading_out:
+		fade = _surface_k
+	return 0.92 * clampf(grow, 0.0, 1.0) * clampf(fade, 0.0, 1.0)
+
+
 func _ease_bed(target: float) -> void:
 	var delta := target - _vis_progress
 	if _bed_left > 0.0 and absf(target - _bed_to) < 0.008:
 		return
 	if delta < -0.002:
+		var scooping := _has_mortar and _visual_level >= 0.0
+		if scooping and _bed_hold_grow > 0.05:
+			pass
+		elif scooping:
+			_bed_hold_grow = bed_grow(clampf(_vis_progress, 0.0, 1.0))
+			_fan_level_hold = _bed_draw_level()
+		else:
+			_bed_hold_grow = _fan_shown if _fan_shown > 0.01 else bed_grow(clampf(_vis_progress, 0.0, 1.0))
+		_bed_alpha0 = _fan_alpha if _fan_shown > 0.01 else _bed_alpha_now()
+		if _fan_level_hold < 0.0:
+			_fan_level_hold = _bed_draw_level()
 		_bed_from = _vis_progress
 		_bed_to = target
-		_bed_dur = PRESENT_REDROP_TIME
-		_bed_left = PRESENT_REDROP_TIME
+		# A scoop keeps the short clock. The long reset fade would still be
+		# moving the mound when the spoon reaches the pour.
+		var down_dur := 0.30 if scooping else PRESENT_REDROP_TIME
+		_bed_dur = down_dur
+		_bed_left = down_dur
 		return
 	# The new bed waits until a fresh drop has finished settling, and until
 	# an outgoing bed has fallen below about 30%.
@@ -2854,7 +3207,7 @@ func _ease_bed(target: float) -> void:
 			_surface_left = SURFACE_EASE
 		return
 	if delta > 0.0008:
-		var step := minf(delta, 0.0035)
+		var step := minf(delta, 0.0020)
 		_vis_progress += step
 		_bed_from = _vis_progress
 		_bed_to = _vis_progress
@@ -2880,8 +3233,10 @@ func _spawn_drop(chip: Dictionary, index: int) -> Dictionary:
 	vis["h"] = full_h * DROP_IN_SCALE
 	vis["sw"] = float(vis["w"])
 	vis["sh"] = float(vis["h"])
-	vis["tw"] = full_w
-	vis["th"] = full_h
+	# Stay at the small stamp until the fade finishes. Growing in the same
+	# frames as the alpha crosses the whole sprite in one step.
+	vis["tw"] = float(vis["w"])
+	vis["th"] = float(vis["h"])
 	var y0 := float(chip["y"]) - DROP_SETTLE
 	vis["y"] = y0
 	vis["sy"] = y0
@@ -2892,8 +3247,8 @@ func _spawn_drop(chip: Dictionary, index: int) -> Dictionary:
 	vis["alpha"] = 0.0
 	vis["alpha_from"] = 0.0
 	vis["alpha_to"] = 1.0
-	vis["alpha_left"] = DROP_IN_TIME
-	vis["alpha_dur"] = DROP_IN_TIME
+	vis["alpha_left"] = DROP_ALPHA_TIME
+	vis["alpha_dur"] = DROP_ALPHA_TIME
 	vis["left"] = DROP_IN_TIME
 	vis["dur"] = DROP_IN_TIME
 	vis["born_wait"] = float(index) * DROP_STAGGER
@@ -2943,8 +3298,8 @@ func _aim_visual(vis: Dictionary, chip: Dictionary, extras: Array) -> void:
 		ghost["alpha_from"] = float(vis["alpha"])
 		ghost["alpha_to"] = 0.0
 		ghost["alpha"] = float(vis["alpha"])
-		ghost["alpha_left"] = PRESENT_GRAIN_TIME
-		ghost["alpha_dur"] = PRESENT_GRAIN_TIME
+		ghost["alpha_left"] = 2.20
+		ghost["alpha_dur"] = 2.20
 		ghost["left"] = 0.0
 		ghost["tx"] = float(ghost["x"])
 		ghost["ty"] = float(ghost["y"])
@@ -2952,17 +3307,18 @@ func _aim_visual(vis: Dictionary, chip: Dictionary, extras: Array) -> void:
 		ghost["th"] = float(ghost["h"])
 		ghost["trot"] = float(ghost["rot"])
 		extras.append(ghost)
-		_ghost_seen = maxf(_ghost_seen, PRESENT_GRAIN_TIME)
+		_ghost_seen = maxf(_ghost_seen, 2.20)
 		vis["kind"] = "dust"
 		vis["sprite"] = 0
 		vis["cracked"] = false
 		vis["alpha_from"] = 0.0
 		vis["alpha_to"] = 1.0
 		vis["alpha"] = 0.0
-		vis["alpha_left"] = PRESENT_GRAIN_TIME
-		vis["alpha_dur"] = PRESENT_GRAIN_TIME
-		vis["w"] = float(chip["w"]) * float(chip.get("draw_k", 1.0)) * 0.30
-		vis["h"] = float(chip["h"]) * float(chip.get("draw_k", 1.0)) * 0.30
+		vis["alpha_left"] = 2.20
+		vis["alpha_dur"] = 2.20
+		# Keep a small stamp. The old picture is the ghost, fading on the same clock.
+		vis["w"] = float(chip["w"]) * float(chip.get("draw_k", 1.0)) * 0.20
+		vis["h"] = float(chip["h"]) * float(chip.get("draw_k", 1.0)) * 0.20
 		_last_pose.erase(int(vis["id"]))
 	vis["kind"] = str(chip["kind"])
 	vis["sprite"] = int(chip["sprite"])
@@ -2974,8 +3330,9 @@ func _aim_visual(vis: Dictionary, chip: Dictionary, extras: Array) -> void:
 	if bool(vis.get("drop_in", false)):
 		vis["tx"] = float(chip["x"])
 		vis["ty"] = float(chip["y"])
-		vis["tw"] = float(chip["w"]) * float(chip.get("draw_k", 1.0))
-		vis["th"] = float(chip["h"]) * float(chip.get("draw_k", 1.0))
+		# Hold the small stamp. The full size is aimed only after the fade.
+		vis["tw"] = float(vis["w"])
+		vis["th"] = float(vis["h"])
 		return
 	var tx := float(chip["x"])
 	var ty := float(chip["y"])
@@ -2983,10 +3340,12 @@ func _aim_visual(vis: Dictionary, chip: Dictionary, extras: Array) -> void:
 	var th := float(chip["h"]) * float(chip.get("draw_k", 1.0))
 	# Stay small while the fade-in runs. Growing and appearing in the same
 	# frames rewrites the whole sprite.
-	var fading_in := not grain and float(vis.get("alpha_left", 0.0)) > 0.0 and float(vis.get("alpha_to", 1.0)) > 0.9 and float(vis.get("alpha_from", 0.0)) < 0.05
+	var fading_in := float(vis.get("alpha_left", 0.0)) > 0.0 and float(vis.get("alpha_to", 1.0)) > 0.9 and float(vis.get("alpha_from", 0.0)) < 0.05
 	if fading_in:
 		tw = float(vis["w"])
 		th = float(vis["h"])
+		tx = float(vis["x"])
+		ty = float(vis["y"])
 	var trot := float(vis["rot"]) + _wrap_deg(float(chip["rot"]) - float(vis["rot"]))
 	var dist := sqrt(pow(tx - float(vis["x"]), 2.0) + pow(ty - float(vis["y"]), 2.0))
 	var rel := maxf(
@@ -2994,6 +3353,9 @@ func _aim_visual(vis: Dictionary, chip: Dictionary, extras: Array) -> void:
 		absf(th - float(vis["h"])) / maxf(float(vis["h"]), 0.5)
 	)
 	var deg := absf(_wrap_deg(trot - float(vis["rot"])))
+	# A pestle nudge smaller than a pixel rewrites every dust edge all grind.
+	if not grain and not fading_in and float(vis.get("left", 0.0)) <= 0.0 and dist < 2.2 and rel < 0.08 and deg < 8.0:
+		return
 	var shift := sqrt(pow(tx - float(vis["tx"]), 2.0) + pow(ty - float(vis["ty"]), 2.0))
 	var size_shift := maxf(
 		absf(tw - float(vis["tw"])) / maxf(float(vis["tw"]), 0.5),
@@ -3050,6 +3412,20 @@ func _move_dur(dist: float, rel: float, deg: float, grain: bool) -> float:
 	return maxf(dur, 0.15)
 
 
+func _pin_fade_pose(s: Dictionary) -> void:
+	s["left"] = 0.0
+	s["sx"] = float(s["x"])
+	s["sy"] = float(s["y"])
+	s["sw"] = float(s["w"])
+	s["sh"] = float(s["h"])
+	s["srot"] = float(s["rot"])
+	s["tx"] = float(s["x"])
+	s["ty"] = float(s["y"])
+	s["tw"] = float(s["w"])
+	s["th"] = float(s["h"])
+	s["trot"] = float(s["rot"])
+
+
 func _begin_fade(s: Dictionary, dur: float, shrink: bool) -> void:
 	if bool(s.get("ghost", false)) and float(s.get("alpha_to", 1.0)) <= 0.0 and float(s.get("alpha_left", 0.0)) > 0.0:
 		return
@@ -3060,6 +3436,13 @@ func _begin_fade(s: Dictionary, dur: float, shrink: bool) -> void:
 	s["alpha_left"] = dur
 	s["alpha_dur"] = dur
 	if not shrink:
+		# A crush tween still running would keep resizing the chunk under the fade.
+		s["left"] = 0.0
+		s["tx"] = float(s["x"])
+		s["ty"] = float(s["y"])
+		s["tw"] = float(s["w"])
+		s["th"] = float(s["h"])
+		s["trot"] = float(s["rot"])
 		return
 	s["sx"] = float(s["x"])
 	s["sy"] = float(s["y"])

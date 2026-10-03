@@ -887,9 +887,11 @@ func _sync_liquid() -> void:
 	var mortar_on := Game.mortar != null or transfer_t >= 0.0 or not _flights.is_empty() or parts_busy
 	if _pile != null and not _pile.residue().is_empty():
 		mortar_on = true
-	if _mortar_fx and mortar_on:
+	# Always repaint. Stopping queue_redraw freezes the last disc, and the
+	# next drop then deletes it in one frame.
+	if _mortar_fx:
 		_mortar_fx.queue_redraw()
-	if _mortar_over and (parts_busy or transfer_t >= 0.0):
+	if _mortar_over:
 		_mortar_over.queue_redraw()
 	if _stream and (pour != "" or not _flights.is_empty()):
 		_stream.queue_redraw()
@@ -1438,10 +1440,16 @@ func _draw_pieces(c: Control) -> void:
 		_draw_mortar_bed(c)
 		if _mortar_parts:
 			var hide_mound := _pile.bed_active() or _pile.grind_progress() >= MortarPile.BED_EPS or _pile.visual_progress() >= MortarPile.BED_EPS
+			if _pile.has_method("outgoing_k") and _pile.outgoing_k() > 0.02:
+				hide_mound = true
+			if _mortar_parts.has_method("set_outgoing") and _pile.has_method("outgoing_k"):
+				_mortar_parts.set_outgoing(_pile.outgoing_k())
+			if _mortar_parts.has_method("set_bed_active"):
+				_mortar_parts.set_bed_active(_pile.bed_active())
 			_mortar_parts.draw_below(c, ZONE_MORTAR.position, ZONE_MORTAR.size, logical, aim, _pile.residue(), hide_mound, _pile.heap_ready())
 	for chip in shown:
 		var vis_a := float(chip.get("vis_alpha", 1.0))
-		if vis_a <= 0.02:
+		if vis_a <= 0.004:
 			continue
 		var lay: Dictionary = _pile.layout_chip(chip)
 		var poly: PackedVector2Array = lay["poly"]
@@ -1494,8 +1502,9 @@ func _draw_mortar_bed(c: Control) -> void:
 			center /= float(n)
 			var points := PackedVector2Array()
 			var colors := PackedColorArray()
+			var mid := Color(minf(col.r * 1.22, 1.0), minf(col.g * 1.18, 1.0), minf(col.b * 1.08, 1.0), col.a)
 			points.append(center)
-			colors.append(Color(minf(col.r * 1.22, 1.0), minf(col.g * 1.18, 1.0), minf(col.b * 1.08, 1.0), col.a))
+			colors.append(mid)
 			for i in n:
 				var speckle := 0.06 * sin(float(i) * 2.7 + 0.4)
 				points.append(pts[i])
@@ -1563,6 +1572,8 @@ func _place_pestle() -> void:
 	if OS.get_environment("KIM_PESTLE_HOLD") == "1" and transfer_t < 0.0:
 		return
 	if transfer_t < 0.0 and _pile.has_method("drops_settling") and _pile.drops_settling():
+		return
+	if transfer_t < 0.0 and _pile.has_method("pestle_locked") and _pile.pestle_locked():
 		return
 	var aim: Dictionary = _pile.pestle()
 	var box := Vector2(MortarPile.PESTLE_W, MortarPile.PESTLE_H) / 100.0 * ZONE_MORTAR.size

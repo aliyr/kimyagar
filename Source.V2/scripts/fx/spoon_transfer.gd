@@ -199,10 +199,15 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 		# through the drag and is carried out on the lift.
 		if not _had_material:
 			blob = 0.0
-		elif local < 0.34:
+		elif which == 0 and local < 0.34:
 			blob = 0.0
+		elif local < 0.34:
+			# Cycle 1 ends with a full mound. The next frame used to set blob
+			# to 0 because the second dip had not started dragging yet.
+			blob = 1.0
 		elif local < 0.62:
-			blob = _ease_in_out((local - 0.34) / 0.28)
+			var growing := _ease_in_out((local - 0.34) / 0.28)
+			blob = growing if which == 0 else maxf(1.0, growing)
 		else:
 			blob = 1.0
 	elif t < T_SCOOP + T_CARRY:

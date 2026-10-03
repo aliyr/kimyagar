@@ -111,6 +111,38 @@ var _pestle_dist: Array[PackedByteArray] = []
 var _flow_grind_travel := 0.0
 var _flow_mouth := Vector2.ZERO
 var _flow_mouth_r := Vector2(200.0, 40.0)
+var _r23_phase := "boot"
+var _r23_wait := 0
+var _r23_hist: Array = []
+var _r23_win := ""
+var _r23_left := 0
+var _r23_fx: Array[int] = []
+var _r23_raw: Array[int] = []
+var _r23_beds: Array[float] = []
+var _r23_grind: Dictionary = {}
+var _r23_kind := ""
+var _r23_prev_n := 0
+var _r23_split: Array[int] = []
+var _r23_split_left := 0
+var _r23_cyc := false
+var _r23_pre := 0
+var _r23_pre_at := 0.0
+var _r23_chunk := 0
+var _r23_chunk_at := 0.0
+var _r23_fade3 := 0
+var _r23_cyc1 := -1
+var _r23_pour := 0
+var _r23_nodes := 0
+var _r23_skip := 0
+var _r23_next := ""
+var _r23_scoop_i := 0
+var _r23_tail := 0
+var _r23_tail_max := 0
+var _r23_pre_max := 0
+var _r23_bed_prev := -1.0
+var _r23_haze_done := false
+var _r23_hold := 0
+var _r23_cm_on := false
 
 
 func setup(shot: String) -> void:
@@ -440,6 +472,9 @@ func _save(host) -> void:
 
 
 func _flow_frame(host) -> void:
+	if OS.get_environment("KIM_R23") == "1":
+		_r23_frame(host)
+		return
 	if host._shot_frames < 6:
 		_flow_snap(host)
 		return
@@ -2094,3 +2129,639 @@ func _flow_write(host, img: Image, label: String) -> void:
 	var path := "%s/%s.jpg" % [dir, label]
 	var err := crop.save_jpg(path, 0.86)
 	print("FILM ", path, " ", crop.get_width(), "x", crop.get_height(), " err ", err)
+
+
+func _r23_frame(host) -> void:
+	_r23_frame_inner(host)
+	# Snap after the read. The viewport image is the previous draw, so the
+	# pose stored with it has to be the one already on screen.
+	_flow_snap(host)
+
+
+func _r23_frame_inner(host) -> void:
+	if host._shot_frames < 6:
+		return
+	var img: Image = host.get_viewport().get_texture().get_image()
+	var ox := 240 if img.get_width() >= 2300 else 0
+	if _r23_phase == "boot":
+		_flow_load_tex()
+		_flow_empty = img.duplicate()
+		var empty_crop := _bowl_crop(img, ox)
+		_flow_empty_lum = _luma_bytes(empty_crop)
+		_flow_empty_cover = _pestle_cover(empty_crop, _crop_origin(ox), _snap)
+		_r23_nodes = host.get_tree().get_node_count()
+		Game.clear_mortar()
+		Game.add_classic_unit("chamomile")
+		if host.workshop._pile != null:
+			host.workshop._pile.motion_reset()
+		_r23_kind = "chamomile"
+		_r23_phase = "g_wait"
+		_r23_wait = 0
+		_r23_next = ""
+		print("R23 NODES ", _r23_nodes, " f ", host._shot_frames)
+		if OS.get_environment("KIM_R23_ONE") == "1":
+			_r23_scoop_i = 0
+			_r23_phase = "sc_arm"
+		return
+	var fx3 := _r23_push(host, img, ox)
+	if _r23_phase == "win":
+		if _r23_win == "" and _r23_left <= 0:
+			_r23_phase = _r23_next
+			_r23_wait = 0
+			_r23_enter(host)
+		return
+	if _r23_phase == "g_wait":
+		_r23_wait += 1
+		if _r23_wait == 2 and host.workshop._pile != null and host.workshop._pile.has_method("park_pestle"):
+			host.workshop._pile.park_pestle()
+		if _r23_settling(host.workshop._pile) and _r23_wait < 600:
+			return
+		Game.start_grinding()
+		if host.workshop._pile != null:
+			host.workshop._pile.motion_reset()
+		_r23_grind = {}
+		_r23_phase = "g_cham"
+		_r23_wait = 0
+		print("R23 ACT grind f ", host._shot_frames)
+		return
+	if _r23_phase == "g_cham":
+		_r23_wait += 1
+		if _r23_wait == 80:
+			_piece_probe(host, img, ox)
+			var haze := _flow_gap(img, ox, host)
+			print("R23 HAZE ", haze, " corners ", _piece_nz, "/", _piece_samples, " worst ", _piece_worst, " ring ", _piece_ring, " f ", host._shot_frames)
+		if _mortar_work() >= 3.50 and _r23_wait > 40:
+			if not _r23_haze_done:
+				_r23_haze_done = true
+				_piece_probe(host, img, ox)
+				var haze_s := _flow_gap(img, ox, host)
+				print("R23 HAZESETTLED ", haze_s, " corners ", _piece_nz, "/", _piece_samples, " worst ", _piece_worst, " ring ", _piece_ring, " f ", host._shot_frames)
+				_flow_write(host, img, "r23-settled")
+			_r23_finish_grind("chamomile")
+			if OS.get_environment("KIM_R23_FAST") == "1":
+				_r23_scoop_i = 0
+				_r23_phase = "sc_arm"
+				return
+			Game.reset_brew()
+			_r23_arm("after_reset")
+			_r23_phase = "win"
+			_r23_next = "redrop"
+			print("R23 ACT after_reset f ", host._shot_frames, " bed ", _r23_bed(host))
+		return
+	if _r23_phase == "g_cm":
+		_r23_wait += 1
+		if not _r23_cm_on:
+			if (_r23_settling(host.workshop._pile) or _r23_has_ghost(host.workshop._pile)) and _r23_wait < 500:
+				return
+			_r23_cm_on = true
+			_r23_grind.erase("cm")
+			Game.start_grinding()
+			if host.workshop._pile != null:
+				host.workshop._pile.motion_reset()
+			_r23_wait = 0
+			print("R23 ACT cm_grind f ", host._shot_frames)
+			return
+		if _r23_portion("mint") >= 3.45 and _r23_wait > 30:
+			_r23_finish_grind("cm")
+			_r23_pool("chamomile+mint", ["chamomile", "cm"])
+			_r23_pause()
+			_r23_phase = "win"
+			_r23_win = ""
+			_r23_left = 0
+			_r23_next = "drop_poppy"
+			print("R23 ACT mix_done f ", host._shot_frames, " bed ", _r23_bed(host))
+		return
+	if _r23_phase == "redrop":
+		Game.add_classic_unit("chamomile")
+		_r23_pause()
+		_r23_arm("redrop")
+		_r23_phase = "win"
+		_r23_next = "g_refill"
+		print("R23 ACT redrop f ", host._shot_frames, " bed ", _r23_bed(host))
+		return
+	if _r23_phase == "g_refill":
+		_r23_wait += 1
+		if _mortar_work() >= 3.50 and _r23_wait > 40:
+			Game.add_classic_unit("chamomile")
+			_r23_pause()
+			_r23_arm("refill_same")
+			_r23_phase = "win"
+			_r23_next = "g_back"
+			print("R23 ACT refill_same f ", host._shot_frames, " bed ", _r23_bed(host))
+		return
+	if _r23_phase == "g_back":
+		_r23_wait += 1
+		if _mortar_work() >= 3.50 and _r23_wait > 40:
+			Game.add_classic_unit("mint")
+			_r23_pause()
+			_r23_arm("second_id")
+			_r23_phase = "win"
+			_r23_next = "g_cm"
+			print("R23 ACT second_id f ", host._shot_frames, " bed ", _r23_bed(host))
+		return
+	if _r23_phase == "drop_poppy":
+		Game.reset_brew()
+		Game.add_classic_unit("poppy")
+		_r23_pause()
+		_r23_arm("drop_poppy")
+		_r23_phase = "win"
+		_r23_next = "drop_poppy2"
+		print("R23 ACT drop_poppy f ", host._shot_frames)
+		return
+	if _r23_phase == "drop_poppy2":
+		Game.add_classic_unit("poppy")
+		_r23_pause()
+		_r23_arm("drop_poppy2")
+		_r23_phase = "win"
+		_r23_next = "drop_borage"
+		print("R23 ACT drop_poppy2 f ", host._shot_frames)
+		return
+	if _r23_phase == "drop_borage":
+		Game.reset_brew()
+		Game.add_classic_unit("borage")
+		_r23_pause()
+		_r23_arm("drop_borage")
+		_r23_phase = "win"
+		_r23_next = "drop_borage2"
+		print("R23 ACT drop_borage f ", host._shot_frames)
+		return
+	if _r23_phase == "drop_borage2":
+		Game.add_classic_unit("borage")
+		_r23_pause()
+		_r23_arm("drop_borage2")
+		_r23_phase = "win"
+		_r23_next = "g_bs"
+		print("R23 ACT drop_borage2 f ", host._shot_frames)
+		return
+	if _r23_phase == "g_bs":
+		_r23_wait += 1
+		if _r23_portion("saffron") >= 3.45 and _r23_wait > 40:
+			_r23_finish_grind("bs")
+			if OS.get_environment("KIM_R23_SCOOP") != "1":
+				_r23_done(host)
+				return
+			_r23_scoop_i = 0
+			_r23_phase = "sc_arm"
+		return
+	if _r23_phase == "sc_arm":
+		_r23_begin_scoop()
+		return
+	if _r23_phase == "sc_grind":
+		_r23_wait += 1
+		if _mortar_work() >= 3.40 and _r23_wait > 30:
+			_r23_pause()
+			host.workshop._on_mortar_tap()
+			_r23_pre = 0
+			_r23_pre_at = 0.0
+			_r23_chunk = 0
+			_r23_chunk_at = 0.0
+			_r23_fade3 = 0
+			_r23_pre_max = 0
+			_r23_cyc = false
+			_r23_cyc1 = -1
+			_r23_pour = 0
+			_r23_tail = 0
+			_r23_tail_max = 0
+			_r23_wait = 0
+			_r23_phase = "sc_run"
+			print("R23 SCOOPSTART ", _r23_kind, " f ", host._shot_frames)
+			_flow_write(host, host.get_viewport().get_texture().get_image(), "grind-%s" % _r23_kind)
+		return
+	if _r23_phase == "sc_run":
+		_r23_scoop(host, fx3)
+		return
+
+
+func _r23_enter(host) -> void:
+	if _r23_phase == "g_bs":
+		Game.reset_brew()
+		Game.add_classic_unit("borage")
+		Game.add_classic_unit("saffron")
+		if host.workshop._pile != null and host.workshop._pile.has_method("park_pestle"):
+			host.workshop._pile.park_pestle()
+		Game.start_grinding()
+		_r23_kind = "saffron"
+		_r23_prev_n = 0
+		if host.workshop._pile != null:
+			host.workshop._pile.motion_reset()
+		print("R23 ACT g_bs f ", host._shot_frames)
+		return
+	if _r23_phase == "g_cm":
+		_r23_cm_on = false
+		# Park while this wait is still outside the grind bucket. Parking on the
+		# same frame as start_grinding counts the lean-to-grind snap.
+		if host.workshop._pile != null and host.workshop._pile.has_method("park_pestle"):
+			host.workshop._pile.park_pestle()
+		return
+	if _r23_phase.begins_with("g_"):
+		_r23_go()
+
+
+func _r23_begin_scoop() -> void:
+	var names: Array[String] = ["chamomile", "mint", "poppy", "ginger", "borage", "saffron"]
+	if _r23_scoop_i >= names.size():
+		return
+	var id := names[_r23_scoop_i]
+	Game.reset_brew()
+	Game.add_classic_unit(id)
+	Game.start_grinding()
+	_r23_kind = id
+	_r23_phase = "sc_grind"
+	_r23_wait = 0
+
+
+func _r23_portion(id: String) -> float:
+	if Game.mortar == null:
+		return 0.0
+	var portions_v: Variant = Game.mortar.get("portions", null)
+	if portions_v is Array:
+		for portion_v in portions_v:
+			if not (portion_v is Dictionary):
+				continue
+			var portion: Dictionary = portion_v
+			if str(portion.get("ingredientId", "")) != id:
+				continue
+			var qty := float(portion.get("quantity", 1.0))
+			if qty <= 0.0:
+				return 0.0
+			return float(portion.get("grindWork", 0.0)) / qty
+	if str(Game.mortar.get("ingredientId", "")) == id:
+		return float(Game.mortar.get("grindWork", 0.0))
+	return 0.0
+
+
+func _r23_has_ghost(pile) -> bool:
+	if pile == null:
+		return false
+	for chip_v in pile.presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)) and float(chip.get("vis_alpha", 0.0)) > 0.05:
+			return true
+	return false
+
+
+func _r23_dropping(pile) -> bool:
+	if pile == null:
+		return false
+	for chip_v in pile.presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)):
+			continue
+		if bool(chip.get("drop_in", false)):
+			return true
+	return false
+
+
+func _r23_settling(pile) -> bool:
+	if pile == null:
+		return false
+	for chip_v in pile.presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)):
+			continue
+		if bool(chip.get("drop_in", false)) or bool(chip.get("grow_in", false)):
+			return true
+		if float(chip.get("vis_alpha", 1.0)) < 0.9 and str(chip.get("kind", "")) != "dust":
+			return true
+	return false
+
+
+func _r23_bed(host) -> float:
+	if host.workshop._pile == null:
+		return -1.0
+	return host.workshop._pile.bed_coverage()
+
+
+func _r23_pause() -> void:
+	if Game.mortar != null:
+		Game.mortar["grinding"] = false
+
+
+func _r23_go() -> void:
+	if Game.mortar != null:
+		Game.start_grinding()
+
+
+func _r23_arm(tag: String) -> void:
+	_r23_win = tag
+	# Crossfade runs about four seconds. The old 120-frame window ended first.
+	_r23_left = 260
+	_r23_hold = 0
+	_r23_skip = 0
+	_r23_fx = []
+	_r23_raw = []
+	_r23_beds = []
+	_r23_bed_prev = -1.0
+
+
+func _r23_finish_grind(id: String) -> void:
+	var arr: Array = _r23_grind.get(id, [])
+	if arr.is_empty():
+		return
+	print("R23 GRIND %s %s" % [id, _r23_stat(arr)])
+
+
+func _r23_pool(label: String, ids: Array) -> void:
+	var arr: Array = []
+	for id_v in ids:
+		for v in _r23_grind.get(str(id_v), []):
+			arr.append(v)
+	if arr.is_empty():
+		return
+	print("R23 GRIND %s %s" % [label, _r23_stat(arr)])
+
+
+func _r23_stat(arr: Array) -> String:
+	var s: Array = arr.duplicate()
+	s.sort()
+	var n := s.size()
+	var med := int(s[n / 2])
+	var p90 := int(s[mini(n - 1, int(float(n) * 0.90))])
+	var mx := int(s[n - 1])
+	return "n %s med %s p90 %s max %s" % [n, med, p90, mx]
+
+
+func _r23_flush() -> void:
+	var fxm := 0
+	var rawm := 0
+	var step := 0.0
+	for v in _r23_fx:
+		fxm = maxi(fxm, int(v))
+	for v2 in _r23_raw:
+		rawm = maxi(rawm, int(v2))
+	var prev := -1.0
+	for b in _r23_beds:
+		if prev >= 0.0:
+			step = maxf(step, absf(float(b) - prev))
+		prev = float(b)
+	var fx0 := -1 if _r23_fx.is_empty() else int(_r23_fx[0])
+	var raw0 := -1 if _r23_raw.is_empty() else int(_r23_raw[0])
+	print("R23 WIN %s fx3max %s fx3_0 %s raw1max %s raw1_0 %s bedstep %.4f" % [_r23_win, fxm, fx0, rawm, raw0, step])
+	print("R23 FX3 %s %s" % [_r23_win, _r23_join(_r23_fx)])
+	print("R23 RAW1 %s %s" % [_r23_win, _r23_join(_r23_raw)])
+	var beds := ""
+	for b2 in _r23_beds:
+		beds += "%.3f " % float(b2)
+	print("R23 BED %s %s" % [_r23_win, beds])
+	_r23_win = ""
+	_r23_left = 0
+
+
+func _r23_join(arr: Array) -> String:
+	var out := ""
+	for v in arr:
+		out += "%s " % int(v)
+	return out
+
+
+func _r23_push(host, img: Image, ox: int) -> int:
+	var crop := _bowl_crop(img, ox)
+	var rgba := _rgba(crop)
+	var origin := _crop_origin(ox)
+	var w := crop.get_width()
+	var h := crop.get_height()
+	var pose: Dictionary = _snap.duplicate(true)
+	_r23_hist.append({"rgba": rgba, "pose": pose, "w": w, "h": h, "origin": origin})
+	var fx3 := -1
+	var raw1 := -1
+	if _r23_hist.size() >= 4:
+		var old: Dictionary = _r23_hist[_r23_hist.size() - 4]
+		fx3 = _interior_drgb(rgba, old["rgba"], w, h, origin, pose, old["pose"], 1)
+	if _r23_hist.size() >= 2:
+		var prev: Dictionary = _r23_hist[_r23_hist.size() - 2]
+		raw1 = _interior_drgb(rgba, prev["rgba"], w, h, origin, pose, prev["pose"], 0)
+	if _r23_hist.size() > 8:
+		_r23_hist.pop_front()
+	var pile = host.workshop._pile
+	var bed := 0.0
+	if pile != null:
+		bed = pile.bed_coverage()
+		_note_motion(host)
+		if _r23_phase == "g_bs":
+			var n: int = pile.chips().size()
+			if _r23_prev_n > 0 and n - _r23_prev_n >= 4 and _r23_split_left <= 0:
+				_r23_split_left = 10
+				_r23_split = []
+				print("R23 SPLIT n %s from %s bed %.3f f %s" % [n, _r23_prev_n, bed, host._shot_frames])
+			_r23_prev_n = n
+	if _r23_skip > 0:
+		_r23_skip -= 1
+	elif _r23_left > 0 and fx3 >= 0:
+		_r23_fx.append(fx3)
+		_r23_raw.append(maxi(raw1, 0))
+		_r23_beds.append(bed)
+		_r23_left -= 1
+		if (_r23_win == "after_reset" or _r23_win == "second_id" or _r23_win == "redrop") and (_r23_left == 99 or _r23_left == 60 or _r23_left == 20):
+			_flow_write(host, img, "r23-%s-%s" % [_r23_win, _r23_left])
+		if _r23_left == 0:
+			_r23_flush()
+	var gid := ""
+	if _r23_phase == "g_cham":
+		gid = "chamomile"
+	elif _r23_phase == "g_cm":
+		gid = "cm"
+	elif _r23_phase == "g_bs":
+		gid = "bs"
+	if fx3 >= 0 and gid != "" and not _r23_dropping(pile) and Game.mortar != null and bool(Game.mortar.get("grinding", false)):
+		var bucket: Array = _r23_grind.get(gid, [])
+		bucket.append(fx3)
+		_r23_grind[gid] = bucket
+		if fx3 >= 800:
+			var chips_n: int = 0 if pile == null else pile.chips().size()
+			var growing := 0
+			var hint := ""
+			if pile != null:
+				for chip_v in pile.presentation():
+					if bool(chip_v.get("grow_in", false)):
+						growing += 1
+				if pile.has_method("fade_hint"):
+					hint = pile.fade_hint()
+			print("R23 SPIKE %s fx %s work %.2f chips %s grow %s f %s %s" % [gid, fx3, _mortar_work(), chips_n, growing, host._shot_frames, hint])
+	if _r23_left > 0 and fx3 >= 400 and pile != null and pile.has_method("fade_hint"):
+		var blob := ""
+		if _r23_hist.size() >= 4:
+			blob = _r23_blob(_r23_hist[_r23_hist.size() - 1], _r23_hist[_r23_hist.size() - 4])
+		print("R23 PEAK %s fx %s raw %s f %s %s %s" % [_r23_win, fx3, maxi(raw1, 0), host._shot_frames, pile.fade_hint(), blob])
+	if _r23_split_left > 0 and fx3 >= 0:
+		_r23_split.append(fx3)
+		_r23_split_left -= 1
+		if _r23_split_left == 0:
+			print("R23 SPLITFX ", _r23_join(_r23_split))
+			_r23_split = []
+	return fx3
+
+
+func _r23_blob(cur: Dictionary, old: Dictionary) -> String:
+	var rgba: PackedByteArray = cur["rgba"]
+	var prev: PackedByteArray = old["rgba"]
+	var w := int(cur["w"])
+	var h := int(cur["h"])
+	var origin: Vector2 = cur["origin"]
+	var pose: Dictionary = cur["pose"]
+	var pose_old: Dictionary = old["pose"]
+	var center := origin + Vector2(140.0, 70.0)
+	var shift := _cam_delta(pose, pose_old)
+	var sx0 := int(round(shift.x))
+	var sy0 := int(round(shift.y))
+	var n := 0
+	var sr := 0
+	var sg := 0
+	var sb := 0
+	var or0 := 0
+	var og0 := 0
+	var ob0 := 0
+	var bright := 0
+	var minx := w
+	var miny := h
+	var maxx := 0
+	var maxy := 0
+	var prad := 14.0
+	if pose.has("head_vp") and pose_old.has("head_vp"):
+		prad = maxf(prad, (pose["head_vp"] as Vector2).distance_to(pose_old["head_vp"]))
+	for i in w * h:
+		var x := i % w
+		var y := int(i / w)
+		var sx := x + sx0
+		var sy := y + sy0
+		if sx < 0 or sy < 0 or sx >= w or sy >= h:
+			continue
+		var ic := i * 4
+		var io := (sy * w + sx) * 4
+		if ic + 2 >= rgba.size() or io + 2 >= prev.size():
+			continue
+		var dr := int(rgba[ic]) - int(prev[io])
+		var dg := int(rgba[ic + 1]) - int(prev[io + 1])
+		var db := int(rgba[ic + 2]) - int(prev[io + 2])
+		if absi(dr) + absi(dg) + absi(db) < 18:
+			continue
+		var dx := (float(x) + origin.x - center.x) / 120.0
+		var dy := (float(y) + origin.y - center.y) / 56.0
+		if dx * dx + dy * dy > 1.0:
+			continue
+		var vp := origin + Vector2(float(x), float(y))
+		if _near_pestle(vp, pose, prad) or _near_pestle(vp, pose_old, prad):
+			continue
+		n += 1
+		sr += int(rgba[ic])
+		sg += int(rgba[ic + 1])
+		sb += int(rgba[ic + 2])
+		or0 += int(prev[io])
+		og0 += int(prev[io + 1])
+		ob0 += int(prev[io + 2])
+		var luma_now := int(rgba[ic]) + int(rgba[ic + 1]) + int(rgba[ic + 2])
+		var luma_old := int(prev[io]) + int(prev[io + 1]) + int(prev[io + 2])
+		if luma_now > luma_old:
+			bright += 1
+		minx = mini(minx, x)
+		miny = mini(miny, y)
+		maxx = maxi(maxx, x)
+		maxy = maxi(maxy, y)
+	if n <= 0:
+		return "blob 0"
+	return "blob n %s new %s,%s,%s old %s,%s,%s bright %s box %s,%s %sx%s" % [n, sr / n, sg / n, sb / n, or0 / n, og0 / n, ob0 / n, bright, minx, miny, maxx - minx + 1, maxy - miny + 1]
+
+
+func _r23_scoop(host, fx3: int) -> void:
+	_r23_wait += 1
+	var phase := str(_snap.get("phase", ""))
+	var level := float(_snap.get("level", 1.0))
+	# Pre-end chunk fade: spoon and pestle hidden, 3-frame interior XOR,
+	# while the scoop is still above the tail band (level 0.09–0.14).
+	if (phase == "dip" or phase == "scoop") and level > 0.14 and level <= 0.80 and _r23_hist.size() >= 4:
+		var cur_s: Dictionary = _r23_hist[_r23_hist.size() - 1]
+		var old_s: Dictionary = _r23_hist[_r23_hist.size() - 4]
+		var d3 := _interior_drgb(cur_s["rgba"], old_s["rgba"], int(cur_s["w"]), int(cur_s["h"]), cur_s["origin"], cur_s["pose"], old_s["pose"], 2)
+		if d3 > _r23_pre:
+			_r23_pre = d3
+			_r23_pre_at = level
+			print("R23 PREPIX ", d3, " f ", host._shot_frames, " level %.3f " % level, _r23_blob(cur_s, old_s))
+		# Last-chunk band, just above the tail. The wider pre max also catches the lift.
+		if level <= 0.22 and d3 > _r23_chunk:
+			_r23_chunk = d3
+			_r23_chunk_at = level
+	var tr = host.workshop._transfer
+	if tr != null and tr.t >= 0.0:
+		if not _r23_cyc and tr.t >= 1.12:
+			_r23_cyc = true
+			_r23_cyc1 = -2
+		elif _r23_cyc1 == -2 and _r23_hist.size() >= 2:
+			var cur: Dictionary = _r23_hist[_r23_hist.size() - 1]
+			var prev: Dictionary = _r23_hist[_r23_hist.size() - 2]
+			_r23_cyc1 = _interior_drgb(cur["rgba"], prev["rgba"], int(cur["w"]), int(cur["h"]), cur["origin"], cur["pose"], prev["pose"], 0)
+			print("R23 CYC1 ", _r23_kind, " ", _r23_cyc1, " f ", host._shot_frames, " level %.3f" % level)
+			_flow_write(host, host.get_viewport().get_texture().get_image(), "scoop-%s" % _r23_kind)
+	if phase == "scoop" and level <= 0.14 and level >= 0.09 and _r23_tail == 0 and _r23_hist.size() >= 2:
+		_r23_tail = 31
+		if tr != null:
+			var mxw := 0.0
+			var dust_n := 0
+			var coarse_n := 0
+			for chip_v in tr.chips:
+				var chip: Dictionary = chip_v
+				mxw = maxf(mxw, float(chip.get("w", 0.0)))
+				if str(chip.get("kind", "")) == "dust":
+					dust_n += 1
+				else:
+					coarse_n += 1
+			var blob := float(host.workshop._transfer_last.get("blob", 0.0))
+			print("R23 CARGO ", _r23_kind, " n ", tr.chips.size(), " dust ", dust_n, " coarse ", coarse_n, " maxw %.1f" % mxw, " motes ", tr.motes.size(), " blob %.2f" % blob)
+	if _r23_tail > 0 and _r23_hist.size() >= 2:
+		var cur_t: Dictionary = _r23_hist[_r23_hist.size() - 1]
+		var prev_t: Dictionary = _r23_hist[_r23_hist.size() - 2]
+		var drgb := _interior_drgb(cur_t["rgba"], prev_t["rgba"], int(cur_t["w"]), int(cur_t["h"]), cur_t["origin"], cur_t["pose"], prev_t["pose"], 2)
+		if drgb > _r23_tail_max and drgb >= 200:
+			var hint := ""
+			var pile = host.workshop._pile
+			if pile != null and pile.has_method("fade_hint"):
+				hint = pile.fade_hint()
+			var amt := 0.0
+			if pile != null:
+				amt = float(pile.residue().get("amount", 0.0))
+			print("R23 TAILPIX ", drgb, " f ", host._shot_frames, " level %.3f " % level, hint, " heap %.3f " % amt, _r23_blob(cur_t, prev_t))
+		_r23_tail_max = maxi(_r23_tail_max, drgb)
+		if _r23_hist.size() >= 4:
+			var old_t: Dictionary = _r23_hist[_r23_hist.size() - 4]
+			var d3t := _interior_drgb(cur_t["rgba"], old_t["rgba"], int(cur_t["w"]), int(cur_t["h"]), cur_t["origin"], cur_t["pose"], old_t["pose"], 2)
+			_r23_fade3 = maxi(_r23_fade3, d3t)
+		_r23_tail -= 1
+	if phase == "pour" or phase == "exit":
+		if phase == "pour" and _r23_pour == 0:
+			_flow_write(host, host.get_viewport().get_texture().get_image(), "pour-%s" % _r23_kind)
+		if _r23_hist.size() >= 2:
+			var cur_p: Dictionary = _r23_hist[_r23_hist.size() - 1]
+			var prev_p: Dictionary = _r23_hist[_r23_hist.size() - 2]
+			# Spoon hidden. This is the leftover heap, not the spoon body.
+			var step := _interior_drgb(cur_p["rgba"], prev_p["rgba"], int(cur_p["w"]), int(cur_p["h"]), cur_p["origin"], cur_p["pose"], prev_p["pose"], 2)
+			if step > _r23_pour and step >= 200:
+				var hint_p := ""
+				var pile_p = host.workshop._pile
+				if pile_p != null and pile_p.has_method("fade_hint"):
+					hint_p = pile_p.fade_hint()
+				var amt_p := 0.0
+				if pile_p != null:
+					amt_p = float(pile_p.residue().get("amount", 0.0))
+				print("R23 POURPIX ", step, " ", phase, " f ", host._shot_frames, " level %.3f " % level, hint_p, " heap %.3f " % amt_p, _r23_blob(cur_p, prev_p))
+			_r23_pour = maxi(_r23_pour, step)
+	var ended: bool = float(host.workshop.transfer_t) < 0.0 and _r23_wait > 20
+	if not ended:
+		return
+	print("R23 SCOOP %s pre %s at %.3f chunk %s at %.3f fade3 %s cyc1 %s pour %s tail %s" % [_r23_kind, _r23_pre, _r23_pre_at, _r23_chunk, _r23_chunk_at, _r23_fade3, _r23_cyc1, _r23_pour, _r23_tail_max])
+	if OS.get_environment("KIM_R23_FAST") == "1" or OS.get_environment("KIM_R23_ONE") == "1":
+		_r23_done(host)
+		return
+	_r23_scoop_i += 1
+	var names: Array[String] = ["chamomile", "mint", "poppy", "ginger", "borage", "saffron"]
+	if _r23_scoop_i >= names.size():
+		_r23_done(host)
+		return
+	_r23_phase = "sc_arm"
+
+
+func _r23_done(host) -> void:
+	var mot := ""
+	if host.workshop._pile != null:
+		var report: Dictionary = host.workshop._pile.motion_report()
+		mot = "pos %.3f size %.4f rot %.2f" % [float(report["pos"]), float(report["size"]), float(report["rot"])]
+	print("R23 DONE ", mot, " nodes ", _r23_nodes, " motion ", _motion_line(host))
+	print("FILM done flow")
+	host.get_tree().quit(0)
