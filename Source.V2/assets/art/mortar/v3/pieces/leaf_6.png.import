@@ -15,7 +15,7 @@ dest_files=["res://.godot/imported/leaf_6.png-bea7d11510183024181b8841ce185d0c.c
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
 compress/lossy_quality=0.85
 compress/uastc_level=0

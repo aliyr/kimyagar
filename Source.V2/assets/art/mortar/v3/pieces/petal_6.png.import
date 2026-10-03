@@ -15,7 +15,7 @@ dest_files=["res://.godot/imported/petal_6.png-5a8cc773a575271352fd92df0da04ced.
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
 compress/lossy_quality=0.85
 compress/uastc_level=0

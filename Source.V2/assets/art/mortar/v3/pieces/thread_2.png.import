@@ -15,7 +15,7 @@ dest_files=["res://.godot/imported/thread_2.png-7a4de357e0925526c4e6b4df0ddcf3aa
 
 [params]
 
-compress/mode=0
+compress/mode=1
 compress/high_quality=false
 compress/lossy_quality=0.85
 compress/uastc_level=0

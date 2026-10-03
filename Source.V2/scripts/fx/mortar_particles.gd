@@ -33,20 +33,6 @@ var _scale: float = 1.0
 var _reduced: bool = false
 var _specular: bool = true
 var _live_shadow: bool = true
-var _shadow_ready := false
-var _shadow_alpha := 0.0
-var _shadow_rx := 0.0
-var _shadow_ry := 0.0
-var _shadow_at := Vector2.ZERO
-## Leftover heap grows in after the bowl empties. It does not pop on.
-var _heap_k := 0.0
-var _heap_dt := 0.0
-var _outgoing := 0.0
-var _bed_live := false
-var _mound_shown := 0.0
-var _mound_hex := ""
-var _mound_hold := false
-var _mound_hold_frac := 0.0
 var _sweeps: Array[Dictionary] = []
 var _aroma_i: float = 0.0
 var _aroma_hex: String = FALLBACK
@@ -56,18 +42,12 @@ var _flash_hex: String = "#ffe3a0"
 var _wipe_t0: float = -1.0
 var _wipe_dur: float = 500.0
 var _residue_hex: String = ""
-var _effects := true
-var _settled := false
 
 
 func _init(seed: int = 1) -> void:
 	_s = seed & 0xFFFFFFFF
 	if _s == 0:
 		_s = 1
-
-
-func set_effects(on: bool) -> void:
-	_effects = on
 
 
 func set_budget(scale: float, reduced_motion: bool = false, specular: bool = true, live_shadow: bool = true) -> void:
@@ -80,7 +60,6 @@ func set_budget(scale: float, reduced_motion: bool = false, specular: bool = tru
 func update(dt: float) -> void:
 	_emit_aroma_stream(dt)
 	_step(dt)
-	_heap_dt += maxf(dt, 0.0)
 
 
 func busy() -> bool:
@@ -88,9 +67,6 @@ func busy() -> bool:
 
 
 func burst(kind: String, at: Vector2 = Vector2.ZERO, opts: Dictionary = {}) -> void:
-	_settled = false
-	if _effects_quiet(kind):
-		return
 	match kind:
 		"strike":
 			_burst_strike(at, opts)
@@ -133,23 +109,6 @@ func burst(kind: String, at: Vector2 = Vector2.ZERO, opts: Dictionary = {}) -> v
 func set_aroma(intensity: float, color: Color) -> void:
 	_aroma_i = clampf(intensity, 0.0, 1.0)
 	_aroma_hex = _color_hex(color)
-	if _aroma_i > 0.01:
-		_settled = false
-
-
-## After the bowl is empty, leftovers die inside this many seconds.
-func settle(seconds: float = 2.0) -> void:
-	if _settled:
-		return
-	_settled = true
-	_aroma_i = 0.0
-	_flash_t0 = -1.0
-	_sweeps = []
-	for particle_v in _particles:
-		var p: Dictionary = particle_v
-		var remain: float = float(p["ttl"]) - float(p["life"])
-		if remain > seconds:
-			p["ttl"] = float(p["life"]) + seconds
 
 
 func brush(ms: float = 500.0) -> void:
@@ -190,8 +149,6 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 		var local: Vector2 = _map(Vector2(float(p["x"]), float(p["y"])), origin, scale)
 		var col: Color = _parse_hex(str(p["color"]))
 		var kind: String = str(p["kind"])
-		if kind != "ripple" and not _particle_visible(local, p, alpha, origin, scale):
-			continue
 		if kind == "ripple":
 			col.a = alpha
 			c.draw_ellipse(local, maxf(0.4, size * scale.x), maxf(0.4, size * 0.36 * scale.y), col, false, 1.6 * scale.x, false)
@@ -210,47 +167,16 @@ func draw(c: CanvasItem, origin: Vector2, zone: Vector2) -> void:
 	_draw_flash(c, origin, scale, now)
 
 
-func set_outgoing(k: float) -> void:
-	_outgoing = clampf(k, 0.0, 1.0)
-
-
-func set_bed_active(on: bool) -> void:
-	_bed_live = on
-
-
-func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary, skip_mound: bool = false, heap_ok: bool = true) -> void:
+func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim: Dictionary, residue: Dictionary, skip_mound: bool = false) -> void:
 	_remember_residue(residue)
 	var scale := Vector2(zone.x / ZONE_W, zone.y / ZONE_H)
 	var wipe_u: float = _wipe_u()
-	var snapped := bool(residue.get("snap", false))
-	if snapped and chips.is_empty():
-		_heap_k = 1.0
-		_heap_dt = 0.0
-	elif chips.is_empty() and not heap_ok:
-		# The old bed is still up. A leftover mound must not pop in under it.
-		_heap_k = 0.0
-		_heap_dt = 0.0
-	var heap_want := 0.0
-	if not residue.is_empty() and chips.is_empty() and wipe_u < 1.0 and (snapped or heap_ok):
-		heap_want = 1.0
-	var heap_k := _advance_heap(heap_want)
-	if snapped and chips.is_empty():
-		heap_k = 1.0
-		_heap_k = 1.0
-	if heap_k > 0.004 and not residue.is_empty() and chips.is_empty() and wipe_u < 1.0 and (snapped or heap_ok):
-		_draw_residue(c, origin, scale, residue, wipe_u, heap_k)
+	if not residue.is_empty() and chips.is_empty() and wipe_u < 1.0:
+		_draw_residue(c, origin, scale, residue, wipe_u)
 	# While the spoon transfer owns the pile, the bed ellipse is the surface.
 	# The dust mound is dozens of ellipses and would paint over that bed.
-	if not skip_mound:
-		_draw_mound_eased(c, origin, scale, chips)
-	else:
-		# The spoon or the ground bed owns this frame. Do not paint a second
-		# mound over the chunks; just remember a smaller value for later.
-		_mound_hold = false
-		if _mound_shown > 0.02:
-			_mound_shown = maxf(0.0, _mound_shown - 0.008)
-		else:
-			_mound_shown = 0.0
+	if not skip_mound and not chips.is_empty():
+		_draw_mound(c, origin, scale, chips)
 	_draw_pestle_shadow(c, origin, scale, chips, aim)
 
 
@@ -272,10 +198,7 @@ static func particle_alpha(p: Dictionary) -> float:
 		if t < 0.6:
 			return 1.0
 		return 1.0 - (t - 0.6) / 0.4
-	# Dust eases in over a fixed span. A one-frame life jump must not flash the disc.
-	var age: float = float(p["life"])
-	var u := clampf(age / 0.90, 0.0, 1.0)
-	var fade_in := u * u * (3.0 - 2.0 * u)
+	var fade_in: float = minf(1.0, t * 6.0)
 	return fade_in * (1.0 - t)
 
 
@@ -291,14 +214,8 @@ static func particle_size(p: Dictionary) -> float:
 	if kind == "aroma":
 		return size * (1.0 + t * 0.9)
 	if kind == "dust":
-		return size * (0.06 + t * 0.32)
+		return size * (1.0 + t * 0.3)
 	return size
-
-
-func _effects_quiet(kind: String) -> bool:
-	if _effects:
-		return false
-	return kind == "strike" or kind == "dust" or kind == "puff" or kind == "sparks" or kind == "fine"
 
 
 func _budget() -> float:
@@ -323,9 +240,9 @@ func _burst_strike(at: Vector2, opts: Dictionary) -> void:
 		})
 
 
-func _burst_land(_opts: Dictionary) -> void:
-	# A drop used to puff yellow dust across the empty bowl. Strikes make the dust.
-	return
+func _burst_land(opts: Dictionary) -> void:
+	var p: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY - 2.0)
+	_emit_puff(p.x, p.y, _opt_hex(opts, FALLBACK), 0.8)
 
 
 func _burst_fine(opts: Dictionary) -> void:
@@ -333,7 +250,8 @@ func _burst_fine(opts: Dictionary) -> void:
 	var color: String = _opt_hex(opts, FALLBACK)
 	_emit_puff(p.x, p.y, color, 1.2)
 	_emit_sparks(p.x, p.y, 6)
-	# The full-mouth flash washed thousands of pixels the moment the spoon scooped.
+	_flash_t0 = _now_ms()
+	_flash_hex = color
 
 
 func _burst_spill(opts: Dictionary) -> void:
@@ -343,18 +261,17 @@ func _burst_spill(opts: Dictionary) -> void:
 
 
 func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: float) -> void:
-	var n: int = _count(3.0 + fineness * 5.0)
+	var n: int = _count(5.0 + fineness * 9.0)
 	var drag: float = 2.4 + fineness * 1.6
 	var gravity: float = 40.0 * (1.0 - fineness * 0.7)
-	for i in n:
+	for _i in n:
 		var ang: float = _range(-PI * 0.95, -PI * 0.05)
 		var speed: float = _range(30.0, 90.0) * (1.0 - fineness * 0.45)
 		var px: float = x + _range(-6.0, 6.0)
 		var py: float = y + _range(-3.0, 2.0)
-		var ttl: float = _range(0.55, 1.05) + fineness * 0.4
-		var size: float = _range(0.55, 1.15) + fineness * 0.28
+		var ttl: float = _range(0.45, 0.95) + fineness * 0.4
+		var size: float = _range(2.2, 5.5) + fineness * 2.0
 		var color: String = _pick(colors, FALLBACK)
-		var gap := 0.48 / float(maxi(n, 1))
 		_push({
 			"kind": "dust",
 			"x": px,
@@ -366,7 +283,6 @@ func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: floa
 			"color": color,
 			"gravity": gravity,
 			"drag": drag,
-			"delay": gap * float(i),
 		})
 
 
@@ -530,11 +446,6 @@ func _step(dt: float) -> void:
 	var next: Array[Dictionary] = []
 	for particle_v in _particles:
 		var p: Dictionary = particle_v
-		var delay := float(p.get("delay", 0.0))
-		if delay > 0.0:
-			p["delay"] = maxf(0.0, delay - dt)
-			next.append(p)
-			continue
 		p["life"] = float(p["life"]) + dt
 		if float(p["life"]) >= float(p["ttl"]):
 			continue
@@ -605,43 +516,32 @@ func _draw_sweeps(c: CanvasItem, origin: Vector2, scale: Vector2, now: float) ->
 			var k: float = (1.0 - float(i) / 9.0) * fade * strength
 			var col := Color(1.0, 244.0 / 255.0, 214.0 / 255.0, k * 0.85)
 			var rad: float = (2.2 + (1.0 - float(i) / 9.0) * 2.4) * scale.x
-			var at := Vector2(px, py)
-			var zone_r := rad / (scale.x if absf(scale.x) > 0.0001 else 1.0)
-			if not MortarPile.circle_inside(_zone_of(at, origin, scale), zone_r):
-				continue
-			c.draw_circle(at, maxf(0.4, rad), col)
+			c.draw_circle(Vector2(px, py), maxf(0.4, rad), col)
 	_sweeps = alive
 
 
-func _draw_flash(_c: CanvasItem, _origin: Vector2, _scale: Vector2, now: float) -> void:
-	# The full-mouth flash is not drawn. The timer still expires so busy() clears.
+func _draw_flash(c: CanvasItem, origin: Vector2, scale: Vector2, now: float) -> void:
 	if _flash_t0 < 0.0:
 		return
-	if (now - _flash_t0) / 520.0 >= 1.0:
+	var t: float = (now - _flash_t0) / 520.0
+	if t >= 1.0:
 		_flash_t0 = -1.0
+		return
+	var center: Vector2 = _map(_zone_to_scene(MOUTH_CX, MOUTH_CY), origin, scale)
+	var grow: float = 1.0 + t * 0.12
+	var rx: float = (MOUTH_RX / 100.0) * ZONE_W * grow * scale.x
+	var ry: float = (MOUTH_RY / 100.0) * ZONE_H * grow * scale.y
+	var col: Color = _parse_hex(_flash_hex)
+	col.a = (1.0 - t) * 0.6
+	c.draw_ellipse(center, maxf(0.4, rx), maxf(0.4, ry), col, false, (3.0 + (1.0 - t) * 5.0) * scale.x, false)
 
 
-func _advance_heap(want: float) -> float:
-	# Sim time, not the wall clock. A slow frame must not dump the whole heap.
-	var dt := minf(_heap_dt, 0.05)
-	_heap_dt = 0.0
-	var step := minf(dt / 1.20, 0.028)
-	if want >= _heap_k:
-		_heap_k = minf(want, _heap_k + step)
-	else:
-		_heap_k = maxf(want, _heap_k - step)
-	return _heap_k
-
-
-func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dictionary, wipe_u: float, heap_k: float = 1.0) -> void:
-	var grow := heap_k * heap_k * (3.0 - 2.0 * heap_k)
-	var amount: float = float(residue.get("amount", 0.0)) * grow
+func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dictionary, wipe_u: float) -> void:
+	var amount: float = float(residue.get("amount", 0.0))
 	var hex: String = _residue_color_hex(residue)
 	var scene: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY)
-	# Ease in from nothing. A 22% ellipse on the first frame read as a full mound.
-	var span := grow
-	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * 0.92 * span
-	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * 1.5 * span
+	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * 0.92
+	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * 1.5
 	var eased := 0.0
 	var use_clip := false
 	if wipe_u > 0.0:
@@ -662,7 +562,7 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 		var keep_w: float = rx * 2.1 * (1.0 - eased)
 		var top: float = scene.y - ry * 3.0
 		clip = _map_rect(Rect2(left, top, keep_w, ry * 6.0), origin, scale)
-	_paint_radial(c, center, rx * scale.x, ry * scale.y, stops_t, stops_c, use_clip, clip, true)
+	_paint_radial(c, center, rx * scale.x, ry * scale.y, stops_t, stops_c, use_clip, clip)
 	var speck: Color = Color(col.r, col.g, col.b, 0.55 * amount * fade)
 	for i in 14:
 		var a: float = (float(i) / 14.0) * PI * 2.0 + 0.4
@@ -674,62 +574,28 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 				continue
 		var local: Vector2 = _map(at, origin, scale)
 		var speck_r: float = (1.1 + float((i * 13) % 5) * 0.3) * scale.x
-		if not MortarPile.circle_inside(local, speck_r):
-			continue
 		c.draw_circle(local, maxf(0.3, speck_r), speck)
 
 
-func _dust_frac(chips: Array) -> float:
+func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -> void:
 	var total := 0.0
 	var dust_area := 0.0
+	var dust_colors: Array = []
 	for chip_v in chips:
 		if not (chip_v is Dictionary):
 			continue
 		var chip: Dictionary = chip_v
 		var area: float = float(chip.get("w", 0.0)) * float(chip.get("h", 0.0))
 		total += area
-		if str(chip.get("kind", "")) == "dust":
-			dust_area += area
-	if total <= 0.0:
-		return 0.0
-	return dust_area / total
-
-
-func _draw_mound_eased(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -> void:
-	var target := _dust_frac(chips)
-	var hex := ""
-	if target > 0.05:
-		var colors: Array = []
-		for chip_v in chips:
-			if chip_v is Dictionary and str(chip_v.get("kind", "")) == "dust" and chip_v.get("color", null) != null:
-				colors.append(_any_hex(chip_v.get("color", FALLBACK)))
-		hex = _mix_hex(colors)
-	# A logical refill zeroes the dust fraction in one frame. Hold the ellipse
-	# and fade it with the outgoing bed instead of deleting it.
-	if _outgoing > 0.02:
-		if not _mound_hold:
-			_mound_hold = true
-			_mound_hold_frac = maxf(_mound_shown, target)
-			if _mound_hex == "":
-				_mound_hex = hex
-		var shown := _mound_hold_frac * _outgoing
-		_mound_shown = shown
-		if shown > 0.02 and _mound_hex != "":
-			_paint_mound(c, origin, scale, shown, _mound_hex)
+		if str(chip.get("kind", "")) != "dust":
+			continue
+		dust_area += area
+		if chip.has("color") and chip.get("color", null) != null:
+			dust_colors.append(_any_hex(chip.get("color", FALLBACK)))
+	var frac: float = 0.0 if total <= 0.0 else dust_area / total
+	if frac <= 0.05:
 		return
-	_mound_hold = false
-	var step := 0.012
-	if target + 0.001 < _mound_shown:
-		_mound_shown = maxf(target, _mound_shown - step)
-	else:
-		_mound_shown = minf(target, _mound_shown + step)
-	if hex != "":
-		_mound_hex = hex
-	if _mound_shown > 0.02 and _mound_hex != "" and not chips.is_empty():
-		_paint_mound(c, origin, scale, _mound_shown, _mound_hex)
-
-
-func _paint_mound(c: CanvasItem, origin: Vector2, scale: Vector2, frac: float, hex: String) -> void:
+	var hex: String = _mix_hex(dust_colors)
 	var scene: Vector2 = _zone_to_scene(FLOOR_CX, FLOOR_CY - 1.5)
 	var rx: float = (FLOOR_RX / 100.0) * ZONE_W * (0.55 + 0.45 * frac)
 	var ry: float = (FLOOR_RY / 100.0) * ZONE_H * (1.4 + 0.8 * frac)
@@ -741,32 +607,31 @@ func _paint_mound(c: CanvasItem, origin: Vector2, scale: Vector2, frac: float, h
 	_paint_radial(c, shadow_at, lrx * 1.05, lry * 0.9, PackedFloat32Array([0.0, 1.0]), [
 		Color(shade.r, shade.g, shade.b, 0.38 * frac),
 		Color(shade.r, shade.g, shade.b, 0.0),
-	], false, Rect2(), true)
+	], false, Rect2())
 	var body: Color = _parse_hex(hex)
+	# Offset radial (highlight up-left of the mound) approximated with stacked ellipses.
+	# Web radial is centered up-left of the ellipse. Stack a centered body, then that offset highlight.
 	_paint_radial(c, center, lrx, lry, PackedFloat32Array([0.0, 0.5, 0.86, 1.0]), [
 		Color(body.r, body.g, body.b, 0.9 * frac),
 		Color(body.r, body.g, body.b, 0.9 * frac),
 		Color(body.r, body.g, body.b, 0.55 * frac),
 		Color(body.r, body.g, body.b, 0.0),
-	], false, Rect2(), true)
+	], false, Rect2())
 	var hi := Vector2(center.x - lrx * 0.18, center.y - lry * 0.55)
 	_paint_radial(c, hi, maxf(0.4, lrx * 0.42), maxf(0.4, lry * 0.42), PackedFloat32Array([0.0, 1.0]), [
 		Color(body.r, body.g, body.b, 0.98 * frac),
 		Color(body.r, body.g, body.b, 0.0),
-	], false, Rect2(), true)
+	], false, Rect2())
 	var foot := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 0.32 * frac)
-	_fill_ellipse(c, Vector2(center.x, center.y + lry * 0.42), maxf(0.4, lrx * 0.72), maxf(0.4, lry * 0.38), foot, true)
+	c.draw_ellipse(Vector2(center.x, center.y + lry * 0.42), maxf(0.4, lrx * 0.72), maxf(0.4, lry * 0.38), foot, true, -1.0, false)
 	for i in 46:
 		var a: float = float(i) * 2.399963
 		var rad: float = sqrt((float(i) + 0.5) / 46.0)
 		var px: float = center.x + cos(a) * rad * lrx * 0.88
 		var py: float = center.y + sin(a) * rad * lry * 0.82
-		var speck_at := Vector2(px, py)
-		var speck_r: float = (0.7 + float((i * 7) % 4) * 0.25) * scale.x
-		if not MortarPile.circle_inside(speck_at, speck_r):
-			continue
 		var speck: Color = Color(40.0 / 255.0, 20.0 / 255.0, 6.0 / 255.0, 0.28 * frac) if i % 3 == 0 else Color(1.0, 248.0 / 255.0, 230.0 / 255.0, 0.22 * frac)
-		c.draw_circle(speck_at, maxf(0.25, speck_r), speck)
+		var speck_r: float = (0.7 + float((i * 7) % 4) * 0.25) * scale.x
+		c.draw_circle(Vector2(px, py), maxf(0.25, speck_r), speck)
 
 
 func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array, aim: Dictionary) -> void:
@@ -774,27 +639,8 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 		return
 	var mode: String = str(aim.get("mode", "lean"))
 	if mode == "lean":
-		# The grind pose used to drop this ellipse on the frame the pestle leaned.
-		if _shadow_alpha <= 0.012 or not _shadow_ready:
-			_shadow_alpha = 0.0
-			_shadow_ready = false
-			return
-		_shadow_alpha = maxf(0.0, _shadow_alpha - 0.012)
-		var shade_lean := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 1.0)
-		var a_lean := _shadow_alpha
-		_paint_radial(c, _shadow_at, _shadow_rx * scale.x, _shadow_ry * scale.y, PackedFloat32Array([0.0, 0.7, 1.0]), [
-			Color(shade_lean.r, shade_lean.g, shade_lean.b, a_lean),
-			Color(shade_lean.r, shade_lean.g, shade_lean.b, a_lean * 0.5),
-			Color(shade_lean.r, shade_lean.g, shade_lean.b, 0.0),
-		], false, Rect2(), true)
 		return
-	# An empty bowl used to delete the contact shadow in one frame.
-	var leaving: bool = chips.is_empty() and mode != "grind"
-	if leaving and _shadow_alpha <= 0.02:
-		_shadow_ready = false
-		return
-	# A fresh drop is raw pieces only. The contact shadow read as haze in the gaps.
-	if float(aim.get("progress", 1.0)) < MortarPile.BED_EPS and float(aim.get("impact", 0.0)) < 0.05:
+	if chips.is_empty() and mode != "grind":
 		return
 	var lift: float = float(aim.get("lift", 0.0))
 	var impact: float = float(aim.get("impact", 0.0))
@@ -805,117 +651,17 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	var rx_zone: float = HEAD_R_X * (1.05 + lift * 0.5)
 	var rx: float = (rx_zone / 100.0) * ZONE_W
 	var ry: float = ((rx_zone * MORTAR_ASPECT * 0.42) / 100.0) * ZONE_H
-	var alpha := 0.22 * (1.0 - lift * 0.55) + impact * 0.06
-	if leaving:
-		alpha = 0.0
+	var alpha: float = 0.34 * (1.0 - lift * 0.55) + impact * 0.1
 	var center: Vector2 = _map(scene, origin, scale)
-	# The contact shadow used to pulse with the beat and rewrite a ring of pixels.
-	if not _shadow_ready:
-		_shadow_alpha = 0.0
-		_shadow_rx = rx * 0.25
-		_shadow_ry = ry * 0.25
-		_shadow_at = center
-		_shadow_ready = true
-	# A one-frame appearance used to stamp the whole contact ellipse.
-	_shadow_alpha += clampf(alpha - _shadow_alpha, -0.015, 0.015)
-	_shadow_rx += clampf(rx - _shadow_rx, -rx * 0.04, rx * 0.04)
-	_shadow_ry += clampf(ry - _shadow_ry, -ry * 0.04, ry * 0.04)
-	var gap := center - _shadow_at
-	if gap.length() > 1.4:
-		gap = gap.normalized() * 1.4
-	_shadow_at += gap
-	alpha = _shadow_alpha
-	rx = _shadow_rx
-	ry = _shadow_ry
-	center = _shadow_at
 	var shade := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 1.0)
-	# Dark contact shadow. It stays inside the opening; rising dust is a different layer.
 	_paint_radial(c, center, rx * scale.x, ry * scale.y, PackedFloat32Array([0.0, 0.7, 1.0]), [
 		Color(shade.r, shade.g, shade.b, alpha),
 		Color(shade.r, shade.g, shade.b, alpha * 0.5),
 		Color(shade.r, shade.g, shade.b, 0.0),
-	], false, Rect2(), true)
+	], false, Rect2())
 
 
-func _fill_ellipse(c: CanvasItem, center: Vector2, rx: float, ry: float, col: Color, clip_bowl: bool) -> void:
-	if col.a <= 0.001 or rx <= 0.05 or ry <= 0.05:
-		return
-	var erx := rx
-	var ery := ry
-	# Stay on draw_ellipse. A polygon here splits the cauldron batches.
-	if clip_bowl and not _ellipse_in_bowl(center, erx, ery):
-		var scale := 1.0
-		for _i in 5:
-			scale *= 0.84
-			if _ellipse_in_bowl(center, erx * scale, ery * scale):
-				break
-		erx *= scale
-		ery *= scale
-		if not _ellipse_in_bowl(center, erx, ery):
-			return
-	c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
-
-
-func _ellipse_in_bowl(center: Vector2, rx: float, ry: float) -> bool:
-	for i in 8:
-		var a := TAU * float(i) / 8.0
-		if not MortarPile.within_margin(center + Vector2(cos(a) * rx, sin(a) * ry)):
-			return false
-	return true
-
-
-func _zone_of(draw_pt: Vector2, origin: Vector2, scale: Vector2) -> Vector2:
-	var zone_pos := Vector2(ZONE_X, ZONE_Y)
-	var sx := scale.x if absf(scale.x) > 0.0001 else 1.0
-	var sy := scale.y if absf(scale.y) > 0.0001 else 1.0
-	return (draw_pt - (zone_pos - origin)) / Vector2(sx, sy)
-
-
-func quiet_fresh() -> void:
-	var keep: Array[Dictionary] = []
-	var center := MortarPile.interior_center()
-	for particle_v in _particles:
-		var p: Dictionary = particle_v
-		if str(p.get("kind", "")) == "ripple":
-			keep.append(p)
-			continue
-		var local := Vector2(float(p.get("x", 0.0)), float(p.get("y", 0.0))) - Vector2(ZONE_X, ZONE_Y)
-		if local.distance_squared_to(center) > 180.0 * 180.0:
-			keep.append(p)
-	_particles = keep
-	_aroma_i = 0.0
-	_sweeps = []
-	_flash_t0 = -1.0
-	_wipe_t0 = -1.0
-	_shadow_ready = false
-	_shadow_alpha = 0.0
-	_heap_k = 0.0
-	_heap_dt = 0.0
-
-
-func _particle_visible(local: Vector2, p: Dictionary, alpha: float, origin: Vector2, scale: Vector2) -> bool:
-	var z := _zone_of(local, origin, scale)
-	var rad := _zone_radius(p, scale)
-	var d := z - MortarPile.interior_center()
-	if d.length_squared() > 180.0 * 180.0:
-		return true
-	if MortarPile.circle_inside(z, rad):
-		return true
-	var kind := str(p.get("kind", ""))
-	if kind == "dust" or kind == "puff" or kind == "trail":
-		return MortarPile.rising_dust_ok(z, rad, float(p.get("vy", 0.0)), alpha)
-	return false
-
-
-func _zone_radius(p: Dictionary, scale: Vector2) -> float:
-	var sx := scale.x if absf(scale.x) > 0.0001 else 1.0
-	var size := particle_size(p) * sx
-	if str(p.get("kind", "")) == "spark":
-		size += 3.0
-	return size / sx
-
-
-func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2, clip_bowl: bool = false) -> void:
+func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2) -> void:
 	if rx <= 0.05 or ry <= 0.05:
 		return
 	var rings := 12
@@ -927,12 +673,10 @@ func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t
 		var erx: float = maxf(0.4, rx * t)
 		var ery: float = maxf(0.4, ry * t)
 		if not use_clip:
-			_fill_ellipse(c, center, erx, ery, col, clip_bowl)
+			c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
 			continue
 		var poly: PackedVector2Array = _ellipse_poly(center, erx, ery, 40)
 		poly = _clip_rect(poly, clip)
-		if clip_bowl:
-			poly = MortarPile.clip_to_interior(poly)
 		if poly.size() >= 3:
 			c.draw_colored_polygon(poly, col)
 

@@ -232,8 +232,7 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 			_released = true
 			_release()
 		if k4 > 0.10:
-			# The ribbon grows out of the lip over 0.2 s. It does not pop in at full width.
-			pouring = clampf((k4 - 0.10) / (0.20 / T_DROP), 0.0, 1.0)
+			pouring = 1.0
 		if _released and not _landed:
 			var pour := clampf((k4 - DROP_AT) / (1.0 - DROP_AT), 0.0, 1.0)
 			_place_fall(pour)
@@ -265,11 +264,6 @@ func update(dt: float, pile: MortarPile) -> Dictionary:
 	mortar_level = _level_at(t)
 	if pile != null:
 		pile.set_visual_level(mortar_level)
-		if prev < T_SCOOP and t >= T_SCOOP:
-			pile.note_carry()
-		var pour_at := T_SCOOP + T_CARRY
-		if prev < pour_at and t >= pour_at and pile.has_method("note_pour"):
-			pile.note_pour()
 	rot = _slew_rot(_rot_target(t), dt)
 	_tick_motes(dt, pos, shedding and _had_material, _chip_color())
 	return {
