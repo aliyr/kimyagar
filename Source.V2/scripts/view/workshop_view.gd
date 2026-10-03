@@ -1900,9 +1900,7 @@ func _on_mortar_tap() -> void:
 	transfer_t = 0.0
 	_transfer_dropped = false
 	_transfer.begin(_mouth, _mouth_r)
-	if _cam_owner == "mortar":
-		_mortar_shot = false
-		_set_camera(Vector2(960, 540), 1.0, 0.45, false, "")
+	_release_workshop_camera()
 	Sfx.scoop()
 	Haptics.pulse("light")
 
@@ -1929,6 +1927,8 @@ func _tick_transfer(dt: float) -> void:
 		_transfer_dropped = true
 		_held_chips = _transfer.chips.duplicate()
 		Game.add_mortar_to_cauldron()
+		if Game.mortar == null:
+			_release_workshop_camera()
 		Sfx.splash()
 		Haptics.pulse("medium")
 		if _mortar_parts:
@@ -2322,7 +2322,10 @@ func _mortar_focus() -> Vector2:
 func _set_camera(focus: Vector2, zoom: float, ms: float, letterbox: bool, owner: String) -> void:
 	if hold_camera:
 		return
-	if _tilt_mode == "off" and owner != "pot":
+	# "off" skips new close-ups (reduced motion, or the performance latch).
+	# A return to the full workshop still has to run, or a mortar shot that
+	# started while tilt was on stays stuck after the latch.
+	if _tilt_mode == "off" and owner != "pot" and zoom > 1.001:
 		return
 	_cam_owner = owner
 	_cam_from = _cam_zoom
@@ -2371,29 +2374,29 @@ func _tick_camera(dt: float) -> void:
 	_apply_camera()
 
 
-func _tick_grind_camera(grinding: bool, dt: float) -> void:
-	if _tilt_mode == "off":
-		return
+func _tick_grind_camera(grinding: bool, _dt: float) -> void:
 	if grinding:
 		_cam_return = -1.0
-		if _cam_owner == "" or _cam_owner == "mortar":
-			if not _mortar_shot:
-				_mortar_shot = true
-				_set_camera(_mortar_focus(), 1.3, 0.65, false, "mortar")
+		if _tilt_mode == "off":
+			return
+		if (_cam_owner == "" or _cam_owner == "mortar") and not _mortar_shot:
+			_set_camera(_mortar_focus(), 1.3, 0.65, false, "mortar")
+			_mortar_shot = _cam_owner == "mortar"
 		return
-	if not _mortar_shot:
+	# Grinding finished, or the spoon has taken the material. Ease back to the
+	# full workshop in the same breath; the next grind may zoom in again.
+	if _cam_owner == "mortar" or _mortar_shot:
+		_release_workshop_camera()
+
+
+func _release_workshop_camera() -> void:
+	if _cam_owner != "mortar" and not _mortar_shot:
 		return
-	if transfer_t >= 0.0:
+	if _cam_owner != "mortar" and _cam_owner != "":
+		return
+	_set_camera(Vector2(960, 540), 1.0, 0.5, false, "")
+	if _cam_owner == "" and is_equal_approx(_cam_to, 1.0):
 		_mortar_shot = false
-		_set_camera(Vector2(960, 540), 1.0, 0.45, false, "")
-		return
-	if _cam_return < 0.0:
-		_cam_return = 0.5
-		return
-	_cam_return -= dt
-	if _cam_return <= 0.0:
-		_mortar_shot = false
-		_set_camera(Vector2(960, 540), 1.0, 0.65, false, "")
 
 
 func _sync_pour_camera() -> void:

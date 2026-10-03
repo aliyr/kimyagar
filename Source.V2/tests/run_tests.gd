@@ -83,6 +83,7 @@ func _run() -> void:
 	_round9()
 	_round11()
 	_round12()
+	_round26()
 
 
 func _fixture_tuning() -> Dictionary:
@@ -2485,6 +2486,72 @@ func _shade_setup() -> void:
 		_shade_view(grey, rig, Vector2i(128, 128)),
 		_shade_view(grey, door, Vector2i(128, 128)),
 	]
+
+
+func _pump_workshop(workshop: Node, tilt: Node, frames: int) -> void:
+	for _i in frames:
+		if not game.is_paused():
+			game.tick(1.0 / 60.0)
+		workshop.advance(1.0 / 60.0, tilt, true)
+
+
+func _assert_full_workshop(workshop: Node, msg: String) -> void:
+	near(workshop._cam_zoom, 1.0, msg + " zoom", 0.02)
+	near(workshop._cam_to, 1.0, msg + " zoom target", 0.02)
+	near(workshop._cam_focus.x, 960.0, msg + " focus x", 1.0)
+	near(workshop._cam_focus.y, 540.0, msg + " focus y", 1.0)
+	near(workshop._camera.scale.x, 1.0, msg + " scale", 0.02)
+	check(str(workshop._cam_owner) == "", msg + " camera owner")
+
+
+func _assert_mortar_shot(workshop: Node, msg: String) -> void:
+	near(workshop._cam_to, 1.3, msg + " zoom target", 0.02)
+	check(str(workshop._cam_owner) == "mortar", msg + " camera owner")
+	check(workshop._mortar_shot, msg + " mortar shot")
+
+
+func _round26() -> void:
+	game.start_fresh()
+	var main: Node = (load("res://scenes/main.tscn") as PackedScene).instantiate()
+	root.add_child(main)
+	var workshop: Node = main.get_node("WorkshopPlate/WorkshopViewport/Workshop")
+	var tilt: Node = main.get_node("Tilt")
+	tilt.mode = "lite"
+	game.add_classic_unit("chamomile")
+	game.start_grinding()
+	_pump_workshop(workshop, tilt, 50)
+	_assert_mortar_shot(workshop, "grinding zooms in")
+	# A slow phone latches tilt off. The close-up must still ease back.
+	tilt.mode = "off"
+	var frames := 0
+	while game.mortar != null and bool(game.mortar.get("grinding", false)) and frames < 400:
+		_pump_workshop(workshop, tilt, 1)
+		frames += 1
+	check(game.mortar != null and game.mortar["grinding"] == false, "grinding finishes")
+	_pump_workshop(workshop, tilt, 40)
+	_assert_full_workshop(workshop, "finished grind returns to the full workshop")
+	tilt.mode = "lite"
+	game.add_classic_unit("saffron")
+	game.start_grinding()
+	_pump_workshop(workshop, tilt, 50)
+	_assert_mortar_shot(workshop, "the next grind zooms in")
+	tilt.mode = "off"
+	workshop._on_mortar_tap()
+	frames = 0
+	while game.mortar != null and frames < 400:
+		_pump_workshop(workshop, tilt, 1)
+		frames += 1
+	check(game.mortar == null, "the pour empties the mortar")
+	_pump_workshop(workshop, tilt, 40)
+	_assert_full_workshop(workshop, "empty mortar returns to the full workshop")
+	tilt.mode = "lite"
+	game.add_classic_unit("chamomile")
+	game.start_grinding()
+	_pump_workshop(workshop, tilt, 50)
+	_assert_mortar_shot(workshop, "a grind after the pour zooms in")
+	game.start_fresh()
+	root.remove_child(main)
+	main.free()
 
 
 func _shade_view(tex: Texture2D, mat: Material, size: Vector2i) -> SubViewport:
