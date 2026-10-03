@@ -244,13 +244,11 @@ func draw_below(c: CanvasItem, origin: Vector2, zone: Vector2, chips: Array, aim
 	if not skip_mound:
 		_draw_mound_eased(c, origin, scale, chips)
 	else:
-		# Ease the value down so a later frame cannot pop it back. While the
-		# spoon owns the bowl, do not paint: that ellipse was the tail rescale.
+		# The spoon or the ground bed owns this frame. Do not paint a second
+		# mound over the chunks; just remember a smaller value for later.
 		_mound_hold = false
 		if _mound_shown > 0.02:
 			_mound_shown = maxf(0.0, _mound_shown - 0.008)
-			if _mound_shown > 0.02 and not _bed_live and _mound_hex != "":
-				_paint_mound(c, origin, scale, _mound_shown, _mound_hex)
 		else:
 			_mound_shown = 0.0
 	_draw_pestle_shadow(c, origin, scale, chips, aim)
@@ -354,9 +352,9 @@ func _emit_strike_dust(x: float, y: float, colors: Array[String], fineness: floa
 		var px: float = x + _range(-6.0, 6.0)
 		var py: float = y + _range(-3.0, 2.0)
 		var ttl: float = _range(0.55, 1.05) + fineness * 0.4
-		var size: float = _range(0.35, 0.75) + fineness * 0.16
+		var size: float = _range(0.55, 1.15) + fineness * 0.28
 		var color: String = _pick(colors, FALLBACK)
-		var gap := 0.70 / float(maxi(n, 1))
+		var gap := 0.48 / float(maxi(n, 1))
 		_push({
 			"kind": "dust",
 			"x": px,

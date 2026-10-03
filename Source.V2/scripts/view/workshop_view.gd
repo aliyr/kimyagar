@@ -1573,8 +1573,6 @@ func _place_pestle() -> void:
 		return
 	if transfer_t < 0.0 and _pile.has_method("drops_settling") and _pile.drops_settling():
 		return
-	if transfer_t < 0.0 and _pile.has_method("pestle_locked") and _pile.pestle_locked():
-		return
 	var aim: Dictionary = _pile.pestle()
 	var box := Vector2(MortarPile.PESTLE_W, MortarPile.PESTLE_H) / 100.0 * ZONE_MORTAR.size
 	var anchor := Vector2(MortarPile.PESTLE_HEAD_X, MortarPile.PESTLE_HEAD_Y)

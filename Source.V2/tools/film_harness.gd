@@ -23,6 +23,7 @@ var _live_pos := 0.0
 var _live_size := 0.0
 var _live_rot := 0.0
 var _flow_phase := "boot"
+var _r24: Dictionary = {}
 var _flow_wait := 0
 var _flow_empty: Image
 var _flow_prev: Image
@@ -478,7 +479,12 @@ func _flow_frame(host) -> void:
 	if host._shot_frames < 6:
 		_flow_snap(host)
 		return
+	if _flow_phase == "xid":
+		_r24_xid(host)
+		return
 	var img: Image = host.get_viewport().get_texture().get_image()
+	if OS.get_environment("KIM_R24") == "1":
+		_r24_observe(host, img, 240 if img.get_width() >= 2300 else 0)
 	var ox := 240 if img.get_width() >= 2300 else 0
 	_fps_sum += Engine.get_frames_per_second()
 	_fps_n += 1
@@ -657,12 +663,25 @@ func _flow_frame(host) -> void:
 				_flow_write_rect(host, pour_img, "pour-%s-%02d" % [_live_ings[_live_mat], _flow_pour.size() - 1])
 		elif phase != "pour":
 			_flow_pour_lum = _luma_bytes(pour_img)
-		if phase == "pour" or phase == "exit":
+		if phase == "pour" or phase == "exit" or (phase == "carry" and OS.get_environment("KIM_R24") == "1"):
 			var fx_crop := _bowl_crop(img, ox)
 			var fx_rgba := _rgba(fx_crop)
 			if _flow_pour_fx_prev.size() == fx_rgba.size():
-				var fx := _interior_drgb(fx_rgba, _flow_pour_fx_prev, fx_crop.get_width(), fx_crop.get_height(), _crop_origin(ox), _snap, _snap, 2)
+				var fx_origin := _crop_origin(ox)
+				var fx := _interior_drgb(fx_rgba, _flow_pour_fx_prev, fx_crop.get_width(), fx_crop.get_height(), fx_origin, _snap, _snap, 2)
 				_flow_pour_fx.append(fx)
+				if OS.get_environment("KIM_R24") == "1":
+					var whole := _interior_drgb(fx_rgba, _flow_pour_fx_prev, fx_crop.get_width(), fx_crop.get_height(), fx_origin, _snap, _snap, 0)
+					var bowl := _interior_drgb(fx_rgba, _flow_pour_fx_prev, fx_crop.get_width(), fx_crop.get_height(), fx_origin, _snap, _snap, 3)
+					if phase == "carry":
+						_r24["carry2"] = maxi(int(_r24.get("carry2", 0)), fx)
+						_r24["carry0"] = maxi(int(_r24.get("carry0", 0)), whole)
+						_r24["carryb"] = maxi(int(_r24.get("carryb", 0)), bowl)
+						if not bool(_r24.get("carry_seen", false)):
+							_r24["carry_seen"] = true
+							_r24["scoopend"] = whole
+					else:
+						_r24["pourex"] = maxi(int(_r24.get("pourex", 0)), fx)
 			_flow_pour_fx_prev = fx_rgba
 		_flow_prev = img
 		var ended: bool = host.workshop.transfer_t < 0.0 and _flow_wait > 8
@@ -696,7 +715,8 @@ func _flow_frame(host) -> void:
 	if _flow_phase == "rst":
 		_flow_wait += 1
 		_span_push(_bowl_crop(img, ox), _crop_origin(ox), _flow_rs, 2, _flow_rs_d)
-		if _flow_wait < 24:
+		var rst_need := 90 if OS.get_environment("KIM_R24") == "1" else 24
+		if _flow_wait < rst_need:
 			_flow_snap(host)
 			return
 		_flow_rs_max = _max_of(_flow_rs)
@@ -724,6 +744,11 @@ func _flow_frame(host) -> void:
 			fx_max = maxi(fx_max, int(_flow_pour_fx[fi]))
 			fx_txt += "%s " % int(_flow_pour_fx[fi])
 		print("POURFX %s n %s max %s %s" % [_live_ings[_live_mat], _flow_pour_fx.size(), fx_max, fx_txt])
+		if OS.get_environment("KIM_R24") == "1":
+			print("R24 CARRY %s carry2 %s carry0 %s bowl %s scoopend %s pourex %s" % [
+				_live_ings[_live_mat], int(_r24.get("carry2", 0)), int(_r24.get("carry0", 0)),
+				int(_r24.get("carryb", 0)), int(_r24.get("scoopend", 0)), int(_r24.get("pourex", 0)),
+			])
 		var rib_txt := ""
 		for rv in _flow_ribbon:
 			rib_txt += "%s " % int(rv)
@@ -751,6 +776,19 @@ func _flow_frame(host) -> void:
 		if flow_env != "":
 			flow_n = mini(_live_ings.size(), int(flow_env))
 		if _live_mat >= flow_n:
+			if OS.get_environment("KIM_R24") == "1" and not bool(_r24.get("xid_started", false)):
+				_r24["xid_started"] = true
+				_r24["step"] = "fill"
+				_r24["wait"] = 0
+				_r24["x3"] = 0
+				_r24["hist"] = []
+				_flow_phase = "xid"
+				Game.reset_brew()
+				Game.add_classic_unit("chamomile")
+				Game.start_grinding()
+				print("R24 XID start f ", host._shot_frames)
+				_flow_snap(host)
+				return
 			print("FILM done flow")
 			host.get_tree().quit(0)
 			_flow_snap(host)
@@ -877,7 +915,7 @@ func _interior_diff(cur: PackedByteArray, old: PackedByteArray, w: int, h: int, 
 
 
 ## Whole-interior change. mode 0 keeps the pestle, mode 1 hides it, mode 2 also hides the spoon.
-## A pixel counts when the sum of absolute channel deltas is at least 18.
+## Mode 3 also hides the spoon mound. A pixel counts when channel-sum delta is at least 18.
 func _interior_drgb(cur: PackedByteArray, old: PackedByteArray, w: int, h: int, origin: Vector2, pose_now: Dictionary, pose_old: Dictionary, mode: int) -> int:
 	var center := origin + Vector2(140.0, 70.0)
 	var shift := _cam_delta(pose_now, pose_old)
@@ -910,6 +948,8 @@ func _interior_drgb(cur: PackedByteArray, old: PackedByteArray, w: int, h: int, 
 		if mode >= 1 and (_near_pestle(vp, pose_now, prad) or _near_pestle(vp, pose_old, prad)):
 			continue
 		if mode >= 2 and (_hit_spoon(vp, pose_now) or _hit_spoon(vp, pose_old)):
+			continue
+		if mode >= 3 and (_near_spoon(vp, pose_now, 72.0) or _near_spoon(vp, pose_old, 72.0)):
 			continue
 		n += 1
 	return n
@@ -948,6 +988,33 @@ func _flow_pieces_opaque(host) -> bool:
 
 
 func _flow_begin(host) -> void:
+	if not bool(_r24.get("nodes", false)):
+		_r24["nodes"] = true
+		print("R24 NODES ", host.get_tree().get_node_count())
+	_r24["kf"] = 0
+	_r24["gframes"] = 0
+	_r24["w1"] = false
+	_r24["w2"] = false
+	_r24["w3"] = false
+	_r24["settled"] = false
+	_r24["carry2"] = 0
+	_r24["carry0"] = 0
+	_r24["carryb"] = 0
+	_r24["scoopend"] = 0
+	_r24["pourex"] = 0
+	_r24["carry_seen"] = false
+	_r24["gone"] = false
+	_r24["pmotion"] = 0
+	_r24["rst3"] = 0
+	_r24["drop3"] = 0
+	_r24["redrop3"] = 0
+	_r24["first_drop"] = false
+	_r24["first_redrop"] = false
+	_r24["first_rst"] = false
+	_r24.erase("pmask")
+	_r24.erase("rgba_drop")
+	_r24.erase("rgba_redrop")
+	_r24.erase("rgba_rst")
 	Game.clear_mortar()
 	Game.add_classic_unit(_live_ings[_live_mat])
 	Game.start_grinding()
@@ -2765,3 +2832,244 @@ func _r23_done(host) -> void:
 	print("R23 DONE ", mot, " nodes ", _r23_nodes, " motion ", _motion_line(host))
 	print("FILM done flow")
 	host.get_tree().quit(0)
+
+
+func _r24_observe(host, img: Image, ox: int) -> void:
+	var pile = host.workshop._pile
+	if pile == null:
+		return
+	var f: int = int(host._shot_frames)
+	var max_w := 0.0
+	var alpha_sum := 0.0
+	var piece_n := 0
+	var dust_n := 0
+	for chip_v in pile.presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)):
+			continue
+		if str(chip.get("kind", "")) == "dust":
+			dust_n += 1
+			continue
+		var w := float(chip.get("w", 0.0))
+		max_w = maxf(max_w, w)
+		alpha_sum += float(chip.get("vis_alpha", 0.0))
+		piece_n += 1
+	var mean_a := 0.0 if piece_n == 0 else alpha_sum / float(piece_n)
+	var bed: float = float(pile.bed_coverage())
+	var drawn: float = float(pile.drawn_bed_coverage())
+	var vp: float = float(pile.visual_progress())
+	var phase := str(_snap.get("phase", ""))
+	var work := _mortar_work()
+	_r24["kf"] = int(_r24.get("kf", 0)) + 1
+	var kf: int = int(_r24["kf"])
+	if _flow_phase == "grind":
+		_r24["gframes"] = int(_r24.get("gframes", 0)) + 1
+	var gframe := int(_r24.get("gframes", 0))
+	if _flow_phase == "grind" and gframe >= 8 and gframe <= 32:
+		var crop := _bowl_crop(img, ox)
+		var mask := _pestle_cover(crop, _crop_origin(ox), _snap)
+		if _r24.has("pmask"):
+			var prev: PackedByteArray = _r24["pmask"]
+			var diff := 0
+			var nmask := mini(mask.size(), prev.size())
+			for i in nmask:
+				if mask[i] != prev[i]:
+					diff += 1
+			_r24["pmotion"] = int(_r24.get("pmotion", 0)) + diff
+		_r24["pmask"] = mask
+		if gframe == 32:
+			print("R24 PESTLE g8-32 %s shotf %s" % [int(_r24.get("pmotion", 0)), f])
+	var sample: bool = kf == 45 or kf == 99 or kf == 150 or kf == 180
+	if not sample:
+		for mark in [1.0, 2.0, 3.0]:
+			var key := "w%d" % int(mark)
+			if work >= mark - 0.04 and work < mark + 0.06 and not bool(_r24.get(key, false)) and _flow_phase == "grind":
+				_r24[key] = true
+				sample = true
+				_r24["tag"] = "w%.0f" % mark
+	if _flow_phase == "tap" and not bool(_r24.get("settled", false)):
+		_r24["settled"] = true
+		sample = true
+		_r24["tag"] = "settled"
+	if sample and _flow_empty != null:
+		var fx: Vector4 = _r24_fx(img, ox)
+		var pcs: Vector4 = _r24_pieces(host, img, ox)
+		var tag := str(_r24.get("tag", "f%d" % kf))
+		if kf == 45 or kf == 99 or kf == 150 or kf == 180:
+			tag = "f%d" % kf
+		print("R24 LOOK %s %s %s w %.2f a %.3f pieces %s dust %s bed %.4f drawn %.4f vprog %.3f fx %d rgb %.0f %.0f %.0f piece_px %d prgb %.0f %.0f %.0f" % [
+			_live_ings[_live_mat], tag, _flow_phase, max_w, mean_a, piece_n, dust_n, bed, drawn, vp,
+			int(fx.x), fx.y, fx.z, fx.w, int(pcs.x), pcs.y, pcs.z, pcs.w,
+		])
+		_r24["tag"] = ""
+	if phase == "dip" or phase == "scoop" or phase == "carry":
+		var prev_bed := float(_r24.get("prev_bed", bed))
+		if absf(bed - prev_bed) > 0.015 or absf(vp - float(_r24.get("prev_vp", vp))) > 0.03:
+			print("R24 BED f %s phase %s bed %.4f -> %.4f drawn %.4f -> %.4f vprog %.3f -> %.3f" % [
+				f, phase, prev_bed, bed, float(_r24.get("prev_drawn", drawn)), drawn, float(_r24.get("prev_vp", vp)), vp,
+			])
+		_r24["prev_bed"] = bed
+		_r24["prev_drawn"] = drawn
+		_r24["prev_vp"] = vp
+	if _flow_phase == "drop" or _flow_phase == "redrop" or _flow_phase == "rst":
+		_r24_fx3(host, img, ox, _flow_phase)
+	if _flow_phase == "rst":
+		if _flow_empty != null:
+			var gone_fx: Vector4 = _r24_fx(img, ox)
+			if int(gone_fx.x) < 40 and not bool(_r24.get("gone", false)):
+				_r24["gone"] = true
+				print("R24 RESET gone f %s wait %s fx %d" % [f, _flow_wait, int(gone_fx.x)])
+		if _flow_wait == 89 and _flow_empty != null:
+			var end_fx: Vector4 = _r24_fx(img, ox)
+			print("R24 RESET end wait %s fx %d window3 %s vprog %.3f" % [_flow_wait, int(end_fx.x), int(_r24.get("rst3", 0)), vp])
+
+
+func _r24_fx3(host, img: Image, ox: int, phase: String) -> void:
+	if _flow_empty == null:
+		return
+	var crop := _bowl_crop(img, ox)
+	var rgba := _rgba(crop)
+	var hist: Array = _r24.get("rgba_" + phase, [])
+	if hist.size() >= 3:
+		var old: PackedByteArray = hist[0]
+		if old.size() == rgba.size():
+			var xor := _interior_drgb(rgba, old, crop.get_width(), crop.get_height(), _crop_origin(ox), _snap, _snap, 1)
+			var key := phase + "3"
+			if xor > int(_r24.get(key, 0)):
+				_r24[key] = xor
+				print("R24 FX3 %s %s f %s xor %s" % [_live_ings[_live_mat], phase, host._shot_frames, xor])
+		hist.pop_front()
+	hist.append(rgba)
+	_r24["rgba_" + phase] = hist
+	var fx: Vector4 = _r24_fx(img, ox)
+	if int(fx.x) > 20 and not bool(_r24.get("first_" + phase, false)):
+		_r24["first_" + phase] = true
+		print("R24 FIRST %s %s f %s fx %d" % [_live_ings[_live_mat], phase, host._shot_frames, int(fx.x)])
+
+
+func _r24_fx(img: Image, ox: int) -> Vector4:
+	var crop := _bowl_crop(img, ox)
+	var empty := _bowl_crop(_flow_empty, ox)
+	var w := crop.get_width()
+	var a := _rgba(crop)
+	var b := _rgba(empty)
+	var n := 0
+	var r := 0.0
+	var g := 0.0
+	var bl := 0.0
+	var pixels := mini(int(a.size() / 4), int(b.size() / 4))
+	for i in pixels:
+		var o := i * 4
+		var sum := absi(int(a[o]) - int(b[o])) + absi(int(a[o + 1]) - int(b[o + 1])) + absi(int(a[o + 2]) - int(b[o + 2]))
+		if sum < 18:
+			continue
+		var x := i % w
+		var y := int(i / w)
+		var dx := (float(x) - 140.0) / 120.0
+		var dy := (float(y) - 70.0) / 56.0
+		if dx * dx + dy * dy > 0.92:
+			continue
+		r += float(a[o])
+		g += float(a[o + 1])
+		bl += float(a[o + 2])
+		n += 1
+	if n == 0:
+		return Vector4.ZERO
+	return Vector4(float(n), r / float(n), g / float(n), bl / float(n))
+
+
+func _r24_pieces(host, img: Image, ox: int) -> Vector4:
+	if host.workshop._pile == null or host.workshop._mortar_fx == null:
+		return Vector4.ZERO
+	var xf: Transform2D = host.workshop._mortar_fx.get_global_transform()
+	var n := 0
+	var r := 0.0
+	var g := 0.0
+	var b := 0.0
+	for chip_v in host.workshop._pile.presentation():
+		var chip: Dictionary = chip_v
+		if bool(chip.get("ghost", false)) or str(chip.get("kind", "")) == "dust":
+			continue
+		if float(chip.get("vis_alpha", 0.0)) < 0.08:
+			continue
+		var lay: Dictionary = host.workshop._pile.layout_chip(chip)
+		var poly: PackedVector2Array = lay["poly"]
+		if poly.size() < 3:
+			continue
+		var pts := PackedVector2Array()
+		var minp := Vector2(99999, 99999)
+		var maxp := Vector2(-99999, -99999)
+		for p in poly:
+			var at: Vector2 = xf * p
+			at.x += float(ox)
+			pts.append(at)
+			minp.x = minf(minp.x, at.x)
+			minp.y = minf(minp.y, at.y)
+			maxp.x = maxf(maxp.x, at.x)
+			maxp.y = maxf(maxp.y, at.y)
+		var x0 := maxi(int(floor(minp.x)), 0)
+		var y0 := maxi(int(floor(minp.y)), 0)
+		var x1 := mini(int(ceil(maxp.x)), img.get_width() - 1)
+		var y1 := mini(int(ceil(maxp.y)), img.get_height() - 1)
+		for y in range(y0, y1 + 1):
+			for x in range(x0, x1 + 1):
+				if not _r24_inside(pts, Vector2(float(x) + 0.5, float(y) + 0.5)):
+					continue
+				var col := img.get_pixel(x, y)
+				r += col.r * 255.0
+				g += col.g * 255.0
+				b += col.b * 255.0
+				n += 1
+	if n == 0:
+		return Vector4.ZERO
+	return Vector4(float(n), r / float(n), g / float(n), b / float(n))
+
+
+func _r24_inside(pts: PackedVector2Array, p: Vector2) -> bool:
+	var inside := false
+	var j := pts.size() - 1
+	for i in pts.size():
+		var a := pts[i]
+		var b := pts[j]
+		var dy := b.y - a.y
+		if (a.y > p.y) != (b.y > p.y) and absf(dy) > 0.0001 and p.x < (b.x - a.x) * (p.y - a.y) / dy + a.x:
+			inside = not inside
+		j = i
+	return inside
+
+
+func _r24_xid(host) -> void:
+	var step := str(_r24.get("step", "fill"))
+	if step == "fill":
+		if _mortar_work() >= 3.45:
+			Game.add_classic_unit("mint")
+			_r24["step"] = "watch"
+			_r24["wait"] = 0
+			_r24["x3"] = 0
+			_r24["hist"] = []
+			print("R24 XID add f ", host._shot_frames, " work ", _mortar_work())
+		_flow_snap(host)
+		return
+	_r24["wait"] = int(_r24.get("wait", 0)) + 1
+	var img: Image = host.get_viewport().get_texture().get_image()
+	var ox := 240 if img.get_width() >= 2300 else 0
+	if _flow_empty != null:
+		var crop := _bowl_crop(img, ox)
+		var rgba := _rgba(crop)
+		var hist: Array = _r24.get("hist", [])
+		if hist.size() >= 3:
+			var old: PackedByteArray = hist[0]
+			if old.size() == rgba.size():
+				var xor := _interior_drgb(rgba, old, crop.get_width(), crop.get_height(), _crop_origin(ox), _snap, _snap, 1)
+				if xor > int(_r24.get("x3", 0)):
+					_r24["x3"] = xor
+					print("R24 XID3 f ", host._shot_frames, " xor ", xor)
+			hist.pop_front()
+		hist.append(rgba)
+		_r24["hist"] = hist
+	if int(_r24.get("wait", 0)) >= 100:
+		print("R24 XID max3 ", int(_r24.get("x3", 0)))
+		print("FILM done flow")
+		host.get_tree().quit(0)
+		return
+	_flow_snap(host)
