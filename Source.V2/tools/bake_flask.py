@@ -1,0 +1,1196 @@
+#!/usr/bin/env python3
+"""Bake the workshop flask at 512×896.
+
+The belly is a circle in pixels (widest row near 58% of the height) with a
+short flattened contact. Glass, cork, twine, wax and the label are painted
+here; the liquor is drawn behind the texture at runtime.
+
+Straight-alpha over is dst_rgb*dst_a*(1-a) + src*a, with output alpha
+a + dst_a*(1-a). The old over() dropped the source whenever the destination
+was opaque, so ink, twine and wax vanished.
+"""
+import math
+import os
+import subprocess
+import sys
+from collections import deque
+
+import numpy as np
+
+W = 512
+H = 896
+
+# Circle belly. Horizontal radius in pixels equals the vertical radius, so the
+# bulb is round on screen. Widest row stays inside 55–60% of the texture.
+CENTER_V = 0.585
+RX = 0.462
+R_PX = RX * W
+FLAT_PX = 52.0
+FILLET_PX = 18.0
+# Pixels of glass wall at the belly (reads as ~10 px once the sprite is 125 wide).
+BELLY_WALL_PX = 46.0
+NECK_WALL_PX = 20.0
+
+NECK = [
+    (0.000, 0.150),
+    (0.016, 0.242),
+    (0.040, 0.176),
+    (0.064, 0.118),
+    (0.108, 0.096),
+    (0.170, 0.090),
+    (0.240, 0.104),
+    (0.300, 0.148),
+    (0.345, 0.198),
+]
+
+
+def _smooth(t):
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _lerp_knots(v, knots):
+    v = float(v)
+    if v <= knots[0][0]:
+        return knots[0][1]
+    if v >= knots[-1][0]:
+        return knots[-1][1]
+    for i in range(len(knots) - 1):
+        a0, a1 = knots[i]
+        b0, b1 = knots[i + 1]
+        if v <= b0:
+            span = max(b0 - a0, 1e-4)
+            return a1 + (b1 - a1) * float(_smooth((v - a0) / span))
+    return knots[-1][1]
+
+
+def _circle_half_px(v):
+    dy = (float(v) - CENTER_V) * H
+    inside = R_PX * R_PX - dy * dy
+    if inside <= 0.0:
+        return 0.0
+    return math.sqrt(inside)
+
+
+def _contact_v():
+    # Horizontal cut where the circle's half-width equals the contact chord.
+    dy = math.sqrt(max(R_PX * R_PX - FLAT_PX * FLAT_PX, 0.0))
+    return CENTER_V + dy / H
+
+
+V_CONTACT = _contact_v()
+
+
+def outer_half_px(v):
+    """Outer silhouette half-width in pixels. Zero below the contact."""
+    v = float(v)
+    if v <= 0.004 or v >= V_CONTACT:
+        return 0.0
+    circ = _circle_half_px(v)
+    neck = _lerp_knots(v, NECK) * W
+    if v <= 0.330:
+        h = neck
+    elif v < 0.455:
+        t = float(_smooth((v - 0.330) / 0.125))
+        h = neck * (1.0 - t) + circ * t
+    else:
+        h = circ
+    d_px = (V_CONTACT - v) * H
+    if d_px < FILLET_PX:
+        fr = FILLET_PX
+        inner = max(FLAT_PX - fr, 1.0)
+        reach = math.sqrt(max(fr * fr - (fr - d_px) * (fr - d_px), 0.0))
+        h = min(h, inner + reach)
+    # A little hand-blown unevenness on the neck only. The belly stays a circle.
+    if v < 0.40:
+        h *= 1.0 + 0.012 * math.sin(v * 48.0)
+    return max(h, 0.0)
+
+
+def wall_px(v, outer_px):
+    t = float(_smooth((float(v) - 0.30) / 0.22))
+    w = NECK_WALL_PX + (BELLY_WALL_PX - NECK_WALL_PX) * t
+    return min(w, max(outer_px * 0.46, 0.0))
+
+
+def bore_half_px(v):
+    outer = outer_half_px(v)
+    if outer < 4.0:
+        return 0.0
+    return max(0.0, outer - wall_px(v, outer))
+
+
+def hash2(ix, iy):
+    ix = np.asarray(ix, dtype=np.int64)
+    iy = np.asarray(iy, dtype=np.int64)
+    n = (ix * 374761393 + iy * 668265263) & 0xFFFFFFFF
+    n = (n ^ (n >> 13)) * 1274126177 & 0xFFFFFFFF
+    return (n & 0xFFFF) / 65535.0
+
+
+def _dilate(mask, radius):
+    r = int(radius)
+    padded = np.pad(mask, r, mode="constant")
+    acc = np.zeros_like(mask)
+    h, w = mask.shape
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            if dx * dx + dy * dy > r * r:
+                continue
+            acc = np.maximum(acc, padded[r + dy:r + dy + h, r + dx:r + dx + w])
+    return acc
+
+
+def _load_rgba(path):
+    probe = subprocess.check_output(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "csv=p=0", path,
+        ],
+        text=True,
+    ).strip()
+    pw, ph = [int(x) for x in probe.split(",")]
+    raw = subprocess.check_output(
+        ["ffmpeg", "-i", path, "-f", "rawvideo", "-pix_fmt", "rgba", "-"],
+        stderr=subprocess.DEVNULL,
+    )
+    return np.frombuffer(raw, np.uint8).reshape(ph, pw, 4).astype(np.float32) / 255.0
+
+
+def _resize(img, tw, th):
+    """Bilinear resample. Keeps the counters of the calligraphy open."""
+    th = max(int(th), 1)
+    tw = max(int(tw), 1)
+    ys = (np.arange(th) + 0.5) * img.shape[0] / float(th) - 0.5
+    xs = (np.arange(tw) + 0.5) * img.shape[1] / float(tw) - 0.5
+    y0 = np.clip(np.floor(ys).astype(np.int32), 0, img.shape[0] - 1)
+    x0 = np.clip(np.floor(xs).astype(np.int32), 0, img.shape[1] - 1)
+    y1 = np.clip(y0 + 1, 0, img.shape[0] - 1)
+    x1 = np.clip(x0 + 1, 0, img.shape[1] - 1)
+    fy = (ys - np.floor(ys)).astype(np.float32)
+    fx = (xs - np.floor(xs)).astype(np.float32)
+    top = img[y0][:, x0] * (1.0 - fx)[None, :] + img[y0][:, x1] * fx[None, :]
+    bot = img[y1][:, x0] * (1.0 - fx)[None, :] + img[y1][:, x1] * fx[None, :]
+    return top * (1.0 - fy)[:, None] + bot * fy[:, None]
+
+
+def _dist_bg(ink):
+    """City-block distance from each ink pixel to the nearest clear pixel."""
+    h, w = ink.shape
+    dist = np.full((h, w), -1, np.int16)
+    q = deque()
+    ys, xs = np.where(~ink)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        dist[y, x] = 0
+        q.append((y, x))
+    while q:
+        y, x = q.popleft()
+        nd = int(dist[y, x]) + 1
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and dist[ny, nx] < 0:
+                dist[ny, nx] = nd
+                q.append((ny, nx))
+    return dist
+
+
+def _maxfilt(a, rad):
+    h, w = a.shape
+    p = np.pad(a, rad, mode="edge")
+    acc = p[rad:rad + h, rad:rad + w].copy()
+    for dy in range(-rad, rad + 1):
+        for dx in range(-rad, rad + 1):
+            acc = np.maximum(acc, p[rad + dy:rad + dy + h, rad + dx:rad + dx + w])
+    return acc
+
+
+def _ink_components(ink, min_n=1):
+    h, w = ink.shape
+    vis = np.zeros(ink.shape, np.uint8)
+    out = []
+    for y, x in zip(*np.where(ink)):
+        if vis[y, x]:
+            continue
+        q = deque([(int(y), int(x))])
+        vis[y, x] = 1
+        pts = []
+        while q:
+            cy, cx = q.popleft()
+            pts.append((cy, cx))
+            for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not vis[ny, nx]:
+                    vis[ny, nx] = 1
+                    q.append((ny, nx))
+        if len(pts) >= min_n:
+            out.append(np.array(pts, np.int32))
+    out.sort(key=lambda p: int(p[:, 1].min()))
+    return out
+
+
+def _erode_mask(mask, rad):
+    return ~_dilate_mask(~np.asarray(mask, bool), rad)
+
+
+def _dilate_mask(ink, rad):
+    out = ink.copy()
+    h, w = ink.shape
+    ys, xs = np.where(ink)
+    for dy in range(-rad, rad + 1):
+        for dx in range(-rad, rad + 1):
+            out[np.clip(ys + dy, 0, h - 1), np.clip(xs + dx, 0, w - 1)] = True
+    return out
+
+
+def _paint_disk(canvas, y, x, rad):
+    r = int(math.ceil(rad))
+    h, w = canvas.shape
+    y0 = max(int(math.floor(y)) - r, 0)
+    y1 = min(int(math.floor(y)) + r + 1, h)
+    x0 = max(int(math.floor(x)) - r, 0)
+    x1 = min(int(math.floor(x)) + r + 1, w)
+    if y0 >= y1 or x0 >= x1:
+        return
+    yy, xx = np.ogrid[y0:y1, x0:x1]
+    canvas[y0:y1, x0:x1] |= (yy - y) ** 2 + (xx - x) ** 2 <= rad * rad
+
+
+def _pen_stroke(canvas, y0, x0, y1, x1, thick, sag):
+    """Baseline stroke. The ends stay fat enough that scaling does not open a gap."""
+    span = max(abs(float(x1) - float(x0)), abs(float(y1) - float(y0)), 1.0)
+    steps = int(span * 2.4) + 1
+    y0 = float(y0)
+    x0 = float(x0)
+    y1 = float(y1)
+    x1 = float(x1)
+    for i in range(steps + 1):
+        t = i / float(steps)
+        # Run a little past each anchor so the joint is buried in the letter.
+        te = (t - 0.06) / 0.88
+        x = (1.0 - te) * x0 + te * x1
+        y = (1.0 - te) * y0 + te * y1 + sag * math.sin(np.clip(t, 0.0, 1.0) * math.pi)
+        rad = thick * (0.78 + 0.22 * math.sin(np.clip(t, 0.0, 1.0) * math.pi))
+        _paint_disk(canvas, y, x, rad)
+
+
+def _nearest_ink(a, b):
+    aa = a if len(a) <= 700 else a[::max(1, len(a) // 700)]
+    bb = b if len(b) <= 700 else b[::max(1, len(b) // 700)]
+    best_d = 1e18
+    best = (int(aa[0, 0]), int(aa[0, 1]), int(bb[0, 0]), int(bb[0, 1]))
+    for y, x in aa:
+        d = (bb[:, 0] - int(y)) ** 2 + (bb[:, 1] - int(x)) ** 2
+        i = int(np.argmin(d))
+        if float(d[i]) < best_d:
+            best_d = float(d[i])
+            best = (int(y), int(x), int(bb[i, 0]), int(bb[i, 1]))
+    return best
+
+
+def _components(ink, min_n, eight):
+    h, w = ink.shape
+    vis = np.zeros(ink.shape, np.uint8)
+    out = []
+    if eight:
+        neigh = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
+    else:
+        neigh = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    ys, xs = np.where(ink)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        if vis[y, x]:
+            continue
+        q = deque([(y, x)])
+        vis[y, x] = 1
+        pts = []
+        while q:
+            cy, cx = q.popleft()
+            pts.append((cy, cx))
+            for dy, dx in neigh:
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not vis[ny, nx]:
+                    vis[ny, nx] = 1
+                    q.append((ny, nx))
+        if len(pts) >= min_n:
+            out.append(np.array(pts, np.int32))
+    return out
+
+
+def _thin_calligraphy(src):
+    """Open the counters and keep dal, waw, and alif.
+
+    Thinning splits the waw into a head and a tail, so a left-to-right take of
+    the first three pieces treats the waw loop as the dal and drops the real
+    one. The dal is the rightmost letter. The waw is every piece between the
+    alif and that dal, joined head to tail. A tapered stroke then ties the
+    three letters along the baseline. Specks go. The result is one
+    8-connected component, about as wide as the Aref Ruqaa word.
+    """
+    ink = src[:, :, 3] > 0.35
+    if int(ink.sum()) < 20:
+        return src[:, :, 3]
+    D = _dist_bg(ink)
+    R = _maxfilt(D.astype(np.float32), 10)
+    punched = ink.copy()
+    for pts in _ink_components(ink, 30):
+        height = int(pts[:, 0].max() - pts[:, 0].min() + 1)
+        width = int(pts[:, 1].max() - pts[:, 1].min() + 1)
+        if height > width * 2.2:
+            continue
+        y0 = int(pts[:, 0].min())
+        y1 = int(pts[:, 0].max())
+        # Only the head, so the stroke down to the baseline stays attached.
+        top = y0 + int(0.50 * (y1 - y0))
+        sel = pts[:, 0] <= top
+        yy, xx = pts[sel, 0], pts[sel, 1]
+        # A smaller punch than 0.62 keeps the waw ring closed, like the Ruqaa head.
+        core = D[yy, xx] > 0.74 * np.maximum(R[yy, xx], 1.0)
+        punched[yy[core], xx[core]] = False
+    D2 = _dist_bg(punched)
+    R2 = _maxfilt(D2.astype(np.float32), 8)
+    # 0.46 kept a hairline (~1.1 px at game size). 0.34 is about 1.5× that stroke.
+    cut = 0.34 * R2
+    thin = punched & ((D2 >= cut) | (D2 + 1.0 >= R2))
+    parts = _ink_components(thin, 80)
+    if len(parts) < 3:
+        ys, xs = np.where(ink)
+        return ink[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
+    alif = None
+    for pts in parts:
+        height = int(pts[:, 0].max() - pts[:, 0].min() + 1)
+        width = int(pts[:, 1].max() - pts[:, 1].min() + 1)
+        if height > width * 1.8 and (alif is None or int(pts[:, 1].min()) < int(alif[:, 1].min())):
+            alif = pts
+    if alif is None:
+        alif = min(parts, key=lambda p: int(p[:, 1].min()))
+    dal = max((p for p in parts if p is not alif), key=lambda p: int(p[:, 1].max()))
+    waw_parts = [p for p in parts if p is not alif and p is not dal]
+    if not waw_parts:
+        ys, xs = np.where(thin)
+        return thin[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
+    pad = 16
+    h, w = thin.shape
+    canvas = np.zeros((h + pad * 2, w + pad * 2), bool)
+    canvas[alif[:, 0] + pad, alif[:, 1] + pad] = True
+    canvas[dal[:, 0] + pad, dal[:, 1] + pad] = True
+    for pts in waw_parts:
+        canvas[pts[:, 0] + pad, pts[:, 1] + pad] = True
+    # The head only touches its tail on a diagonal. A short solid joint keeps
+    # them one piece after the label is scaled down.
+    for i, pts in enumerate(waw_parts):
+        others = [q for j, q in enumerate(waw_parts) if j != i]
+        if not others:
+            continue
+        rest = np.concatenate(others, 0)
+        y0, x0, y1, x1 = _nearest_ink(pts, rest)
+        _pen_stroke(canvas, y0 + pad, x0 + pad, y1 + pad, x1 + pad, 4.2, 0.0)
+    waw_all = np.concatenate(waw_parts, 0)
+    a_foot = alif[alif[:, 0] >= np.percentile(alif[:, 0], 88)]
+    a_foot = a_foot[a_foot[:, 1] >= np.percentile(a_foot[:, 1], 40)]
+    w_low = waw_all[waw_all[:, 0] >= np.percentile(waw_all[:, 0], 55)]
+    w_low = w_low[w_low[:, 1] <= np.percentile(w_low[:, 1], 45)]
+    if len(a_foot) and len(w_low):
+        y0, x0, y1, x1 = _nearest_ink(a_foot, w_low)
+        _pen_stroke(canvas, y0 + pad, x0 + pad, y1 + pad, x1 + pad, 4.6, 1.4)
+    w_right = waw_all[waw_all[:, 0] >= np.percentile(waw_all[:, 0], 45)]
+    w_right = w_right[w_right[:, 1] >= np.percentile(w_right[:, 1], 70)]
+    d_left = dal[dal[:, 0] >= np.percentile(dal[:, 0], 50)]
+    d_left = d_left[d_left[:, 1] <= np.percentile(d_left[:, 1], 35)]
+    if len(w_right) and len(d_left):
+        y0, x0, y1, x1 = _nearest_ink(w_right, d_left)
+        _pen_stroke(canvas, y0 + pad, x0 + pad, y1 + pad, x1 + pad, 6.2, 0.6)
+    parts8 = _components(canvas, 1, True)
+    if parts8:
+        parts8.sort(key=len, reverse=True)
+        kept = np.zeros_like(canvas)
+        kept[parts8[0][:, 0], parts8[0][:, 1]] = True
+        canvas = kept
+    ys, xs = np.where(canvas)
+    if len(xs) == 0:
+        return thin.astype(np.float32)
+    return canvas[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1].astype(np.float32)
+
+
+def _mark():
+    """دوا in Aref Ruqaa, shaped by Godot's text server.
+
+    ffmpeg drawtext has no Arabic shaping and drew three hollow boxes.
+    tools/dawa_src.png is the natural RTL render. Counters stay open, the
+    pen is about 60% of that weight, and the letters meet along the baseline.
+    See render_dawa.gd.
+    """
+    src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dawa_src.png")
+    ink = _thin_calligraphy(_load_rgba(src_path))
+    ys, xs = np.where(ink > 0.12)
+    if len(xs) == 0:
+        return ink
+    y0 = max(int(ys.min()) - 2, 0)
+    y1 = min(int(ys.max()) + 3, ink.shape[0])
+    x0 = max(int(xs.min()) - 2, 0)
+    x1 = min(int(xs.max()) + 3, ink.shape[1])
+    return ink[y0:y1, x0:x1]
+
+
+def over(dst_rgb, dst_a, src_rgb, src_a):
+    """Straight-alpha source over straight-alpha destination.
+
+    out_rgb is returned straight (premultiplied result divided by out alpha):
+    premul = dst_rgb * dst_a * (1-a) + src_rgb * a
+    out_a  = a + dst_a * (1-a)
+    """
+    a = np.clip(np.asarray(src_a, np.float32), 0.0, 1.0)
+    if np.ndim(a) == 0:
+        a = np.full(dst_a.shape, float(a), np.float32)
+    if a.ndim == 3:
+        a = a[..., 0]
+    elif a.ndim == 1:
+        a = a.reshape(dst_a.shape)
+    one_m = 1.0 - a
+    out_a = a + dst_a * one_m
+    src = np.asarray(src_rgb, np.float32)
+    premul = dst_rgb * (dst_a * one_m)[..., None] + src * a[..., None]
+    safe = np.maximum(out_a, 1e-4)[..., None]
+    return premul / safe, out_a
+
+
+def paint(corked: bool) -> np.ndarray:
+    ys, xs = np.mgrid[0:H, 0:W]
+    u = (xs + 0.5) / W
+    v = (ys + 0.5) / H
+    cx = 0.5 + 0.004 * np.sin((v - 0.2) * 2.2)
+    nx = np.abs(u - cx)
+
+    hw = np.empty(H, np.float32)
+    inner = np.empty(H, np.float32)
+    for y in range(H):
+        vv = (y + 0.5) / H
+        hw[y] = outer_half_px(vv) / W
+        inner[y] = bore_half_px(vv) / W
+    hw_img = hw[:, None]
+    inner_img = inner[:, None]
+    side = (hw_img - nx) * W
+    bottom = (V_CONTACT - v) * H
+    dist = np.minimum(side, np.maximum(bottom, 0.0))
+    sil = (hw_img > 0.004) & (v > 0.006) & (v < V_CONTACT)
+    cover = np.clip(dist + 1.05, 0.0, 1.0) * sil.astype(np.float32)
+    hole = (nx < inner_img) & (inner_img > 0.012) & (cover > 0.45)
+
+    # The outer circle stays put. The dark stroke is a fine line; the pale
+    # wall behind it is what still reads as glass thickness.
+    thick_var = 0.92 + 0.10 * hash2(ys // 24, xs // 28)
+    side_wave = 1.0 + 0.035 * np.sin(v * 36.0 + u * 5.0)
+    rim_w = np.where(v < 0.36, 3.2, 4.4) * thick_var * side_wave
+    rim = np.clip(1.0 - dist / rim_w, 0.0, 1.0)
+    rim = rim * rim * (3.0 - 2.0 * rim)
+    band_c = np.where(v < 0.36, 12.0, 22.0) * (0.94 + 0.08 * hash2(ys // 28, (xs + 19) // 24))
+    band = np.clip(1.0 - np.abs(dist - band_c * 0.55) / (band_c * 0.55), 0.0, 1.0)
+    band *= (dist > 2.0) & (dist < band_c)
+    inner_wobble = inner_img + (1.4 * np.sin(v * 48.0) + 0.8 * np.sin(v * 17.0 + 0.8)) / W
+    inner_band = np.clip(1.0 - np.abs(nx - inner_wobble) * W / 2.6, 0.0, 1.0)
+    inner_band *= (dist > 8.0) & (cover > 0.35) & (inner_img > 0.02)
+
+    blot = hash2(xs // 7, ys // 9)
+    blot2 = hash2(xs // 13, ys // 15)
+    grain = (blot * 0.55 + blot2 * 0.45) * 2.0 - 1.0
+
+    rgb = np.zeros((H, W, 3), np.float32)
+    alpha = np.zeros((H, W), np.float32)
+
+    # A little body in the upper belly, so the bulb is not only the rim and the
+    # crescent. The tint stays warm enough that the liquor colour check holds.
+    fresnel = np.clip((inner_img - nx) * W / 36.0, 0.0, 1.0)
+    fresnel = 1.0 - fresnel
+    upper = np.clip((v - 0.39) / 0.04, 0.0, 1.0) * np.clip((0.57 - v) / 0.05, 0.0, 1.0)
+    body_a = np.where(hole, 0.024 + 0.044 * upper + 0.006 * fresnel * fresnel, 0.0) * cover
+    body_rgb = np.array([0.80, 0.86, 0.70], np.float32)
+    light_side = np.clip((0.62 - u) / 0.55, 0.0, 1.0)
+    rim_dark = np.array([0.16, 0.24, 0.16], np.float32)
+    rim_lit = np.array([0.42, 0.54, 0.38], np.float32)
+    rim_rgb = rim_dark * (1.0 - light_side[..., None]) + rim_lit * light_side[..., None]
+    rim_rgb = np.clip(rim_rgb * (0.96 + 0.06 * grain[..., None]), 0.0, 1.0)
+    rim_a = rim * 0.58 * cover
+    thick_rgb = np.clip(np.array([0.74, 0.84, 0.66], np.float32) * (0.96 + 0.06 * grain[..., None]), 0.0, 1.0)
+    thick_a = band * np.where(hole, 0.04, 0.50) * cover
+    # Lower bulb only: a pale wall inside the rim, so the base reads as glass.
+    # It stays out of the bore, and it starts below the upper-belly veil.
+    lower = np.clip((v - 0.735) / 0.030, 0.0, 1.0) * np.clip((0.838 - v) / 0.018, 0.0, 1.0)
+    wall_reach = np.clip((12.5 - dist) / 12.5, 0.0, 1.0)
+    wall_reach = wall_reach * ((~hole) & (cover > 0.25) & (dist < 13.0) & (dist > 0.4)).astype(np.float32)
+    thick_a = np.maximum(thick_a, wall_reach * 0.58 * lower)
+    line_rgb = np.array([0.90, 0.96, 0.84], np.float32)
+    line_a = inner_band * 0.08 * cover
+
+    rgb, alpha = over(rgb, alpha, body_rgb, body_a)
+    rgb, alpha = over(rgb, alpha, thick_rgb, thick_a)
+    rgb, alpha = over(rgb, alpha, line_rgb, line_a)
+    rgb, alpha = over(rgb, alpha, rim_rgb, rim_a)
+
+    # Crescent specular follows the left silhouette. A second, shorter arc sits
+    # inside it, and a thin rim light follows the right edge.
+    left = cx - hw_img
+    right = cx + hw_img
+    along = np.clip((v - 0.40) / 0.40, 0.0, 1.0)
+    on_bulb = (v > 0.40) & (v < 0.80) & (cover > 0.25)
+    # A thin crescent. A little blot keeps it from reading as a vector arc.
+    break_up = 0.92 + 0.08 * blot
+    c1 = left + 0.042
+    d1 = (u - c1) / 0.012
+    spec = np.exp(-(d1 * d1)) * np.sin(np.clip(along, 0.0, 1.0) * np.pi) * break_up
+    c2 = left + 0.105
+    d2 = (u - c2) / 0.007
+    along2 = np.clip((v - 0.48) / 0.24, 0.0, 1.0)
+    spec2 = np.exp(-(d2 * d2)) * np.sin(along2 * np.pi) * 0.22 * (0.88 + 0.12 * blot2)
+    c3 = right - 0.016
+    d3 = (u - c3) / 0.006
+    rim_l = np.exp(-(d3 * d3)) * np.sin(np.clip(along, 0.0, 1.0) * np.pi) * 0.32
+    spec_a = np.clip((spec * 0.78 + spec2 * 0.08 + rim_l * 0.14) * cover * on_bulb, 0.0, 0.50)
+    # Furnace-warm, not a white stripe. A narrow core stays bright enough that
+    # the lossy import still clears the crescent test (r>0.92, g>0.90).
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.95, 0.82], np.float32), spec_a)
+    # The top of the crescent is a thin stroke. A short bright tick there keeps
+    # the bend after the lossy import, without fattening the arc.
+    shoulder = np.clip((v - 0.445) / 0.025, 0.0, 1.0) * np.clip((0.495 - v) / 0.025, 0.0, 1.0)
+    d_sh = (u - c1) / 0.006
+    sh = np.exp(-(d_sh * d_sh)) * shoulder * cover * on_bulb
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.96, 0.84], np.float32), np.clip(sh * 0.78, 0.0, 0.78))
+    core_along = np.clip((v - 0.515) / 0.040, 0.0, 1.0)
+    core = np.exp(-((u - c1) / 0.0085) ** 2) * np.sin(core_along * np.pi)
+    # Keep this glint off the rows the crescent-bend test samples (0.46 and 0.57).
+    core = core * ((v > 0.518) & (v < 0.552)) * cover * on_bulb
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.98, 0.90], np.float32), np.clip(core * 0.96, 0.0, 0.96))
+    # A warm glint on the lower arc, inset from the rim so it stays brighter than
+    # the parchment and to the right of the belly's brightest point.
+    low_boost = np.clip((v - 0.66) / 0.04, 0.0, 1.0) * np.clip((0.76 - v) / 0.04, 0.0, 1.0)
+    d_low = (u - (c1 + 0.048)) / 0.008
+    low_arc = np.exp(-(d_low * d_low)) * low_boost * cover * on_bulb
+    rgb, alpha = over(rgb, alpha, np.array([1.0, 0.97, 0.86], np.float32), np.clip(low_arc * 0.62, 0.0, 0.62))
+
+    # Warm bounce on the right wall, cool bounce on the left. Neither enters the hole.
+    bounce = np.clip((u - 0.62) / 0.22, 0.0, 1.0) * np.exp(-((v - 0.70) / 0.12) ** 2)
+    bounce = bounce * np.where(hole, 0.0, 0.16) * (dist > 8.0) * cover
+    rgb, alpha = over(rgb, alpha, np.array([0.86, 0.44, 0.16], np.float32), bounce)
+    cool = np.clip((0.40 - u) / 0.18, 0.0, 1.0) * np.exp(-((v - 0.58) / 0.14) ** 2)
+    cool = cool * np.where(hole, 0.0, 0.10) * (dist > 10.0) * cover
+    rgb, alpha = over(rgb, alpha, np.array([0.62, 0.74, 0.78], np.float32), cool)
+
+    # A few hairline scratches and tiny seed bubbles. Quiet enough to miss
+    # at 1×, visible as glass at 3×.
+    scratch = np.zeros((H, W), np.float32)
+    for u0, v0, v1, amp, phase in (
+        (0.32, 0.46, 0.60, 0.006, 0.4),
+        (0.66, 0.52, 0.68, 0.005, 1.7),
+    ):
+        span = (v > v0) & (v < v1) & (cover > 0.3)
+        curve = u0 + amp * np.sin((v - v0) * 90.0 + phase)
+        scratch = scratch + np.exp(-(((u - curve) * W) / 0.55) ** 2) * span
+    scratch = np.clip(scratch, 0.0, 1.0)
+    rgb, alpha = over(rgb, alpha, np.array([0.82, 0.78, 0.64], np.float32), scratch * 0.10)
+    dust = (hash2(xs // 2, ys // 2) > 0.994) & (hash2(xs, ys) > 0.70) & (cover > 0.2)
+    dust = dust & (np.abs(v - 0.470) > 0.018)
+    rgb, alpha = over(rgb, alpha, np.array([0.55, 0.46, 0.32], np.float32), dust.astype(np.float32) * 0.14)
+    for bu, bv, br in ((0.34, 0.52, 2.4), (0.68, 0.60, 1.8), (0.38, 0.68, 1.5)):
+        dpx = np.hypot((u - bu) * W, (v - bv) * H)
+        on_wall = (dist > 6.0) & (dist < 36.0) & (cover > 0.3)
+        ring = np.exp(-((dpx - br) / 0.55) ** 2) * on_wall
+        bub = np.exp(-(dpx / (br * 0.45)) ** 2) * on_wall
+        rgb, alpha = over(rgb, alpha, np.array([0.25, 0.32, 0.24], np.float32), ring * 0.16)
+        rgb, alpha = over(rgb, alpha, np.array([0.90, 0.94, 0.82], np.float32), bub * 0.12)
+    # Keep bare glass under the warm-pixel test. Brass, cork and the label come next.
+    alpha = np.minimum(alpha, 0.68)
+
+    # Wound brass wire on the lip, wound copper wire on the collar. Grooves
+    # stay translucent so the bands are not flat orange stickers.
+    lip = (v > 0.018) & (v < 0.046) & (nx < hw_img) & (nx > inner_img * 0.82) & (cover > 0.25)
+    _wire(rgb, alpha, u, v, lip, np.array([0.46, 0.28, 0.10]), np.array([0.93, 0.74, 0.32]), 0.78, over)
+    collar = (v > 0.306) & (v < 0.334) & (nx < hw_img * 1.01) & (nx > inner_img * 0.22) & (cover > 0.2)
+    _wire(rgb, alpha, u, v, collar, np.array([0.50, 0.22, 0.09]), np.array([0.78, 0.40, 0.16]), 0.58, over)
+
+    if corked:
+        _cork(rgb, alpha, u, v, nx, hw_img, over)
+    _label(rgb, alpha, u, v, hw_img, over)
+
+    # Liquor sample, above the parchment. A small clear patch survives lossy import.
+    clear = hole & (np.abs(v - 0.470) < 0.012) & (nx < 0.020)
+    alpha = np.where(clear, np.minimum(alpha, 0.015), alpha)
+    rgb = np.where(clear[..., None], body_rgb, rgb)
+
+    peak = V_CONTACT + 0.010
+    shadow_dx = (u - 0.50) / 0.20
+    shadow_dy = (v - peak) / 0.028
+    shadow = np.exp(-(shadow_dx ** 2 + shadow_dy ** 2))
+    shadow *= (v > V_CONTACT - 0.005) & (v < V_CONTACT + 0.07)
+    sh_a = shadow * 0.58 * (cover < 0.18)
+    sh_rgb = np.array([0.07, 0.04, 0.022], np.float32)
+    # Shadow is behind the glass: premul = glass + shadow * (1 - glass_a).
+    out_a = alpha + sh_a * (1.0 - alpha)
+    premul = rgb * alpha[..., None] + sh_rgb * (sh_a * (1.0 - alpha))[..., None]
+    safe = np.maximum(out_a, 1e-4)[..., None]
+    out = np.zeros((H, W, 4), np.float32)
+    out[:, :, :3] = premul / safe
+    out[:, :, 3] = out_a
+    out = np.clip(out, 0.0, 1.0)
+    _clear_ink_specks(out)
+    return out
+
+
+def _clear_ink_specks(img):
+    """Drop isolated ink pixels, including a diagonal-only touch."""
+    ink = _label_ink(img)
+    parts = _components(ink, 1, False)
+    if len(parts) <= 1:
+        return
+    y0, x0 = int(0.55 * H), int(0.18 * W)
+    paper = np.array([0.86, 0.75, 0.56], np.float32)
+    for pts in parts:
+        if len(pts) > 2:
+            continue
+        for y, x in pts:
+            yy, xx = int(y) + y0, int(x) + x0
+            img[yy, xx, :3] = paper
+            img[yy, xx, 3] = 0.98
+
+
+def _cork(rgb, alpha, u, v, nx, hw_img, over_fn):
+    top, bot = 0.050, 0.198
+    span = np.clip((v - top) / (bot - top), 0.0, 1.0)
+    cork_hw = 0.078 - 0.010 * span
+    cork = (v > top) & (v < bot) & (nx < cork_hw) & (nx < hw_img - 0.008)
+    # Fine grain: tight growth lines and small pores, not wide dark bands.
+    x_px = u * W
+    rings = 0.72 + 0.026 * np.sin(x_px * 0.62) + 0.016 * np.sin(x_px * 1.35 + 0.6) + 0.010 * np.sin(x_px * 2.2)
+    lines = (np.clip(np.cos(x_px * 0.55), 0.0, 1.0) ** 16) * 0.04
+    pores = (hash2((u * W).astype(np.int32), (v * H).astype(np.int32) // 2) > 0.93).astype(np.float32) * 0.05
+    wood = np.stack([
+        np.clip(rings - lines - pores, 0.0, 1.0) * 0.76,
+        np.clip(rings - lines * 0.65 - pores, 0.0, 1.0) * 0.46,
+        np.clip(rings * 0.52, 0.0, 1.0) * 0.26,
+    ], axis=-1)
+    shade = 0.86 + 0.18 * np.exp(-((u - 0.44) / 0.07) ** 2)
+    wood = np.clip(wood * shade[..., None], 0.0, 1.0)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, wood, cork.astype(np.float32))
+
+    inside = (nx < hw_img - 0.006) & (v > top - 0.01) & (v < bot + 0.02)
+    for c, sigma in ((0.078, 0.0033), (0.148, 0.0036)):
+        band = np.exp(-((v - c) / sigma) ** 2) * (nx < cork_hw + 0.010) * inside
+        phase = u * W * 0.32 + (v - c) * H * 0.6
+        strand = np.clip((0.5 + 0.5 * np.sin(phase) - 0.28) / 0.72, 0.0, 1.0)
+        ply = 0.5 + 0.5 * np.sin(phase * 2.0 + 0.7)
+        fibre = hash2((u * W).astype(np.int32), (v * H).astype(np.int32) // 2)
+        twine = np.array([0.32, 0.18, 0.08]) * (0.70 + 0.40 * strand[..., None]) * (0.90 + 0.12 * fibre[..., None])
+        a = np.clip(band, 0.0, 1.0) * (0.35 + 0.62 * ply)
+        rgb[:], alpha[:] = over_fn(rgb, alpha, np.clip(twine, 0.0, 1.0), a)
+
+    # A small wax pool on the lower twine, with a thin drip and a fine rim.
+    # The body stays inside the wax colour test (r>0.48, g<0.34, b<0.24).
+    du = (u - 0.50) * W
+    dv = (v - 0.152) * H
+    ang = np.arctan2(dv, du)
+    nedge = hash2((u * W).astype(np.int32) // 3, (v * H).astype(np.int32) // 3)
+    rad = 1.0 + 0.07 * np.sin(ang * 4.0) + 0.04 * np.sin(ang * 7.0 + 1.4) + (nedge - 0.5) * 0.08
+    ell = np.sqrt((du / 13.0) ** 2 + (dv / 6.0) ** 2)
+    pool = np.clip((rad - ell) * 7.0, 0.0, 1.0)
+    drip = np.exp(-((u - 0.528) * W / 2.6) ** 2) * np.exp(-((v - 0.172) * H / 9.0) ** 2)
+    drip *= (v > 0.158) & (v < 0.198)
+    wax_m = np.clip(pool + drip * 0.85, 0.0, 1.0) * inside * (nx < hw_img - 0.016)
+    edge = np.clip((ell - (rad - 0.14)) / 0.14, 0.0, 1.0) * (pool > 0.05)
+    body_c = np.array([0.55, 0.18, 0.12], np.float32)
+    rim_c = np.array([0.40, 0.12, 0.08], np.float32)
+    wax_col = body_c * (1.0 - edge[..., None]) + rim_c * edge[..., None]
+    gloss = np.exp(-((u - 0.482) / 0.008) ** 2) * np.exp(-((v - 0.146) / 0.0035) ** 2) * (pool > 0.55)
+    wax_col = np.clip(wax_col + gloss[..., None] * np.array([0.12, 0.05, 0.02]), 0.0, 1.0)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, wax_col, wax_m * 0.96)
+
+
+def _wire(rgb, alpha, u, v, mask, base, hi, freq, over_fn):
+    """Fine helical wire: a thin bright strand and an open groove."""
+    phase = u * W * freq + v * H * 1.6
+    strand = 0.5 + 0.5 * np.sin(phase)
+    thin = np.clip((strand - 0.48) / 0.52, 0.0, 1.0) ** 1.35
+    ply = 0.5 + 0.5 * np.sin(phase * 2.0 + 1.1)
+    fibre = hash2((u * W).astype(np.int32), (v * H).astype(np.int32))
+    col = base * (0.62 + 0.22 * thin[..., None]) + hi * (0.08 + 0.42 * ply[..., None] * thin[..., None])
+    col = np.clip(col * (0.94 + 0.08 * fibre[..., None]), 0.0, 1.0)
+    a = mask.astype(np.float32) * (0.16 + 0.78 * thin)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, col, a)
+
+
+def _label(rgb, alpha, u, v, hw_img, over_fn):
+    # Level card. A tilt left a scrap of hem floating above the parchment.
+    ang = 0.0
+    # About 14% smaller than the previous card, low enough that liquor shows above it.
+    cu, cv = 0.50, 0.716
+    du = u - cu
+    dv = v - cv
+    ru = du * math.cos(ang) + dv * math.sin(ang)
+    rv = -du * math.sin(ang) + dv * math.cos(ang)
+    hw, hh = 0.226, 0.086
+    edge = np.maximum(np.abs(ru) / hw, np.abs(rv) / hh)
+    paper = (edge < 1.0) & (nx_inside(u, v, hw_img))
+    n = hash2((u * W).astype(np.int32) // 3, (v * H).astype(np.int32) // 3)
+    stain = hash2((u * W).astype(np.int32) // 11, (v * H).astype(np.int32) // 13)
+    paper_rgb = np.array([0.86, 0.75, 0.56]) * (0.95 + 0.07 * n)[..., None]
+    paper_rgb = np.where((stain > 0.82)[..., None], paper_rgb * 0.92 + np.array([0.45, 0.28, 0.12]) * 0.10, paper_rgb)
+    # Soft inner shade, then a solid thin border on the visible outline.
+    # The geometric ramp used to miss the top and the clipped bottom.
+    hem = np.clip((edge - 0.94) / 0.06, 0.0, 1.0)
+    # Dark enough to read as a border, red enough that lossy WebP does not
+    # push it under the ink test (r < 0.28 and luma < 70).
+    hem_rgb = np.array([0.48, 0.26, 0.12], np.float32)
+    paper_rgb = np.clip(
+        paper_rgb * (1.0 - 0.55 * hem[..., None]) + hem_rgb * (0.80 * hem[..., None]),
+        0.0,
+        1.0,
+    )
+    # Solid band on every side, plus the visible outline where the bottle clips a corner.
+    border = paper & ((edge > 0.948) | ~_erode_mask(paper, 3))
+    paper_rgb = np.where(border[..., None], hem_rgb, paper_rgb)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, paper_rgb, paper.astype(np.float32) * 0.98)
+
+    fibre = 0.62 + 0.38 * (0.5 + 0.5 * np.sin(ru * W * 0.55))
+    string = np.exp(-((rv + hh * 0.955) / 0.0028) ** 2) * (np.abs(ru) < hw * 0.94)
+    # Side strings stay on the card, inset from the hem and clear of the word.
+    top = cv - hh
+    string = string + np.exp(-((u - 0.300) / 0.0028) ** 2) * (v > top + 0.004) * (v < cv + hh * 0.90)
+    string = string + np.exp(-((u - 0.700) / 0.0028) ** 2) * (v > top + 0.004) * (v < cv + hh * 0.90)
+    string = np.clip(string, 0.0, 1.0) * fibre * paper.astype(np.float32)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.36, 0.22, 0.10], np.float32), string * 0.90)
+
+    mark = _MARK
+    mh, mw = mark.shape
+    aspect = float(mw) / float(max(mh, 1))
+    # The word fills the card. Height leads, so the pen is not stretched wide.
+    box_w = hw * 2.0 * W * 0.94
+    box_h = hh * 2.0 * H * 0.84
+    if box_w / max(box_h, 1.0) > aspect:
+        tw = max(int(box_h * aspect), 8)
+        th = max(int(box_h), 8)
+    else:
+        tw = max(int(box_w), 8)
+        th = max(int(box_w / aspect), 8)
+    stamp = _resize(mark, tw, th)
+    stamp_hw = (tw / float(W)) * 0.5
+    stamp_hh = (th / float(H)) * 0.5
+    mu = ru / max(stamp_hw, 1e-4)
+    mv = rv / max(stamp_hh, 1e-4)
+    on_word = (np.abs(mu) <= 1.0) & (np.abs(mv) <= 1.0) & paper
+    ix = np.clip(((mu + 1.0) * 0.5 * (tw - 1)).astype(np.int32), 0, tw - 1)
+    iy = np.clip(((mv + 1.0) * 0.5 * (th - 1)).astype(np.int32), 0, th - 1)
+    ink = stamp[iy, ix]
+    # Opaque core. Darker than the round-11 hairline so the word reads at 125 px.
+    tooth = 0.99 + 0.01 * hash2((u * W).astype(np.int32), (v * H).astype(np.int32))
+    ink_a = np.clip((ink - 0.22) / 0.40, 0.0, 1.0) * tooth * on_word.astype(np.float32)
+    rgb[:], alpha[:] = over_fn(rgb, alpha, np.array([0.11, 0.038, 0.016], np.float32), ink_a)
+
+
+def nx_inside(u, v, hw_img):
+    return np.abs(u - 0.5) < hw_img - 0.01
+
+
+_MARK = None
+
+
+def to_webp(img: np.ndarray, path: str) -> None:
+    raw = (np.clip(img, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8).tobytes()
+    png = path + ".png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}", "-i", "-", png],
+        input=raw, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", png, "-c:v", "libwebp", "-lossless", "0", "-quality", "90",
+         "-compression_level", "6", path],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+    )
+    os.remove(png)
+
+
+def _shade(c, amount):
+    c = np.asarray(c, np.float32)
+    if amount >= 0.0:
+        return c + (1.0 - c) * amount
+    return c * (1.0 + amount)
+
+
+def preview(glass: np.ndarray, level: float, color, path: str) -> None:
+    """Liquor behind the glass, then the sprite at the real 125 px width and at 3×."""
+    bg = np.zeros_like(glass)
+    bg[:, :, 0] = 0.42
+    bg[:, :, 1] = 0.26
+    bg[:, :, 2] = 0.13
+    bg[:, :, 3] = 1.0
+    ys, xs = np.mgrid[0:H, 0:W]
+    v = (ys + 0.5) / H
+    u = (xs + 0.5) / W
+    bg[:, :, 0] += 0.025 * np.sin(ys * 0.07)
+    surf = (1.0 - level) * 0.770 + level * 0.42
+    hw = np.array([bore_half_px((y + 0.5) / H) / W for y in range(H)], np.float32)
+    nx = np.abs(u - 0.5)
+    bottom = 0.790
+    liq = (v > surf) & (v < bottom) & (nx < hw[:, None] * 0.92) & (level > 0.02)
+    depth = np.clip((v - surf) / max(bottom - surf, 0.05), 0.0, 1.0)
+    light = _shade(color, 0.08)
+    deep = _shade(color, -0.16)
+    lift = np.clip(1.0 - depth / 0.10, 0.0, 1.0) ** 2
+    sink = np.clip((depth - 0.28) / 0.72, 0.0, 1.0) ** 2
+    col = color * (1.0 - lift[..., None]) + light * lift[..., None]
+    col = col * (1.0 - sink[..., None]) + deep * sink[..., None]
+    a = (0.90 + 0.05 * sink)[..., None]
+    bg[:, :, :3] = np.where(liq[..., None], bg[:, :, :3] * (1.0 - a) + col * a, bg[:, :, :3])
+    ga = glass[:, :, 3:4]
+    out = glass[:, :, :3] * ga + bg[:, :, :3] * (1.0 - ga)
+    out = np.clip(out, 0.0, 1.0)
+    raw = (out * 255.0 + 0.5).astype(np.uint8)
+    raw = np.concatenate([raw, np.full((H, W, 1), 255, np.uint8)], axis=-1).tobytes()
+    base, ext = os.path.splitext(path)
+    for width, dest in ((125, base + "_1x" + ext), (375, base + "_3x" + ext)):
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}", "-i", "-",
+             "-vf", f"scale={width}:-1:flags=lanczos", dest],
+            input=raw, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
+        )
+
+
+def _hue(rgb):
+    r, g, b = [float(x) for x in rgb]
+    mx = max(r, g, b)
+    mn = min(r, g, b)
+    d = mx - mn
+    if d < 1e-5:
+        return 0.0
+    if mx == r:
+        h = ((g - b) / d) % 6.0
+    elif mx == g:
+        h = (b - r) / d + 2.0
+    else:
+        h = (r - g) / d + 4.0
+    return h * 60.0
+
+
+def _crop_mask(mask):
+    ys, xs = np.where(mask)
+    if len(xs) == 0:
+        return mask
+    return mask[int(ys.min()):int(ys.max()) + 1, int(xs.min()):int(xs.max()) + 1]
+
+
+def _load_ref_mask(name):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tests", "ref", name)
+    rgba = _load_rgba(path)
+    return rgba[:, :, 0] > 0.45
+
+
+def _label_ink(img):
+    luma = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
+    y0, y1 = int(0.55 * H), int(0.82 * H)
+    x0, x1 = int(0.18 * W), int(0.82 * W)
+    ink = (img[y0:y1, x0:x1, 3] > 0.85) & (luma[y0:y1, x0:x1] < 70.0 / 255.0)
+    return ink & (img[y0:y1, x0:x1, 0] < 0.28) & (img[y0:y1, x0:x1, 0] > img[y0:y1, x0:x1, 2])
+
+
+def _height_iou(baked, ref, rad):
+    """Dilated IoU after matching height and centering the two ink masks."""
+    baked = _crop_mask(baked)
+    ref = _crop_mask(ref)
+    bh, bw = baked.shape
+    rh, rw = ref.shape
+    if bh < 2 or rh < 2 or bw < 2 or rw < 2:
+        return 0.0
+    tw = max(1, int(round(bw * (float(rh) / float(bh)))))
+    small = _resize(baked.astype(np.float32), tw, rh) > 0.45
+    pad = int(rad) + 2
+    hh = rh + pad * 2
+    ww = max(small.shape[1], rw) + pad * 2
+    A = np.zeros((hh, ww), bool)
+    B = np.zeros((hh, ww), bool)
+    ay = pad
+    ax = (ww - small.shape[1]) // 2
+    bx = (ww - rw) // 2
+    A[ay:ay + small.shape[0], ax:ax + small.shape[1]] = small
+    B[ay:ay + rh, bx:bx + rw] = ref
+    if rad > 0:
+        A = _dilate(A.astype(np.uint8), rad).astype(bool)
+        B = _dilate(B.astype(np.uint8), rad).astype(bool)
+    inter = int(np.logical_and(A, B).sum())
+    union = int(np.logical_or(A, B).sum())
+    if union == 0:
+        return 0.0
+    return inter / float(union)
+
+
+def _hem_coverage(img):
+    """Fraction of the card's top and bottom rows that read as the dark hem."""
+    luma = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
+    y0, y1 = int(0.60 * H), int(0.84 * H)
+    x0, x1 = int(0.24 * W), int(0.76 * W)
+    card = img[y0:y1, x0:x1, 3] > 0.90
+    sl = luma[y0:y1, x0:x1]
+    ys = np.where(card.any(axis=1))[0]
+    if len(ys) == 0:
+        return 0.0, 0.0
+
+    def row_cov(y):
+        cols = np.where(card[y])[0]
+        if len(cols) < 8:
+            return 0.0
+        return float((sl[y, cols] < 0.42).mean())
+
+    # The outermost rows can be a single antialiased pixel. Use the first
+    # row that spans most of the card.
+    wide = [int(y) for y in ys if int(card[y].sum()) > 40]
+    if not wide:
+        wide = [int(ys[0]), int(ys[-1])]
+    return row_cov(wide[0]), row_cov(wide[-1])
+
+
+def _opaque_run(alpha, vf):
+    """Consecutive pixels with alpha > 0.40, from the outer edge inward."""
+    y = int(vf * H)
+    row = alpha[y]
+    xs = np.where(row > 0.15)[0]
+    if len(xs) == 0:
+        return 0.0
+    run = 0
+    for x in range(int(xs[0]), int(xs[-1])):
+        if row[x] >= 0.40:
+            run += 1
+        elif run > 0:
+            break
+    return float(run)
+
+
+def verify(open_img, cork_img):
+    """Print the measurements the round cares about. Exit 1 on a miss."""
+    a = open_img[:, :, 3]
+    # Widest opaque-ish row.
+    half = []
+    for y in range(H):
+        xs = np.where(a[y] > 0.20)[0]
+        half.append(0.0 if len(xs) == 0 else 0.5 * (xs[-1] - xs[0]))
+    half = np.array(half)
+    y_wid = int(np.argmax(half))
+    radius = float(half[y_wid])
+    print(f"widest v={y_wid / H:.3f} half_px={radius:.1f} contact_v={V_CONTACT:.3f}")
+
+    # Circle fit on the belly, above the fillet.
+    y0 = int(0.48 * H)
+    y1 = int((CENTER_V + 0.70 * (R_PX / H)) * H)
+    ys = np.arange(y0, y1)
+    dy = ys - y_wid
+    pred = np.sqrt(np.maximum(radius * radius - dy.astype(np.float64) ** 2, 0.0))
+    err = half[ys] - pred
+    rms = float(np.sqrt(np.mean(err ** 2)))
+    print(f"circle rms={rms:.2f}px ({100 * rms / max(radius, 1):.2f}% of R)")
+
+    # Wax must lie inside the open neck.
+    red = (cork_img[:, :, 0] > 0.45) & (cork_img[:, :, 0] > cork_img[:, :, 1] + 0.15) & (
+        cork_img[:, :, 0] > cork_img[:, :, 2] + 0.20) & (cork_img[:, :, 3] > 0.70)
+    outside = 0
+    wax_n = int(red.sum())
+    ys_w, xs_w = np.where(red)
+    for y, x in zip(ys_w, xs_w):
+        edge = np.where(a[y] > 0.20)[0]
+        if len(edge) == 0 or x < edge[0] or x > edge[-1]:
+            outside += 1
+    print(f"wax pixels={wax_n} outside={outside}")
+
+    # Label ink.
+    luma = 0.299 * open_img[:, :, 0] + 0.587 * open_img[:, :, 1] + 0.114 * open_img[:, :, 2]
+    band = (np.arange(H)[:, None] > int(0.58 * H)) & (np.arange(H)[:, None] < int(0.78 * H))
+    dark = band & (open_img[:, :, 3] > 0.85) & (luma < 60.0 / 255.0)
+    paper = band & (open_img[:, :, 3] > 0.85) & (luma > 0.45) & (open_img[:, :, 0] > 0.55)
+    print(f"ink pixels={int(dark.sum())} ink luma={float(luma[dark].mean()) * 255 if dark.any() else -1:.1f} "
+          f"paper luma={float(luma[paper].mean()) * 255 if paper.any() else -1:.1f}")
+
+    # Belly alpha, split into wall and hole.
+    belly = (np.arange(H)[:, None] > int(0.50 * H)) & (np.arange(H)[:, None] < int(0.74 * H))
+    cx = W // 2
+    # hole: near centre
+    hole_a = a[int(0.62 * H), cx]
+    print(f"sample a={a[int(0.47 * H), cx]:.3f} belly-centre a={hole_a:.3f} "
+          f"mouth a={a[int(0.12 * H), cx]:.3f} cork a={cork_img[int(0.12 * H), cx, 3]:.3f}")
+
+    # Highlight x at three rows should move.
+    xs_h = []
+    for vf in (0.46, 0.58, 0.70):
+        y = int(vf * H)
+        score = open_img[y, :, 0] * (open_img[y, :, 3] > 0.12)
+        # left half only
+        score[W // 2:] = 0
+        xs_h.append(int(np.argmax(score)))
+    print(f"crescent x={xs_h}")
+
+    # Liquor colour through the centre hole (not the cleared sample).
+    yb = int(0.50 * H)
+    gpx = open_img[yb, cx]
+    print(f"hole glass rgba={gpx}")
+    wood = np.array([0.42, 0.26, 0.13], np.float32)
+    worst = 0.0
+    for name, col in (
+        ("borage", (74 / 255, 80 / 255, 148 / 255)),
+        ("mint", (61 / 255, 143 / 255, 90 / 255)),
+        ("saffron", (194 / 255, 59 / 255, 18 / 255)),
+        ("chamomile", (232 / 255, 201 / 255, 106 / 255)),
+    ):
+        body = _shade(np.array(col, np.float32), -0.0)
+        # mid depth, matching BottleGlass.draw
+        light = _shade(body, 0.03)
+        deep = _shade(body, -0.06)
+        liq = light * 0.5 + deep * 0.5
+        la = 0.94
+        over_wood = liq * la + wood * (1.0 - la)
+        shown = gpx[:3] * gpx[3] + over_wood * (1.0 - gpx[3])
+        delta = (shown - body) * 255.0
+        worst = max(worst, float(np.max(np.abs(delta))))
+        print(f"  {name} delta RGB {delta[0]:+.1f} {delta[1]:+.1f} {delta[2]:+.1f} "
+              f"hue { _hue(body * 255):.0f}->{_hue(shown * 255):.0f}")
+
+    ok = True
+    if not (0.55 <= y_wid / H <= 0.60):
+        print("FAIL widest")
+        ok = False
+    if rms / max(radius, 1) >= 0.03:
+        print("FAIL rms")
+        ok = False
+    if wax_n < 40 or outside > 0:
+        print("FAIL wax")
+        ok = False
+    if not dark.any() or float(luma[dark].mean()) * 255 >= 60:
+        print("FAIL ink")
+        ok = False
+    if paper.any() and dark.any():
+        contrast = float(luma[paper].mean() - luma[dark].mean())
+        print(f"contrast={contrast:.3f}")
+        if contrast < 0.25:
+            print("FAIL contrast")
+            ok = False
+    if max(xs_h) - min(xs_h) < 8:
+        print("FAIL crescent")
+        ok = False
+    if a[int(0.47 * H), cx] > 0.08:
+        print("FAIL sample")
+        ok = False
+    width, count, second, span = _ink_span(open_img)
+    print(f"ink width={width} span={span} count={count} second={second}")
+    if span < 8 or width < span * 0.62 or second > count * 0.45:
+        print("FAIL joined word")
+        ok = False
+    ink_mask = _label_ink(open_img)
+    ys_i, xs_i = np.where(ink_mask)
+    aspect = 0.0
+    if len(xs_i):
+        aspect = float(xs_i.max() - xs_i.min() + 1) / float(max(ys_i.max() - ys_i.min() + 1, 1))
+    iou_d = _height_iou(ink_mask, _load_ref_mask("dawa_ref.png"), 5)
+    iou_w = _height_iou(ink_mask, _load_ref_mask("wa_ref.png"), 5)
+    parts8 = _components(ink_mask, 1, True)
+    parts8.sort(key=len, reverse=True)
+    sizes = [len(p) for p in parts8]
+    print(f"ink aspect={aspect:.3f} iou_dawa={iou_d:.3f} iou_wa={iou_w:.3f} ink8={sizes[:6]}")
+    if aspect < 1.12 or iou_d + 1e-6 < iou_w + 0.15 or iou_d < 0.45:
+        print("FAIL dal")
+        ok = False
+    if not sizes or (len(sizes) > 1 and sizes[1] >= 1):
+        print("FAIL ink components")
+        ok = False
+    top_cov, bot_cov = _hem_coverage(open_img)
+    print(f"hem coverage top={top_cov:.2f} bottom={bot_cov:.2f}")
+    if top_cov < 0.90 or bot_cov < 0.90:
+        print("FAIL hem")
+        ok = False
+    runs = [_opaque_run(a, vf) for vf in (0.76, 0.79, 0.81)]
+    print(f"lower wall opaque run={runs}")
+    if min(runs) < 3.5:
+        print("FAIL lower wall")
+        ok = False
+    # Bottom is a chord, not a needle: half-width near the contact stays wide.
+    y_bot = int((V_CONTACT - 0.004) * H)
+    print(f"contact half_px={half[y_bot]:.1f}")
+    if half[y_bot] < 28:
+        print("FAIL flat bottom")
+        ok = False
+    if worst > 15.0:
+        print("FAIL liquor colour", worst)
+        ok = False
+    return ok
+
+
+def _ink_span(img):
+    """Width of the dominant dark connected component on the label, in pixels."""
+    luma = 0.299 * img[:, :, 0] + 0.587 * img[:, :, 1] + 0.114 * img[:, :, 2]
+    y0, y1 = int(0.52 * H), int(0.80 * H)
+    x0, x1 = int(0.15 * W), int(0.85 * W)
+    ink = (img[y0:y1, x0:x1, 3] > 0.85) & (luma[y0:y1, x0:x1] < 60.0 / 255.0)
+    ink = ink & (img[y0:y1, x0:x1, 0] < 0.30) & (img[y0:y1, x0:x1, 0] > img[y0:y1, x0:x1, 2])
+    seen = np.zeros(ink.shape, np.uint8)
+    best = (0, 0)
+    second = 0
+    h, w = ink.shape
+    ys, xs = np.where(ink)
+    if len(xs) == 0:
+        return 0, 0, 0, 0
+    full = int(xs.max() - xs.min() + 1)
+    from collections import deque
+    for y, x in zip(ys, xs):
+        if seen[y, x]:
+            continue
+        q = deque([(int(y), int(x))])
+        seen[y, x] = 1
+        n = 0
+        xa = xb = int(x)
+        while q:
+            cy, cx = q.pop()
+            n += 1
+            xa = min(xa, cx)
+            xb = max(xb, cx)
+            for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = 1
+                    q.append((ny, nx))
+        width = xb - xa + 1
+        if n > best[0]:
+            second = best[0]
+            best = (n, width)
+        elif n > second:
+            second = n
+    return best[1], best[0], second, full
+
+
+def emit_profile():
+    """Inner bore knots for BottleGlass.PROFILE. Linear interp stays on the circle."""
+    print("PROFILE")
+    v = 0.200
+    while v <= 0.800 + 1e-6:
+        b = bore_half_px(v) / W
+        print(f"\tVector2({v:.3f}, {b:.3f}),")
+        v += 0.010
+    print("\tVector2(0.820, 0.000),")
+    print("\tVector2(0.960, 0.000),")
+
+
+def main():
+    global _MARK
+    _MARK = _mark()
+    out_dir = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "Source.V2/assets/art/bottles"
+    os.makedirs("/tmp/kim-r9", exist_ok=True)
+    print(f"R_PX={R_PX:.2f} V_CONTACT={V_CONTACT:.4f}")
+    emit_profile()
+    open_img = paint(False)
+    cork_img = paint(True)
+    if not verify(open_img, cork_img):
+        print("verification failed")
+        sys.exit(1)
+    preview(open_img, 0.0, (0.85, 0.75, 0.45), "/tmp/kim-r9/prev_empty.jpg")
+    preview(open_img, 0.22, (0.85, 0.55, 0.18), "/tmp/kim-r9/prev_low.jpg")
+    preview(open_img, 0.92, (0.78, 0.28, 0.10), "/tmp/kim-r9/prev_high.jpg")
+    preview(cork_img, 1.0, (61 / 255, 143 / 255, 90 / 255), "/tmp/kim-r9/prev_mint.jpg")
+    preview(cork_img, 1.0, (74 / 255, 80 / 255, 148 / 255), "/tmp/kim-r9/prev_borage.jpg")
+    preview(cork_img, 1.0, (194 / 255, 59 / 255, 18 / 255), "/tmp/kim-r9/prev_saffron.jpg")
+    if "--preview-only" in sys.argv:
+        print("previews only")
+        return
+    to_webp(open_img, os.path.join(out_dir, "glass_open.webp"))
+    to_webp(cork_img, os.path.join(out_dir, "glass_cork.webp"))
+    print("wrote", out_dir)
+
+
+if __name__ == "__main__":
+    main()
