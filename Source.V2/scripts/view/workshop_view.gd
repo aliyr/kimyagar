@@ -1442,7 +1442,7 @@ func _draw_pieces(c: Control) -> void:
 		var sc := 1.0 + hop * 0.08
 		if str(chip["kind"]) == "dust":
 			var col: Color = chip["color"]
-			c.draw_circle(center, maxf(w, h) * 0.5 * sc, Color(col.r, col.g, col.b, 0.9))
+			_fill_opening_disc(c, center, maxf(w, h) * 0.5 * sc, Color(col.r, col.g, col.b, 0.9))
 			continue
 		var tex := UiKit.tex("mortar/v3/pieces/%s_%d.png" % [str(chip["kind"]), int(chip["sprite"])])
 		if tex == null:
@@ -1454,25 +1454,34 @@ func _draw_pieces(c: Control) -> void:
 			var clip := MortarPile.clip_polygon(nick)
 			var poly := PackedVector2Array()
 			var uvs := PackedVector2Array()
+			var cs := cos(rot)
+			var sn := sin(rot)
 			for p in clip:
 				uvs.append(p)
 				var local := Vector2((p.x - 0.5) * w, (p.y - 0.5) * h) * sc
-				poly.append(center + Vector2(cos(rot) * local.x - sin(rot) * local.y, sin(rot) * local.x + cos(rot) * local.y))
-			var cols := PackedColorArray()
-			cols.resize(poly.size())
-			cols.fill(Color.WHITE)
-			c.draw_polygon(poly, cols, uvs, tex)
-			var tinted := PackedColorArray()
-			tinted.resize(poly.size())
-			var tint: Color = chip["color"]
-			tinted.fill(Color(tint.r, tint.g, tint.b, 0.22))
-			c.draw_polygon(poly, tinted)
+				poly.append(center + Vector2(cs * local.x - sn * local.y, sn * local.x + cs * local.y))
+			_paint_piece(c, tex, poly, uvs, chip["color"])
 		else:
-			c.draw_set_transform(center, rot, Vector2(sc, sc))
-			c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
-			var tint2: Color = chip["color"]
-			c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint2.r, tint2.g, tint2.b, 0.22), true)
-			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			var hw := w * 0.5 * sc
+			var hh := h * 0.5 * sc
+			var cs2 := cos(rot)
+			var sn2 := sin(rot)
+			var quad := PackedVector2Array()
+			var quv := PackedVector2Array()
+			var locals: Array[Vector2] = [Vector2(-hw, -hh), Vector2(hw, -hh), Vector2(hw, hh), Vector2(-hw, hh)]
+			var srcs: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+			for i in 4:
+				var local2: Vector2 = locals[i]
+				quad.append(center + Vector2(cs2 * local2.x - sn2 * local2.y, sn2 * local2.x + cs2 * local2.y))
+				quv.append(srcs[i])
+			if MortarPile.poly_inside_opening(quad):
+				c.draw_set_transform(center, rot, Vector2(sc, sc))
+				c.draw_texture_rect(tex, Rect2(-w * 0.5, -h * 0.5, w, h), false)
+				var tint2: Color = chip["color"]
+				c.draw_rect(Rect2(-w * 0.5, -h * 0.5, w, h), Color(tint2.r, tint2.g, tint2.b, 0.22), true)
+				c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				_paint_piece(c, tex, quad, quv, chip["color"])
 
 
 func _draw_mortar_bed(c: Control) -> void:
@@ -1490,27 +1499,65 @@ func _draw_mortar_bed(c: Control) -> void:
 		var surface := MortarPile.pile_surface_y(level) - ZONE_MORTAR.position.y
 		var rx := bw * 0.46
 		var ry := 16.0 + 6.0 * level
-		c.draw_set_transform(Vector2(cx, surface + ry * 0.35), 0.0, Vector2.ONE)
-		c.draw_colored_polygon(_oval(rx * 0.92, ry * 1.15), Color(col.r * 0.72, col.g * 0.68, col.b * 0.55, 0.96))
-		c.draw_set_transform(Vector2(cx, surface), 0.0, Vector2.ONE)
-		c.draw_colored_polygon(_oval(rx, ry), Color(col.r, col.g, col.b, 0.96))
-		c.draw_colored_polygon(_oval(rx * 0.62, ry * 0.55), Color(col.r * 0.78, col.g * 0.74, col.b * 0.6, 0.55))
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_paint_bed_oval(c, Vector2(cx, surface + ry * 0.35), rx * 0.92, ry * 1.15, Color(col.r * 0.72, col.g * 0.68, col.b * 0.55, 0.96))
+		_paint_bed_oval(c, Vector2(cx, surface), rx, ry, Color(col.r, col.g, col.b, 0.96))
+		_paint_bed_oval(c, Vector2(cx, surface), rx * 0.62, ry * 0.55, Color(col.r * 0.78, col.g * 0.74, col.b * 0.6, 0.55))
 		for hollow_v in info.get("hollows", []):
 			var hollow: Dictionary = hollow_v
 			var hx := origin.x + float(hollow.get("x", 50.0)) / 100.0 * bw
 			var hy := origin.y + float(hollow.get("y", 60.0)) / 100.0 * bh
 			var ha := clampf(float(hollow.get("life", MortarPile.MARK_LIFE)) / MortarPile.MARK_LIFE, 0.0, 1.0)
-			c.draw_set_transform(Vector2(hx, hy), 0.0, Vector2.ONE)
-			c.draw_colored_polygon(_oval(rx * 0.22, ry * 0.7), Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.8 * ha))
-			c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_paint_bed_oval(c, Vector2(hx, hy), rx * 0.22, ry * 0.7, Color(col.r * 0.45, col.g * 0.4, col.b * 0.32, 0.8 * ha))
 		for spill_v in info.get("spills", []):
 			var spill: Dictionary = spill_v
 			var sc: Color = spill.get("color", col)
 			var sx := origin.x + float(spill.get("x", 50.0)) / 100.0 * bw
 			var sy := origin.y + float(spill.get("y", 70.0)) / 100.0 * bh
 			var sa := clampf(float(spill.get("life", MortarPile.MARK_LIFE)) / MortarPile.MARK_LIFE, 0.0, 1.0)
-			c.draw_circle(Vector2(sx, sy), 3.4, Color(sc.r, sc.g, sc.b, 0.85 * sa))
+			_fill_opening_disc(c, Vector2(sx, sy), 3.4, Color(sc.r, sc.g, sc.b, 0.85 * sa))
+
+
+func _paint_piece(c: Control, tex: Texture2D, poly: PackedVector2Array, uvs: PackedVector2Array, tint: Color) -> void:
+	if not MortarPile.poly_inside_opening(poly):
+		var cut: Array = MortarPile.clip_opening_uv(poly, uvs)
+		poly = cut[0]
+		uvs = cut[1]
+	if poly.size() < 3 or uvs.size() != poly.size():
+		return
+	var cols := PackedColorArray()
+	cols.resize(poly.size())
+	cols.fill(Color.WHITE)
+	c.draw_polygon(poly, cols, uvs, tex)
+	var tinted := PackedColorArray()
+	tinted.resize(poly.size())
+	tinted.fill(Color(tint.r, tint.g, tint.b, 0.22))
+	c.draw_polygon(poly, tinted)
+
+
+func _paint_bed_oval(c: Control, center: Vector2, rx: float, ry: float, color: Color) -> void:
+	var local := _oval(rx, ry)
+	var placed := PackedVector2Array()
+	placed.resize(local.size())
+	for i in local.size():
+		placed[i] = center + local[i]
+	if not MortarPile.poly_inside_opening(placed):
+		placed = MortarPile.clip_opening(placed)
+	if placed.size() >= 3:
+		c.draw_colored_polygon(placed, color)
+
+
+func _fill_opening_disc(c: Control, center: Vector2, radius: float, color: Color) -> void:
+	var poly := PackedVector2Array()
+	poly.resize(16)
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		poly[i] = center + Vector2(cos(a) * radius, sin(a) * radius)
+	if MortarPile.poly_inside_opening(poly):
+		c.draw_circle(center, radius, color)
+		return
+	poly = MortarPile.clip_opening(poly)
+	if poly.size() >= 3:
+		c.draw_colored_polygon(poly, color)
 
 
 func _draw_mortar_fx(c: Control) -> void:

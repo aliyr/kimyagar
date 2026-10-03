@@ -562,7 +562,7 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 		var keep_w: float = rx * 2.1 * (1.0 - eased)
 		var top: float = scene.y - ry * 3.0
 		clip = _map_rect(Rect2(left, top, keep_w, ry * 6.0), origin, scale)
-	_paint_radial(c, center, rx * scale.x, ry * scale.y, stops_t, stops_c, use_clip, clip)
+	_paint_radial(c, center, rx * scale.x, ry * scale.y, stops_t, stops_c, use_clip, clip, true)
 	var speck: Color = Color(col.r, col.g, col.b, 0.55 * amount * fade)
 	for i in 14:
 		var a: float = (float(i) / 14.0) * PI * 2.0 + 0.4
@@ -573,6 +573,8 @@ func _draw_residue(c: CanvasItem, origin: Vector2, scale: Vector2, residue: Dict
 			if not keep.has_point(at):
 				continue
 		var local: Vector2 = _map(at, origin, scale)
+		if not MortarPile.point_in_opening(local):
+			continue
 		var speck_r: float = (1.1 + float((i * 13) % 5) * 0.3) * scale.x
 		c.draw_circle(local, maxf(0.3, speck_r), speck)
 
@@ -607,7 +609,7 @@ func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -
 	_paint_radial(c, shadow_at, lrx * 1.05, lry * 0.9, PackedFloat32Array([0.0, 1.0]), [
 		Color(shade.r, shade.g, shade.b, 0.38 * frac),
 		Color(shade.r, shade.g, shade.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 	var body: Color = _parse_hex(hex)
 	# Offset radial (highlight up-left of the mound) approximated with stacked ellipses.
 	# Web radial is centered up-left of the ellipse. Stack a centered body, then that offset highlight.
@@ -616,19 +618,21 @@ func _draw_mound(c: CanvasItem, origin: Vector2, scale: Vector2, chips: Array) -
 		Color(body.r, body.g, body.b, 0.9 * frac),
 		Color(body.r, body.g, body.b, 0.55 * frac),
 		Color(body.r, body.g, body.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 	var hi := Vector2(center.x - lrx * 0.18, center.y - lry * 0.55)
 	_paint_radial(c, hi, maxf(0.4, lrx * 0.42), maxf(0.4, lry * 0.42), PackedFloat32Array([0.0, 1.0]), [
 		Color(body.r, body.g, body.b, 0.98 * frac),
 		Color(body.r, body.g, body.b, 0.0),
-	], false, Rect2())
+	], false, Rect2(), true)
 	var foot := Color(30.0 / 255.0, 14.0 / 255.0, 4.0 / 255.0, 0.32 * frac)
-	c.draw_ellipse(Vector2(center.x, center.y + lry * 0.42), maxf(0.4, lrx * 0.72), maxf(0.4, lry * 0.38), foot, true, -1.0, false)
+	_fill_opening_ellipse(c, Vector2(center.x, center.y + lry * 0.42), maxf(0.4, lrx * 0.72), maxf(0.4, lry * 0.38), foot)
 	for i in 46:
 		var a: float = float(i) * 2.399963
 		var rad: float = sqrt((float(i) + 0.5) / 46.0)
 		var px: float = center.x + cos(a) * rad * lrx * 0.88
 		var py: float = center.y + sin(a) * rad * lry * 0.82
+		if not MortarPile.point_in_opening(Vector2(px, py)):
+			continue
 		var speck: Color = Color(40.0 / 255.0, 20.0 / 255.0, 6.0 / 255.0, 0.28 * frac) if i % 3 == 0 else Color(1.0, 248.0 / 255.0, 230.0 / 255.0, 0.22 * frac)
 		var speck_r: float = (0.7 + float((i * 7) % 4) * 0.25) * scale.x
 		c.draw_circle(Vector2(px, py), maxf(0.25, speck_r), speck)
@@ -661,7 +665,7 @@ func _draw_pestle_shadow(c: CanvasItem, origin: Vector2, scale: Vector2, chips: 
 	], false, Rect2())
 
 
-func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2) -> void:
+func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t: PackedFloat32Array, stops_c: Array[Color], use_clip: bool, clip: Rect2, mask_opening: bool = false) -> void:
 	if rx <= 0.05 or ry <= 0.05:
 		return
 	var rings := 12
@@ -672,13 +676,29 @@ func _paint_radial(c: CanvasItem, center: Vector2, rx: float, ry: float, stops_t
 			continue
 		var erx: float = maxf(0.4, rx * t)
 		var ery: float = maxf(0.4, ry * t)
-		if not use_clip:
+		if not use_clip and not mask_opening:
 			c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
 			continue
 		var poly: PackedVector2Array = _ellipse_poly(center, erx, ery, 40)
-		poly = _clip_rect(poly, clip)
+		if use_clip:
+			poly = _clip_rect(poly, clip)
+		if mask_opening and not MortarPile.poly_inside_opening(poly):
+			poly = MortarPile.clip_opening(poly)
+		elif not use_clip:
+			c.draw_ellipse(center, erx, ery, col, true, -1.0, false)
+			continue
 		if poly.size() >= 3:
 			c.draw_colored_polygon(poly, col)
+
+
+func _fill_opening_ellipse(c: CanvasItem, center: Vector2, rx: float, ry: float, col: Color) -> void:
+	var poly := _ellipse_poly(center, rx, ry, 28)
+	if MortarPile.poly_inside_opening(poly):
+		c.draw_ellipse(center, rx, ry, col, true, -1.0, false)
+		return
+	poly = MortarPile.clip_opening(poly)
+	if poly.size() >= 3:
+		c.draw_colored_polygon(poly, col)
 
 
 func _draw_aroma(c: CanvasItem, local: Vector2, size: float, scale: Vector2, col: Color, alpha: float, p: Dictionary) -> void:

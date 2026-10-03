@@ -574,6 +574,111 @@ static func sprite_count(kind: String) -> int:
 	return aspects.size()
 
 
+## Inner painted opening, in mortar-zone pixels. Inset so a clipped edge
+## does not rasterise onto the stone past the rounded bottom corners.
+const OPEN_INSET := 2.0
+static var _open_poly: PackedVector2Array = PackedVector2Array()
+
+
+static func opening_local() -> PackedVector2Array:
+	if _open_poly.size() >= 3:
+		return _open_poly
+	var c := Vector2(VIS_CX - ZONE_X, VIS_CY - ZONE_Y)
+	var rx := VIS_RX - OPEN_INSET
+	var ry := VIS_RY - OPEN_INSET
+	var n := 40
+	var poly := PackedVector2Array()
+	poly.resize(n)
+	for i in n:
+		var a := TAU * float(i) / float(n)
+		poly[i] = Vector2(c.x + cos(a) * rx, c.y + sin(a) * ry)
+	_open_poly = poly
+	return poly
+
+
+static func point_in_opening(p: Vector2) -> bool:
+	var c := Vector2(VIS_CX - ZONE_X, VIS_CY - ZONE_Y)
+	var rx := VIS_RX - OPEN_INSET
+	var ry := VIS_RY - OPEN_INSET
+	var dx := (p.x - c.x) / rx
+	var dy := (p.y - c.y) / ry
+	return dx * dx + dy * dy <= 1.0
+
+
+static func poly_inside_opening(poly: PackedVector2Array) -> bool:
+	for p in poly:
+		if not point_in_opening(p):
+			return false
+	return true
+
+
+static func clip_opening(poly: PackedVector2Array) -> PackedVector2Array:
+	var cut: Array = clip_opening_uv(poly, PackedVector2Array())
+	var out: PackedVector2Array = cut[0]
+	return out
+
+
+static func clip_opening_uv(poly: PackedVector2Array, uvs: PackedVector2Array) -> Array:
+	if poly.size() < 3:
+		return [PackedVector2Array(), PackedVector2Array()]
+	var has_uv := uvs.size() == poly.size()
+	var clip := opening_local()
+	var sp: PackedVector2Array = poly
+	var su: PackedVector2Array = uvs if has_uv else PackedVector2Array()
+	var nclip: int = clip.size()
+	for i in nclip:
+		var a: Vector2 = clip[i]
+		var b: Vector2 = clip[(i + 1) % nclip]
+		var ip: PackedVector2Array = sp
+		var iu: PackedVector2Array = su
+		sp = PackedVector2Array()
+		su = PackedVector2Array()
+		if ip.is_empty():
+			break
+		var s: Vector2 = ip[ip.size() - 1]
+		var suv := Vector2.ZERO
+		if has_uv:
+			suv = iu[iu.size() - 1]
+		for k in ip.size():
+			var e: Vector2 = ip[k]
+			var euv := Vector2.ZERO
+			if has_uv:
+				euv = iu[k]
+			var ein := _open_inside(e, a, b)
+			var sin := _open_inside(s, a, b)
+			if ein:
+				if not sin:
+					var t := _open_hit(s, e, a, b)
+					sp.append(s.lerp(e, t))
+					if has_uv:
+						su.append(suv.lerp(euv, t))
+				sp.append(e)
+				if has_uv:
+					su.append(euv)
+			elif sin:
+				var t2 := _open_hit(s, e, a, b)
+				sp.append(s.lerp(e, t2))
+				if has_uv:
+					su.append(suv.lerp(euv, t2))
+			s = e
+			if has_uv:
+				suv = euv
+	return [sp, su]
+
+
+static func _open_inside(p: Vector2, a: Vector2, b: Vector2) -> bool:
+	return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x) >= -0.001
+
+
+static func _open_hit(s: Vector2, e: Vector2, a: Vector2, b: Vector2) -> float:
+	var se := e - s
+	var ab := b - a
+	var den := se.x * ab.y - se.y * ab.x
+	if absf(den) < 0.0000001:
+		return 0.0
+	return clampf(((a.x - s.x) * ab.y - (a.y - s.y) * ab.x) / den, 0.0, 1.0)
+
+
 static func clip_polygon(nick: int) -> PackedVector2Array:
 	match nick:
 		0:
